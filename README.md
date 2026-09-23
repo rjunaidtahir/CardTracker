@@ -1,4 +1,4 @@
-# Card Tracker: Phase 1
+# Card Tracker
 
 A personal Android app that reads your UAE bank SMS and turns them into credit card transactions and statements. Everything stays on the phone in a local Room database.
 
@@ -35,14 +35,14 @@ All bank formats live in **`app/src/main/java/com/junaid/cardtracker/parser/Bank
 
 | Bank | Sender ID | Card SMS | Statements | Accounts / other |
 |---|---|---|---|---|
-| FAB | FAB | purchases (·0831), cashback, payments to card (·3115) | ·3115 statements | ·8001/·8003/·8005: remittances, salary, deposits, credits, debits (EMIs), ATM, transfers, bills, rewards |
-| Emirates NBD | EmiratesNBD | "Purchase of…" and "Payment of … to …", refunds, payments received | Mini Stmt | – |
-| ADCB | ADCBAlert | both "was used for" formats, foreign-fee format, reversals, payments | Billing alert | account ·0001 credits/debits |
-| Al Hilal | AlHilal | purchases, cashback | – (no sample yet) | – |
-| HSBC | HSBC-UAE | purchases, reversals, cashback, payments | statements | – |
-| Mashreq | Mashreq | **no purchase sample yet** (generic guess) | – | accounts ·7639/·8902 in/out, card payments ·4680 |
+| FAB | FAB | purchases (·0831), cashback, payments to card (·3115) | statements, incl. "payment due date" and credit balances | ·8001/·8003/·8005: remittances, salary, deposits, credits, debits (EMIs), debit-card purchases, ATM, transfers, UAE PGS payments, Dubai First card payments, bills, rewards |
+| Emirates NBD | EmiratesNBD | "Purchase of…" and "Payment of … to …", Nol top-ups, refunds, payments received | Mini Stmt | – |
+| ADCB | ADCBAlert | all "was used for" formats, "purchase transaction … performed", bills from card, foreign-fee format, reversals, payments | Billing alert | account ·0001 credits/debits, online transfers |
+| Al Hilal | AlHilal | purchases, refunds, cashback | "Payment … is due on" (total, no minimum) | – |
+| HSBC | HSBC-UAE | purchases (old and new format), reversals, cashback, payments | statements | – |
+| Mashreq | Mashreq | card purchases ·4680, debit-card ATM withdrawals | – | accounts ·7639/·8902 in/out, Aani payments, card payments ·4680 |
 
-OTP and auth-code messages are dropped. Adverts, payment reminders, card-setting notices, approval prompts, transfer requests, scheduled transfers, declined transactions and limit changes are ignored.
+OTP, auth-code and transaction-PIN messages are dropped. Adverts, payment reminders, card-setting notices, approval prompts, transfer requests, scheduled transfers and standing instructions, declined or failed transactions, instalment conversions, loan and mortgage notices, IPO requests, invoices, lounge notices and limit changes are ignored.
 
 **Bank account and transfers.** FAB account 8001 is tracked as a *bank account*, with both money in and money out, and "Count in spending" is off by default. FAB often sends two SMS for one transfer ("Outward Remittance Debit" and "funds transfer … processed"). The app merges those into one transaction.
 
@@ -58,24 +58,23 @@ Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any ot
 
 ## Screens
 
+The app uses a dark theme with neon green for money figures and a fixed colour per category, so a category looks the same in every chart.
+
+- **Period chips (Overview, Transactions, Cards):** Month (with arrows), 1W, 1M, 3M, 6M, 12M, All and **Custom** (pick any date range on a calendar). The arrows step back or forward by the period's own length. Tap the date line to open the calendar.
 - **Overview (home):**
-  - Month picker and total spent, compared with last month.
-  - **Card payments due:** amount still to pay, due date, and paid / minimum paid / overdue.
-  - **Spending by category:** tap a category to see its transactions.
-  - **Last 12 months:** bar chart; tap a bar to switch month.
-  - **By card.**
-  - **Recurring payments:** subscriptions and EMIs, with the next expected date.
-  - **Foreign-currency spending in AED.**
-  - **Savings goals:** add a goal, add money, see the monthly amount needed to reach the target date.
+  - **Total spent** for the period, compared with the same-length period before it, plus per-day average, number of spends and money in.
+  - **Chart card** with two views: an **arc chart** of categories (tap a segment or chip to highlight it and open its transactions) and a **trend line** over time (days, weeks or months depending on the period; touch or drag to read a value).
+  - **Category list** with amounts, shares and bars; tap one to see its transactions.
+  - **Card payments due**, **last 12 months** bars (tap a month to open it), **top merchants**, **by card**, **recurring payments**, **foreign currency** and **savings goals**.
 - **Transactions:**
-  - Sync button, "Add by typing", month and card filters.
-  - When a bank account is selected, **Money in / Money out / Net** at the top.
-  - Each row shows its category. Tap a row, then **Change** to re-categorise; "Apply to all" teaches the app that merchant for the past and future.
-  - Tap a row to see the raw SMS or delete it.
+  - Sync and **Add** (type "lunch 45 aed") at the top, then a **search** box (merchant, category, card, amount), period chips and card chips.
+  - A bank account (for example FAB ·8001) shows **Net** on top and **Money in / Money out** as two tiles below it.
+  - Transactions are grouped by day with a daily total. Each row has a coloured category icon, "Category • Card", the amount and the time.
+  - Tap a row for details, the raw SMS, **Change** category ("Apply to all" teaches the app that merchant) or Delete.
 - **Cards:**
-  - **Balances:** available, limit and % used side by side, once you've entered limits.
-  - Each card shows this month's spend, payments received, and the latest statement with its paid/due status.
-  - Tap a card for its profile: nickname, credit limit, statement day, due day, per-card reminders, utilisation, payments to the card, card type and **Show & count**.
+  - **Available credit** across cards, with utilisation bars (green / amber / red).
+  - Each card is drawn as a **bank-coloured card tile**: spend or account net for the period, available limit or balance, the latest statement and its paid/due status, and the **Show & count** switch.
+  - Tap a card for its profile: a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
 - **Review:** unparsed SMS, with **Share unparsed SMS**.
 - **Settings:**
   - Live listening and **due-date reminders**.
@@ -83,7 +82,12 @@ Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any ot
   - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
 - **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
 
-## First steps after installing v1.0
+## After installing v1.1
+
+1. Tap **Re-parse all SMS** (Review or Settings) so the new bank formats are picked up. Most of the Review list should clear.
+2. Check the Review tab and share anything left.
+
+## First steps (new install)
 
 1. **Re-parse all SMS** (Review or Settings) so every transaction gets a category.
 2. On the Cards tab, open each credit card and enter its **credit limit** (optional: statement day and due day).

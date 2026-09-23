@@ -13,24 +13,29 @@ object SmsParser {
     val UAE_ZONE: ZoneId = ZoneId.of("Asia/Dubai")
 
     private const val NUMDATE = """\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"""
-    private const val TIME = """\d{1,2}:\d{2}(?::\d{2})?"""
-    private const val WORDDATE = """[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|\d{1,2}[A-Za-z]{3}\d{2,4}"""
+    /** 08-SEP-2026 / 25/Mar/2026 / 7 July 2026 / May 25 2026 */
+    private const val WORDDATE_T = """\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}"""
+    private const val WEEKDAY = """(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+)?"""
+    private const val TIME = """\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]\.?M\b)?"""
+    private const val WORDDATE = """[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}[A-Za-z]{3}\d{2,4}"""
     /** 1,234.56 / 90.90 / 4300 / .07 */
     private const val AMT = """(?:\d[\d,]*(?:\.\d+)?|\.\d+)"""
+    /** Balances and statement totals can be negative (credit balance): AED -61.38 */
+    private const val SAMT = """(?:-\s?)?$AMT"""
 
     private val tokens = linkedMapOf(
         "{CUR}" to "(?<currency>[A-Z]{3})",
         "{ANYCUR}" to "[A-Z]{3}",
         "{AMOUNT}" to "(?<amount>$AMT)",
-        "{AVAIL}" to "(?<avail>$AMT)",
-        "{TOTAL}" to "(?<total>$AMT)",
+        "{AVAIL}" to "(?<avail>$SAMT)",
+        "{TOTAL}" to "(?<total>$SAMT)",
         "{MIN}" to "(?<min>$AMT)",
         "{CARDTYPE}" to "(?<cardtype>Credit|Debit)",
         "{CARD}" to """(?:[X*\d]+\s*)?(?<card>\d{4})\b""",
         "{TO}" to """(?:[X*\d]+\s*)?(?<to>\d{4})\b""",
         "{MERCHANT}" to "(?<merchant>.+?)",
         "{CITY}" to """(?:,\s*[^.,]+?)?""",
-        "{DATETIME}" to "(?<date>$NUMDATE(?:,?\\s+$TIME)?)",
+        "{DATETIME}" to "(?<date>$WEEKDAY(?:$NUMDATE|$WORDDATE_T)(?:,?\\s+$TIME)?)",
         "{DUE}" to "(?<due>$NUMDATE|$WORDDATE)",
         "{STMTDATE}" to "(?<stmtdate>$NUMDATE|$WORDDATE)",
     )
@@ -169,7 +174,7 @@ object SmsParser {
         )
     }
 
-    fun parseAmount(s: String): BigDecimal = BigDecimal(s.replace(",", "").trimEnd('.'))
+    fun parseAmount(s: String): BigDecimal = BigDecimal(s.replace(",", "").replace(" ", "").trimEnd('.'))
 
     private val countrySuffix = Regex("""(?:\s+(?:ARE|AE|UAE))+$""", RegexOption.IGNORE_CASE)
 
@@ -179,36 +184,53 @@ object SmsParser {
         return firstChunk.replace(countrySuffix, "").trim().trimEnd(',', '.', '-').trim()
     }
 
-    private val numericDate = Regex("""^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$""")
+    private val splitTime = Regex("""^(.*?)(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp])\.?[Mm]\.?)?)?$""")
+    private val weekdayPrefix = Regex("""^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+""", RegexOption.IGNORE_CASE)
+    private val numericDate = Regex("""^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$""")
     private val monthFirst = Regex("""^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$""")
-    private val dayFirst = Regex("""^(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$""")
+    private val dayFirst = Regex("""^(\d{1,2})(?:\s+|[/-])([A-Za-z]{3,9}),?(?:\s+|[/-])(\d{2,4})$""")
     private val compact = Regex("""^(\d{1,2})([A-Za-z]{3})(\d{2}|\d{4})$""") // 11Jun25, 07Jul2025
     private val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
-    /** Day-first dates as used by UAE banks. Returns the date-time and whether a time was present. */
+    private fun year(raw: String) = raw.toInt().let { if (it < 100) 2000 + it else it }
+
+    /**
+     * Day-first dates as used by UAE banks, with an optional time (24h or AM/PM) and weekday:
+     * 13/09/2026 11:58:47 · 08-SEP-2026, 07:42:23 AM · Tuesday, 7 July 2026, 3:16 pm · May 25 2026 11:02AM · 25/Mar/2026 01:40.
+     * Returns the date-time and whether a time was present.
+     */
     fun parseDateTime(raw: String): Pair<LocalDateTime, Boolean>? {
         val s = raw.trim().replace(Regex("""\s+"""), " ")
+        val tm = splitTime.matchEntire(s) ?: return null
+        val datePart = tm.groupValues[1].trim().trimEnd(',').replace(weekdayPrefix, "")
+        val date = parseDate(datePart) ?: return null
+        val h = tm.groupValues[2]
+        if (h.isEmpty()) return date.atStartOfDay() to false
+        var hour = h.toInt()
+        when (tm.groupValues[5].lowercase()) {
+            "p" -> if (hour < 12) hour += 12
+            "a" -> if (hour == 12) hour = 0
+        }
+        val time = LocalTime.of(hour, tm.groupValues[3].toInt(), tm.groupValues[4].ifEmpty { "0" }.toInt())
+        return date.atTime(time) to true
+    }
+
+    private fun parseDate(s: String): LocalDate? {
         numericDate.matchEntire(s)?.let { m ->
-            val (d, mo, yRaw) = m.destructured
-            val y = yRaw.toInt().let { if (it < 100) 2000 + it else it }
-            val date = LocalDate.of(y, mo.toInt(), d.toInt())
-            val h = m.groupValues[4]
-            if (h.isEmpty()) return date.atStartOfDay() to false
-            val time = LocalTime.of(h.toInt(), m.groupValues[5].toInt(), m.groupValues[6].ifEmpty { "0" }.toInt())
-            return date.atTime(time) to true
+            val (d, mo, y) = m.destructured
+            return LocalDate.of(year(y), mo.toInt(), d.toInt())
         }
         monthFirst.matchEntire(s)?.let { m ->
             val mo = monthIndex(m.groupValues[1]) ?: return null
-            return LocalDate.of(m.groupValues[3].toInt(), mo, m.groupValues[2].toInt()).atStartOfDay() to false
+            return LocalDate.of(m.groupValues[3].toInt(), mo, m.groupValues[2].toInt())
         }
         compact.matchEntire(s)?.let { m ->
             val mo = monthIndex(m.groupValues[2]) ?: return null
-            val y = m.groupValues[3].toInt().let { if (it < 100) 2000 + it else it }
-            return LocalDate.of(y, mo, m.groupValues[1].toInt()).atStartOfDay() to false
+            return LocalDate.of(year(m.groupValues[3]), mo, m.groupValues[1].toInt())
         }
         dayFirst.matchEntire(s)?.let { m ->
             val mo = monthIndex(m.groupValues[2]) ?: return null
-            return LocalDate.of(m.groupValues[3].toInt(), mo, m.groupValues[1].toInt()).atStartOfDay() to false
+            return LocalDate.of(year(m.groupValues[3]), mo, m.groupValues[1].toInt())
         }
         return null
     }

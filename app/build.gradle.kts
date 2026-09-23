@@ -13,8 +13,8 @@ android {
         applicationId = "com.junaid.cardtracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "1.0"
+        versionCode = 8
+        versionName = "1.1"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.
@@ -57,6 +57,8 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
+    // Category and chart icons (debug APK gets bigger; fine for a sideloaded app).
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 

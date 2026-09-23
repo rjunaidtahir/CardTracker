@@ -313,7 +313,7 @@ class ParserTest {
             "Dear Customer, your Within UAE Fund transfer to ENBD ANNUM Account/Card No. XXXX7701 has been scheduled. Transfer of AED 500.0 will be done on 28/09/2026.",
             received,
         )
-        assertEquals(ParseResult.Ignored("FAB", "Scheduled / standing instruction"), r1)
+        assertEquals(ParseResult.Ignored("FAB", "Scheduled transfer"), r1)
         val r2 = SmsParser.parse(
             "FAB",
             "Dear Customer, you have deregistered your standing Instruction service for Within UAE Fund transfer of AED 1,500.00 to ENBD ANNUM Account/Card No. XXXX7701",
@@ -456,6 +456,113 @@ class ParserTest {
         val auth = SmsParser.parse("EmiratesNBD", cases[0].second, received)
         assertIs<ParseResult.Ignored>(auth)
         assertEquals(false, auth.store)
+    }
+
+    // ------------------------------------------------ v1.1 formats (Review list)
+
+    @Test fun v11_transaction_formats() {
+        val cases = listOf(
+            TxnCase("EmiratesNBD", "AED 50.00 has been debited from your Credit Card 0866 to top up your Nol e-purse. Avl.limit AED 2,345.00", TxnType.PURCHASE, "0866", "50.00", merchant = "Nol top-up"),
+            TxnCase("EmiratesNBD", "Payment of AED 2,000.00 towards your Credit Card ending 9940 on 03/09/2026 was received through Online Banking. Thank you.", TxnType.PAYMENT, "9940", "2000.00"),
+            TxnCase("EmiratesNBD", "Purchase of AED 28.72 with Credit Card ending 3944 at MORE VALUE SUPERMARKE, DUBAI. Avl Cr. Limit is AED -120.50", TxnType.PURCHASE, "3944", "28.72"),
+            TxnCase("AlHilal", "Refund of 1 AED from CAREEM PLUS on 08-SEP-2026, 07:42:23 AM has been credited to your card ending with 3976.", TxnType.REFUND, "3976", "1", merchant = "CAREEM PLUS"),
+            TxnCase("Mashreq", "Mashreq Credit Card ending 4680 was used for a transaction of AED 47,830.00 at LAND DEPARTMENT on Tuesday, 7 July 2026, 3:16 pm. Available limit: AED 12,170.00", TxnType.PURCHASE, "4680", "47830.00", merchant = "LAND DEPARTMENT"),
+            TxnCase("Mashreq", "Dear Customer, your Aani payment of AED 120.00 to AN** KAI*** is successful.", TxnType.TRANSFER_OUT, "7639", "120.00", cardType = CardType.ACCOUNT),
+            TxnCase("Mashreq", "Your Card ending with 0933 was used for cash withdrawal of AED 2,500.00 at MASHREQ ATM DXB on 02-MAY-2026 07:14 PM. Avl bal AED 5,000.00", TxnType.PURCHASE, "0933", "2500.00", merchant = "ATM cash withdrawal", cardType = CardType.DEBIT),
+            TxnCase("Mashreq", "An amount of AED 10000.00 has been credited to your Mashreq account no. XXXXXXXX7639 for Inward Transfer. Login to Online Banking for details.", TxnType.TRANSFER_IN, "7639", "10000.00", merchant = "Inward Transfer"),
+            TxnCase("ADCBAlert", "AED10900.00 transferred via ADCB Personal Internet Banking / Mobile App from acc. no. XXX810001 on May 25 2026 11:02AM. Avl. bal. AED 1,234.00", TxnType.TRANSFER_OUT, "0001", "10900.00", cardType = CardType.ACCOUNT),
+            TxnCase("ADCBAlert", "Thank you and Congratulations on your new card. Your credit card xxx3538 was used for AED 257.00 on 12/06/2026 18:22:10 at CARREFOUR CITY,DUBAI- AE. Available credit limit is now AED 4,743.00", TxnType.PURCHASE, "3538", "257.00", merchant = "CARREFOUR CITY"),
+            TxnCase("ADCBAlert", "A purchase transaction of USD265.00 has been performed on your Credit Card XXX3538 on 03/05/2026 10:11:12 at IIA STORE,NEW YORK-US. Available credit limit is now AED 3,000.00", TxnType.PURCHASE, "3538", "265.00", currency = "USD", merchant = "IIA STORE"),
+            TxnCase("ADCBAlert", "AED308.34 debited from Acc/Cr.Card XXX3538 for DEWA on 21-08-2023 14:43:18", TxnType.PURCHASE, "3538", "308.34", merchant = "DEWA"),
+            TxnCase("FAB", "Dear Customer, a debit of AED 500.00 has been made from your account XXXX8001 against your request for UAE PGS payment to JOHN SMITH through FAB Online on 25/Mar/2026 01:40", TxnType.TRANSFER_OUT, "8001", "500.00", merchant = "JOHN SMITH", cardType = CardType.ACCOUNT),
+            TxnCase("FAB", "Your Dubai First card payment request of AED 8,000.00 to IBAN/Account/Card XXXX8623 was processed successfully from your account/card XXXX8001 on 02/09/2026 10:15", TxnType.TRANSFER_OUT, "8001", "8000.00", merchant = "Payment to Dubai First credit card ·8623", to = "8623"),
+            TxnCase("FAB", "Debit Card Purchase\nDebit Account XXXX8001\nCard XXXX5919\nAED 185.38\nAmazon.ae   Dubai  AE\n12/11/25 22:03\nAvailable Balance AED 9,000.00", TxnType.PURCHASE, "8001", "185.38", merchant = "Amazon.ae", cardType = CardType.ACCOUNT),
+            TxnCase("FAB", "Congratulations! You have successfully redeemed 20000 FAB Al Futtaim Rewards to save on your bills. Value: AED 50", TxnType.REFUND, null, "50"),
+            TxnCase("FAB", "Out of total amount due of AED 1308.34, payment of AED 1000 to DEWA for consumer number 2001234567 has been processed on 16/08/2023", TxnType.PURCHASE, "8001", "1000", merchant = "DEWA"),
+            TxnCase("HSBC-UAE", "Your Credit Card ending *** 5258 was used for AED 8.00 at DRAGON ICE CAFE. Your available limit is AED 1,234.00", TxnType.PURCHASE, "5258", "8.00", merchant = "DRAGON ICE CAFE"),
+        )
+        for (c in cases) {
+            val t = txn(c.sender, c.body)
+            assertEquals(c.type, t.type, c.body)
+            assertEquals(c.card, t.cardLast4, c.body)
+            assertEquals(0, bd(c.amount).compareTo(t.amount), "amount: ${c.body}")
+            assertEquals(c.currency, t.currency, c.body)
+            c.merchant?.let { assertEquals(it, t.merchant, c.body) }
+            c.cardType?.let { assertEquals(it, t.cardType, c.body) }
+            c.to?.let { assertEquals(it, t.toLast4, c.body) }
+        }
+        // Times with AM/PM and weekday names
+        assertEquals(ts(2026, 9, 8, 7, 42, 23), txn("AlHilal", cases[3].body).timestamp)
+        assertEquals(ts(2026, 7, 7, 15, 16), txn("Mashreq", cases[4].body).timestamp)
+        assertEquals(ts(2026, 5, 2, 19, 14), txn("Mashreq", cases[6].body).timestamp)
+        assertEquals(ts(2026, 5, 25, 11, 2), txn("ADCBAlert", cases[8].body).timestamp)
+        assertEquals(ts(2026, 3, 25, 1, 40), txn("FAB", cases[12].body).timestamp)
+        assertEquals(bd("-120.50"), txn("EmiratesNBD", cases[2].body).availableLimit)
+    }
+
+    @Test fun v11_statement_formats() {
+        val a = stmt("AlHilal", "Payment of AED 1423.09 for credit card ending with (3976) is due on 25 August 2026. Please pay on time.")
+        assertEquals("3976", a.cardLast4)
+        assertEquals(bd("1423.09"), a.statementBalance)
+        assertNull(a.minimumDue)
+        assertEquals(LocalDate.of(2026, 8, 25), a.dueDate)
+
+        val f = stmt("FAB", "Dear Customer, the payment due date of your FAB Credit Card ending with 2784 is 06-12-2023. The total amount due is AED 3,734.00 and the Minimum due amount is AED 186.70.")
+        assertEquals("2784", f.cardLast4)
+        assertEquals(bd("3734.00"), f.statementBalance)
+        assertEquals(bd("186.70"), f.minimumDue)
+        assertEquals(LocalDate.of(2023, 12, 6), f.dueDate)
+
+        val neg = stmt(
+            "FAB",
+            "Your statement of the card ending with 3115 dated 11Jun25 has been sent to you. The total amount due is AED -61.38. Minimum due is AED 0.00. Due date is 07Jul25",
+        )
+        assertEquals(bd("-61.38"), neg.statementBalance)
+    }
+
+    @Test fun v11_ignored_formats() {
+        val cases = listOf(
+            "EmiratesNBD" to "Your purchase of AED 1,200.00 at SHARAF DG has been converted to 12 monthly installments.",
+            "ADCBAlert" to "Your transaction of AED 3,000 has been converted into installments. Monthly amount AED 250.",
+            "Mashreq" to "Your beneficiary for AED transfers will be activated within 4 hours.",
+            "FAB" to "Dear Customer, your mortgage loan of AED 1,000,000.00 has been disbursed to the seller.",
+            "EmiratesNBD" to "Your Loan on Card request of AED 10,000.00 is approved and will be credited to your card.",
+            "HSBC-UAE" to "You will now receive push notifications instead of SMS for transactions above AED 0.",
+            "Mashreq" to "Congratulations! Your account has been opened. Your first deposit of AED 3000 is due.",
+            "ADCBAlert" to "Your request for transfer of AED 5,000.00 is under process.",
+            "FAB" to "Your transfer of AED 700.00 to account XXXX1234 has failed. Please try again.",
+            "FAB" to "Your IPO subscription request for AED 10,000.00 has been received.",
+            "EmiratesNBD" to "A provisional credit limit of AED 5,000 has been set on your new card.",
+            "ADCBAlert" to "Last Stmt Bal. of Cr.Card XXX3538 is AED 1,263.92. Avl. limit AED 4,000.00",
+            "FAB" to "Your Standing Instruction for AED 500.00 to card XXXX3115 has been registered.",
+            "EmiratesNBD" to "Your invoice of AED 99.00 for DU is ready.",
+            "ADCBAlert" to "The limit change of AED 2,000 for supplementary card XXX1234 is complete.",
+            "HSBC-UAE" to "Spend AED 5,000 this quarter to unlock free lounge access. T&Cs apply.",
+            "EmiratesNBD" to "Enjoy 10% off up to AED 100 at noon. Visit offers.emiratesnbd.com",
+            "ADCBAlert" to "Get AED 500 cashback. Visit adcb.com/offers. TCs apply",
+            "EmiratesNBD" to "Dine and save up to AED 200 this weekend. Opt out: SMS STOP",
+            "FAB" to "Your summer deals: shop and save AED 250. TnC apply.",
+            "Mashreq" to "Set up an installment plan for your AED 3,000 purchase. please visit mashreq.com",
+        )
+        for ((sender, body) in cases) {
+            val r = SmsParser.parse(sender, body, received)
+            assertIs<ParseResult.Ignored>(r, "Expected ignored: $body -> $r")
+        }
+        // HSBC transaction PIN is an OTP: never stored
+        val pin = SmsParser.parse("HSBC-UAE", "PIN for transaction of AED 250.00 at AMAZON on card ending 5258 is 137781. Do not share.", received)
+        assertIs<ParseResult.Ignored>(pin)
+        assertEquals(false, pin.store)
+    }
+
+    @Test fun v11_date_parsing() {
+        assertEquals(LocalDateTime.of(2026, 9, 8, 7, 42, 23) to true, SmsParser.parseDateTime("08-SEP-2026, 07:42:23 AM"))
+        assertEquals(LocalDateTime.of(2026, 5, 2, 19, 14) to true, SmsParser.parseDateTime("02-MAY-2026 07:14 PM"))
+        assertEquals(LocalDateTime.of(2026, 7, 7, 15, 16) to true, SmsParser.parseDateTime("Tuesday, 7 July 2026, 3:16 pm"))
+        assertEquals(LocalDateTime.of(2026, 5, 25, 11, 2) to true, SmsParser.parseDateTime("May 25 2026 11:02AM"))
+        assertEquals(LocalDateTime.of(2026, 3, 25, 1, 40) to true, SmsParser.parseDateTime("25/Mar/2026 01:40"))
+        assertEquals(LocalDateTime.of(2026, 1, 1, 0, 5) to true, SmsParser.parseDateTime("01/01/2026 12:05 AM"))
+        assertEquals(LocalDateTime.of(2026, 9, 13, 11, 58, 47) to true, SmsParser.parseDateTime("13/09/2026 11:58:47"))
+        assertEquals(LocalDateTime.of(2025, 7, 7, 0, 0) to false, SmsParser.parseDateTime("07Jul25"))
     }
 
     // ------------------------------------------------------ Mashreq (generic)

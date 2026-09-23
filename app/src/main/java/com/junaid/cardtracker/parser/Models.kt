@@ -37,7 +37,14 @@ data class Rule(
      * different rules in the same group, same account, same amount, within 3 hours are merged.
      */
     val pairGroup: String? = null,
-)
+    /**
+     * Whether this SMS names where the money went. Within a pairGroup, only a message that names the
+     * destination pairs with one that doesn't. Defaults to "the pattern has a {TO} token".
+     */
+    val describesDestination: Boolean? = null,
+) {
+    val namesDestination: Boolean get() = describesDestination ?: pattern.contains("{TO}")
+}
 
 /** [store] = false means the SMS is dropped entirely (not even the raw text is kept), e.g. OTPs. */
 data class IgnoreRule(val label: String, val pattern: String, val store: Boolean = true)

@@ -1,34 +1,39 @@
 package com.junaid.cardtracker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.DonutLarge
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.material.icons.filled.TrendingDown
+import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -46,14 +51,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.junaid.cardtracker.core.Bucket
 import com.junaid.cardtracker.core.DueState
+import com.junaid.cardtracker.core.TimePoint
 import com.junaid.cardtracker.data.CardDue
 import com.junaid.cardtracker.data.CategoryEntity
 import com.junaid.cardtracker.data.FxRateEntity
@@ -65,9 +73,20 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val shortMonth = DateTimeFormatter.ofPattern("MMM", Locale.ENGLISH)
+private val dayMonth = DateTimeFormatter.ofPattern("d MMM", Locale.ENGLISH)
+private val weekdayDayMonth = DateTimeFormatter.ofPattern("EEE, d MMM", Locale.ENGLISH)
+private val monthYearShort = DateTimeFormatter.ofPattern("MMM yy", Locale.ENGLISH)
 
-// ================================================================ Overview (Phases 2-4 dashboard)
+/** Axis label and tooltip for a timeline bucket. */
+fun TimePoint.toChartPoint(bucket: Bucket): ChartPoint = when (bucket) {
+    Bucket.DAY -> ChartPoint(start.format(dayMonth), start.format(weekdayDayMonth), amountMinor)
+    Bucket.WEEK -> ChartPoint(start.format(dayMonth), "Week of " + start.format(dayMonth), amountMinor)
+    Bucket.MONTH -> ChartPoint(start.format(monthYearShort), start.format(monthFmt), amountMinor)
+}
 
+// ================================================================ Overview (dashboard)
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun OverviewScreen(
     vm: MainViewModel,
@@ -81,182 +100,299 @@ fun OverviewScreen(
     val cards by vm.cards.collectAsStateWithLifecycle()
     val names = categories.associate { it.id to it.name }
     val cardNames = cards.associate { it.cardKey to (it.nickname ?: it.cardKey) }
+    var chartMode by rememberSaveable { mutableStateOf(0) } // 0 = arc, 1 = trend
+    var selectedCat by remember(o.period) { mutableStateOf<Long?>(null) }
+    var hasSel by remember(o.period) { mutableStateOf(false) }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // ---- month + hero number
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // ---- hero
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = vm::previousMonth) { Icon(Icons.Filled.KeyboardArrowLeft, "Previous month") }
-                Text(o.month.format(monthFmt), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
-                IconButton(onClick = vm::nextMonth) { Icon(Icons.Filled.KeyboardArrowRight, "Next month") }
+            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)) {
+                Eyebrow("Total spent")
+                Text(fmtMoney(o.spentMinor), style = heroNumberStyle)
+                val prev = o.previous
+                if (prev != null && o.previousMinor > 0) {
+                    val diff = o.spentMinor - o.previousMinor
+                    val pct = kotlin.math.abs(diff) * 100 / o.previousMinor
+                    val up = diff > 0
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                        Icon(if (up) Icons.Filled.TrendingUp else Icons.Filled.TrendingDown, null, Modifier.size(16.dp), tint = if (up) Ink.red else Ink.green)
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "$pct% ${if (up) "more" else "less"} than ${prev.label()} · ${fmtMoney(o.previousMinor)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Ink.muted,
+                            maxLines = 2,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MiniStat("Per day", fmtCompactMoney(o.avgPerDayMinor), Modifier.weight(1f))
+                    MiniStat("Spends", o.txnCount.toString(), Modifier.weight(1f))
+                    MiniStat("Money in", fmtCompactMoney(o.moneyInMinor), Modifier.weight(1f), Ink.green)
+                }
             }
-            Text("Spent", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(fmtMoney(o.spentMinor), style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.SemiBold)
-            if (o.previousMonthMinor > 0) {
-                val diff = o.spentMinor - o.previousMonthMinor
-                val pct = (kotlin.math.abs(diff) * 100 / o.previousMonthMinor)
-                Text(
-                    (if (diff >= 0) "$pct% more" else "$pct% less") + " than ${o.month.minusMonths(1).format(monthFmt)} (${fmtMoney(o.previousMonthMinor)})",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+        }
+
+        // ---- period chips
+        item {
+            PeriodSelector(
+                period = o.period,
+                onKind = vm::selectPeriodKind,
+                onShift = vm::shiftPeriod,
+                onCustom = vm::setCustomPeriod,
+            )
+        }
+
+        // ---- chart card: arc (categories) or trend (over time)
+        item {
+            Panel(Modifier.padding(horizontal = 16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (chartMode == 0) "By category" else "Over time", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                    ModeToggle(chartMode) { chartMode = it }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (chartMode == 0) {
+                    val slices = o.byCategory.map { (id, v) ->
+                        DonutSlice(id, v, CategoryStyle.color(id), id?.let { names[it] } ?: "Uncategorised")
+                    }
+                    val sel = slices.firstOrNull { hasSel && it.key == selectedCat }
+                    DonutChart(
+                        slices = slices,
+                        selectedKey = selectedCat,
+                        hasSelection = hasSel,
+                        onSelect = { s -> if (s == null) { hasSel = false } else { selectedCat = s.key; hasSel = true } },
+                        centerTitle = sel?.label ?: "Total",
+                        centerValue = fmtCompactMoney(sel?.value ?: o.spentMinor),
+                        centerSubtitle = sel?.let { s -> if (o.spentMinor > 0) "${s.value * 100 / o.spentMinor}% of spend" else null }
+                            ?: if (slices.isEmpty()) "No spending" else "${slices.size} categories",
+                    )
+                    if (sel != null) {
+                        TextButton(onClick = { onOpenCategory(sel.key) }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                            Text("See ${sel.label} transactions")
+                        }
+                    }
+                    if (slices.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            slices.forEach { s ->
+                                Pill(
+                                    text = s.label,
+                                    selected = hasSel && selectedCat == s.key,
+                                    onClick = { if (hasSel && selectedCat == s.key) hasSel = false else { selectedCat = s.key; hasSel = true } },
+                                    icon = CategoryStyle.icon(s.key),
+                                    tint = s.color,
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    AreaChart(
+                        points = o.timeline.map { it.toChartPoint(o.bucket) },
+                        idleTitle = when (o.bucket) { Bucket.DAY -> "Daily spend"; Bucket.WEEK -> "Weekly spend"; Bucket.MONTH -> "Monthly spend" },
+                        idleValue = "avg " + fmtMoney(if (o.timeline.isNotEmpty()) o.spentMinor / o.timeline.size else 0L),
+                    )
+                    Text("Touch or drag across the chart to read a value", style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 6.dp))
+                }
+            }
+        }
+
+        // ---- category list with amounts and shares
+        if (o.byCategory.isNotEmpty()) {
+            item {
+                Panel(Modifier.padding(horizontal = 16.dp), padding = PaddingValues(vertical = 8.dp)) {
+                    val max = o.byCategory.maxOf { it.second }.coerceAtLeast(1)
+                    o.byCategory.forEach { (id, amount) ->
+                        val color = CategoryStyle.color(id)
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onOpenCategory(id) }.padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            IconBadge(CategoryStyle.icon(id), color, 36.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(id?.let { names[it] } ?: "Uncategorised", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(fmtMoney(amount), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    ShareBar(amount.toFloat() / max, color, Modifier.weight(1f))
+                                    Spacer(Modifier.width(10.dp))
+                                    Text(if (o.spentMinor > 0) "${amount * 100 / o.spentMinor}%" else "", style = MaterialTheme.typography.labelMedium, color = Ink.muted)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
         // ---- upcoming dues
         val open = dues.filter { it.status.state == DueState.UNPAID || it.status.state == DueState.OVERDUE || it.status.state == DueState.MIN_PAID }
-        item { SectionTitle("Card payments due") }
+        item { SectionHeader("Card payments due", Modifier.padding(horizontal = 20.dp)) }
         if (open.isEmpty()) {
-            item { Muted(if (dues.isEmpty()) "No statement SMS yet." else "All statements paid.") }
+            item { Muted(if (dues.isEmpty()) "No statement SMS yet." else "All statements paid.", Modifier.padding(horizontal = 20.dp)) }
         }
-        items(open, key = { "due-" + it.card.cardKey }) { d -> DueRow(d) { onOpenCard(d.card.cardKey) } }
-
-        // ---- by category
-        item { SectionTitle("Spending by category") }
-        if (o.byCategory.isEmpty()) item { Muted("No spending this month.") }
-        val catMax = o.byCategory.maxOfOrNull { it.second } ?: 1L
-        items(o.byCategory, key = { "cat-" + it.first }) { (id, amount) ->
-            BarRow(
-                label = id?.let { names[it] } ?: "Uncategorised",
-                value = fmtMoney(amount),
-                share = if (o.spentMinor > 0) "${amount * 100 / o.spentMinor}%" else "",
-                fraction = amount.toFloat() / catMax,
-                onClick = { onOpenCategory(id) },
-            )
-        }
+        items(open, key = { "due-" + it.card.cardKey }) { d -> DueRow(d, Modifier.padding(horizontal = 16.dp)) { onOpenCard(d.card.cardKey) } }
 
         // ---- 12-month history
         item {
-            SectionTitle("Last 12 months")
-            MonthBars(o.history.map { it.month to it.amountMinor }, selected = o.month, onSelect = { vm.selectMonth(it) })
+            Panel(Modifier.padding(horizontal = 16.dp)) {
+                Text("Last 12 months", style = MaterialTheme.typography.titleMedium)
+                val selIdx = o.history.indexOfFirst { o.period.kind == com.junaid.cardtracker.core.PeriodKind.MONTH && o.period.start?.let(YearMonth::from) == it.month }
+                val sel = o.history.getOrNull(selIdx)
+                Spacer(Modifier.height(6.dp))
+                BarChart(
+                    data = o.history.map { it.month.format(shortMonth).take(3) to it.amountMinor },
+                    selectedIndex = selIdx.takeIf { it >= 0 },
+                    onSelect = { i -> vm.selectMonth(o.history[i].month) },
+                    headline = sel?.let { "${it.month.format(monthFmt)}: ${fmtMoney(it.amountMinor)}" } ?: "Tap a month to open it",
+                )
+            }
+        }
+
+        // ---- top merchants
+        if (o.topMerchants.isNotEmpty()) {
+            item {
+                Panel(Modifier.padding(horizontal = 16.dp)) {
+                    Text("Top merchants", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    val max = o.topMerchants.maxOf { it.second }.coerceAtLeast(1)
+                    o.topMerchants.forEachIndexed { i, (m, v) ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("${i + 1}", style = MaterialTheme.typography.labelLarge, color = Ink.faint, modifier = Modifier.width(22.dp))
+                            Column(Modifier.weight(1f)) {
+                                Row {
+                                    Text(m, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(fmtMoney(v), fontWeight = FontWeight.SemiBold)
+                                }
+                                ShareBar(v.toFloat() / max, Ink.green)
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         // ---- by card
         if (o.byCard.isNotEmpty()) {
-            item { SectionTitle("By card") }
-            val cardMax = o.byCard.maxOf { it.amountMinor }
-            items(o.byCard, key = { "card-" + it.key }) { s ->
-                BarRow(cardNames[s.key] ?: s.key, fmtMoney(s.amountMinor), "", s.amountMinor.toFloat() / cardMax, onClick = null)
+            item {
+                Panel(Modifier.padding(horizontal = 16.dp)) {
+                    Text("By card", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(6.dp))
+                    val cardMax = o.byCard.maxOf { it.amountMinor }.coerceAtLeast(1)
+                    o.byCard.forEach { s ->
+                        Column(Modifier.fillMaxWidth().clickable(enabled = s.key != "Typed entries") { onOpenCard(s.key) }.padding(vertical = 4.dp)) {
+                            Row {
+                                Text(cardNames[s.key] ?: s.key, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(fmtMoney(s.amountMinor), fontWeight = FontWeight.SemiBold)
+                            }
+                            ShareBar(s.amountMinor.toFloat() / cardMax, Ink.violet)
+                        }
+                    }
+                }
             }
         }
 
         // ---- recurring
-        item { SectionTitle("Recurring payments") }
-        if (o.recurring.isEmpty()) item { Muted("None detected yet (needs 3+ roughly monthly charges).") }
-        items(o.recurring, key = { "rec-${it.merchantKey}|${it.cardKey}|${it.averageMinor}|${it.lastDate}" }) { r ->
-            Row(Modifier.fillMaxWidth()) {
-                Column(Modifier.weight(1f)) {
-                    Text(r.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        "${r.occurrences}× · next about ${r.nextExpected.format(dateFmt)}" + (r.cardKey?.let { " · " + (cardNames[it] ?: it) } ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+        item {
+            Panel(Modifier.padding(horizontal = 16.dp)) {
+                Text("Recurring payments", style = MaterialTheme.typography.titleMedium)
+                if (o.recurring.isEmpty()) Muted("None detected yet (needs 3+ roughly monthly charges).", Modifier.padding(top = 6.dp))
+                o.recurring.forEach { r ->
+                    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconBadge(Icons.Filled.Repeat, Ink.violet, 34.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(r.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${r.occurrences}× · next about ${r.nextExpected.format(dateFmt)}" + (r.cardKey?.let { " · " + (cardNames[it] ?: it) } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Ink.muted,
+                            )
+                        }
+                        Text(fmtMoney(r.averageMinor), fontWeight = FontWeight.SemiBold)
+                    }
                 }
-                Text(fmtMoney(r.averageMinor), fontWeight = FontWeight.Medium)
             }
         }
 
         // ---- currencies
         if (o.byCurrency.isNotEmpty()) {
-            item { SectionTitle("Foreign currency spending (in AED)") }
-            items(o.byCurrency, key = { "cur-" + it.currency }) { c ->
-                Row(Modifier.fillMaxWidth()) {
-                    Text("${fmtMoney(c.originalMinor, c.currency)} · ${c.count} txns", modifier = Modifier.weight(1f))
-                    Text("≈ " + fmtMoney(c.aedMinor), fontWeight = FontWeight.Medium)
+            item {
+                Panel(Modifier.padding(horizontal = 16.dp)) {
+                    Text("Foreign currency (in AED)", style = MaterialTheme.typography.titleMedium)
+                    o.byCurrency.forEach { c ->
+                        Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                            Text("${fmtMoney(c.originalMinor, c.currency)} · ${c.count} txns", modifier = Modifier.weight(1f), color = Ink.muted)
+                            Text("≈ " + fmtMoney(c.aedMinor), fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
             }
         }
 
         // ---- goals
-        item { GoalsSection(goals, onSave = { vm.saveGoal(it) }, onDelete = { vm.deleteGoal(it) }) }
+        item { Box(Modifier.padding(horizontal = 16.dp)) { GoalsSection(goals, onSave = { vm.saveGoal(it) }, onDelete = { vm.deleteGoal(it) }) } }
+    }
+}
+
+/** AED 12.3K style for tight spaces (full amounts elsewhere). */
+fun fmtCompactMoney(minor: Long): String = if (kotlin.math.abs(minor) < 100_000_00) fmtMoney(minor).substringBeforeLast('.') else "AED " + fmtCompact(minor)
+
+@Composable
+private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Ink.text) {
+    Column(
+        modifier.clip(RoundedCornerShape(16.dp)).background(Ink.surface).border(1.dp, Ink.border, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Eyebrow(label)
+        Text(value, style = MaterialTheme.typography.titleSmall, color = color, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** Two round icon buttons: arc chart / trend chart. */
+@Composable
+private fun ModeToggle(mode: Int, onChange: (Int) -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(50)).background(Ink.surfaceHigh).border(1.dp, Ink.border, RoundedCornerShape(50)).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        listOf(Icons.Filled.DonutLarge to "Categories", Icons.Filled.ShowChart to "Trend").forEachIndexed { i, (icon, desc) ->
+            val on = mode == i
+            Box(
+                Modifier.size(34.dp).clip(CircleShape).background(if (on) Ink.green.copy(alpha = 0.2f) else Color.Transparent).clickable { onChange(i) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, desc, Modifier.size(18.dp), tint = if (on) Ink.green else Ink.muted)
+            }
+        }
     }
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+fun Muted(text: String, modifier: Modifier = Modifier) {
+    Text(text, modifier = modifier, style = MaterialTheme.typography.bodyMedium, color = Ink.muted)
 }
 
 @Composable
-private fun Muted(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-@Composable
-private fun DueRow(d: CardDue, onClick: () -> Unit) {
+private fun DueRow(d: CardDue, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val attention = d.status.state == DueState.UNPAID || d.status.state == DueState.OVERDUE
-    Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+    val accent = if (attention) Ink.red else Ink.amber
+    Panel(modifier.fillMaxWidth(), onClick = onClick, padding = PaddingValues(14.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 4.dp, height = 44.dp).clip(RoundedCornerShape(2.dp)).background(accent))
+            Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(d.label, fontWeight = FontWeight.Medium)
+                Text(d.label, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     "Due ${fmtEpochDay(d.statement.dueDateEpochDay)}" + (d.statement.minimumDueMinor?.let { " · min ${fmtMoney(it, d.statement.currency)}" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Ink.muted,
                 )
-                Text(
-                    dueStateText(d),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (attention) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                )
+                Text(dueStateText(d), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = accent)
             }
-            Text(fmtMoney(d.status.remainingMinor, d.statement.currency), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        }
-    }
-}
-
-/** One horizontal bar: label and value in text colours, the bar itself in a single hue (magnitude only). */
-@Composable
-private fun BarRow(label: String, value: String, share: String, fraction: Float, onClick: (() -> Unit)?) {
-    val m = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
-    Column(m.fillMaxWidth().padding(vertical = 2.dp)) {
-        Row {
-            Text(label, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (share.isNotEmpty()) Text(share, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(end = 8.dp))
-            Text(value, fontWeight = FontWeight.Medium)
-        }
-        MeterBar(fraction)
-    }
-}
-
-/** Vertical bars for monthly totals; tap a bar to pick that month. The selected month is labelled. */
-@Composable
-private fun MonthBars(data: List<Pair<YearMonth, Long>>, selected: YearMonth, onSelect: (YearMonth) -> Unit) {
-    val max = (data.maxOfOrNull { it.second } ?: 0L).coerceAtLeast(1L)
-    val sel = data.firstOrNull { it.first == selected }
-    Column {
-        Text(
-            sel?.let { "${it.first.format(monthFmt)}: ${fmtMoney(it.second)}" } ?: "Tap a month",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().height(140.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
-            data.forEach { (m, v) ->
-                val isSel = m == selected
-                Column(
-                    Modifier.weight(1f).fillMaxHeight().clickable { onSelect(m) },
-                    verticalArrangement = Arrangement.Bottom,
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    val frac = (v.toFloat() / max).coerceIn(0f, 1f)
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .fillMaxHeight(if (v > 0) (0.02f + 0.78f * frac) else 0.01f)
-                            .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
-                            .background(if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                    )
-                    Text(
-                        m.format(shortMonth).take(1),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                        color = if (isSel) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            Text(fmtMoney(d.status.remainingMinor, d.statement.currency), style = MaterialTheme.typography.titleMedium, color = Ink.text)
         }
     }
 }
@@ -282,19 +418,19 @@ private fun GoalsSection(goals: List<GoalEntity>, onSave: (GoalEntity) -> Unit, 
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Savings goals", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("Savings goals", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
             TextButton(onClick = { adding = true }) { Text("Add goal") }
         }
         if (goals.isEmpty()) Muted("Set a target and log what you put aside.")
         goals.forEach { g ->
             val frac = if (g.targetMinor > 0) g.savedMinor.toFloat() / g.targetMinor else 0f
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
+            Panel(Modifier.fillMaxWidth(), padding = PaddingValues(14.dp)) {
+                Column {
                     Row {
                         Text(g.name, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Text("${(frac * 100).toInt()}%", fontWeight = FontWeight.Medium)
+                        Text("${(frac * 100).toInt()}%", fontWeight = FontWeight.SemiBold, color = Ink.green)
                     }
-                    MeterBar(frac)
+                    ShareBar(frac, Ink.green)
                     val remaining = (g.targetMinor - g.savedMinor).coerceAtLeast(0)
                     val perMonth = g.targetDateEpochDay?.let { d ->
                         val months = java.time.temporal.ChronoUnit.MONTHS.between(YearMonth.now(), YearMonth.from(LocalDate.ofEpochDay(d))).coerceAtLeast(1)

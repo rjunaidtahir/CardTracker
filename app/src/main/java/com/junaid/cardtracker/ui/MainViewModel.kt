@@ -12,6 +12,11 @@ import com.junaid.cardtracker.core.Insights
 import com.junaid.cardtracker.core.LockPolicy
 import com.junaid.cardtracker.core.MonthTotal
 import com.junaid.cardtracker.core.PinHasher
+import com.junaid.cardtracker.core.Period
+import com.junaid.cardtracker.core.PeriodKind
+import com.junaid.cardtracker.core.Timeline
+import com.junaid.cardtracker.core.TimePoint
+import com.junaid.cardtracker.core.Bucket
 import com.junaid.cardtracker.core.RecurringPayment
 import com.junaid.cardtracker.core.ReviewExport
 import com.junaid.cardtracker.core.Slice
@@ -51,30 +56,43 @@ import java.time.ZoneId
 
 data class CardSummary(
     val card: CardEntity,
-    /** This card's own net spend for the month (shown even if the card isn't counted). */
+    /** This card's own net spend for the selected period (shown even if the card isn't counted). */
     val monthSpendAedMinor: Long,
     val monthTxnCount: Int,
     val latestStatement: StatementEntity?,
-    /** Payments received this month: PAYMENT SMS on the card + transfers to it from your account. */
+    /** Payments received in the period: PAYMENT SMS on the card + transfers to it from your account. */
     val monthPaidInMinor: Long = 0,
-    /** Bank accounts: money in / out this month. */
+    /** Bank accounts: money in / out in the period. */
     val monthInMinor: Long = 0,
     val monthOutMinor: Long = 0,
     /** Latest available limit (cards) or balance (accounts) from any SMS. */
     val latestBalanceMinor: Long? = null,
     /** Latest statement with paid/due status (credit cards with a statement SMS). */
     val due: CardDue? = null,
+    /** Last available limit / balance of each day (last ~13 months), oldest first: the balance line. */
+    val balanceHistory: List<Pair<LocalDate, Long>> = emptyList(),
 )
 
 data class OverviewState(
-    val month: YearMonth,
+    val period: Period,
     val spentMinor: Long = 0,
-    val previousMonthMinor: Long = 0,
+    /** Same-length period just before (null for All). */
+    val previous: Period? = null,
+    val previousMinor: Long = 0,
     val byCategory: List<Pair<Long?, Long>> = emptyList(),
     val byCard: List<Slice> = emptyList(),
+    /** Spending over the period, in day/week/month buckets. */
+    val timeline: List<TimePoint> = emptyList(),
+    val bucket: Bucket = Bucket.DAY,
+    /** Last 12 calendar months, always (for the bar chart). */
     val history: List<MonthTotal> = emptyList(),
     val byCurrency: List<CurrencyTotal> = emptyList(),
     val recurring: List<RecurringPayment> = emptyList(),
+    val txnCount: Int = 0,
+    val avgPerDayMinor: Long = 0,
+    val topMerchants: List<Pair<String, Long>> = emptyList(),
+    /** Money that came into your bank accounts (salary, transfers in) in the period. */
+    val moneyInMinor: Long = 0,
 )
 
 fun TransactionEntity.txnType(): TxnType = runCatching { TxnType.valueOf(type) }.getOrDefault(TxnType.PURCHASE)
@@ -93,8 +111,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     val nav = Navigator()
 
-    /** null = all months */
-    val month = MutableStateFlow<YearMonth?>(YearMonth.now(zone))
+    /** Selected period for Overview, Transactions and Cards. Starts on the current calendar month. */
+    val period = MutableStateFlow(Period.of(PeriodKind.MONTH, LocalDate.now(zone)))
+    /** Transactions search text (merchant, category, card, amount). */
+    val search = MutableStateFlow("")
     /** null = all cards */
     val cardFilter = MutableStateFlow<String?>(null)
     /** null = all categories */
@@ -155,10 +175,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- data
 
-    private fun range(m: YearMonth?): Pair<Long, Long> =
-        if (m == null) 0L to Long.MAX_VALUE
-        else m.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli() to
-            m.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    private fun LocalDate.startMs() = atStartOfDay(zone).toInstant().toEpochMilli()
+
+    /** [from, to) in epoch millis for a period (All = everything). */
+    private fun range(p: Period): Pair<Long, Long> =
+        (p.start?.startMs() ?: 0L) to (p.end?.plusDays(1)?.startMs() ?: Long.MAX_VALUE)
 
     /**
      * Transactions tab list. With "All cards", cards switched OFF on the Cards tab are hidden
@@ -166,15 +187,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * (Card detail → Show transactions) still shows its transactions.
      */
     val transactions: StateFlow<List<TransactionEntity>> =
-        combine(month, cardFilter, categoryFilter) { m, c, cat -> Triple(m, c, cat) }
-            .flatMapLatest { (m, c, cat) ->
-                val (from, to) = range(m)
-                combine(dao.txns(from, to, c), dao.cards()) { list, cards ->
+        combine(period, cardFilter, categoryFilter) { p, c, cat -> Triple(p, c, cat) }
+            .flatMapLatest { (p, c, cat) ->
+                val (from, to) = range(p)
+                combine(dao.txns(from, to, c), dao.cards(), dao.categories(), search) { list, cards, cats, q ->
                     val visible = if (c != null) list else {
                         val hidden = cards.filterNot { it.countInSpending }.map { it.cardKey }.toSet()
                         list.filter { it.cardKey == null || it.cardKey !in hidden }
                     }
-                    if (cat == null) visible else visible.filter { it.categoryId == cat }
+                    val byCat = if (cat == null) visible else visible.filter { it.categoryId == cat }
+                    val query = q.trim()
+                    if (query.isEmpty()) byCat else {
+                        val names = cats.associate { it.id to it.name }
+                        val nick = cards.associate { it.cardKey to (it.nickname ?: "") }
+                        val terms = query.split(Regex("[,\\s]+")).filter { it.isNotBlank() }
+                        byCat.filter { t ->
+                            val hay = listOf(
+                                t.merchant, t.bank, t.cardKey ?: "", t.categoryId?.let { names[it] } ?: "",
+                                nick[t.cardKey] ?: "", com.junaid.cardtracker.parser.Money.fromMinor(t.amountMinor).toPlainString(),
+                            ).joinToString(" ")
+                            terms.any { hay.contains(it, ignoreCase = true) }
+                        }
+                    }
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -202,7 +236,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val cardSummaries: StateFlow<List<CardSummary>> =
         combine(
             dao.cards(),
-            month.flatMapLatest { m -> val (from, to) = range(m ?: YearMonth.now(zone)); dao.txnsBetween(from, to) },
+            period.flatMapLatest { p -> val (from, to) = range(p); dao.txnsBetween(from, to) },
             dao.statements(),
             recentTxns,
             dues,
@@ -214,6 +248,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .groupBy { it.cardKey!! }
                 .mapValues { (_, l) -> l.maxBy { it.timestamp }.availableLimitMinor }
             val dueByCard = dueList.associateBy { it.card.cardKey }
+            val history = recent.filter { it.availableLimitMinor != null && it.cardKey != null }
+                .groupBy { it.cardKey!! }
+                .mapValues { (_, l) ->
+                    l.groupBy { Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate() }
+                        .map { (d, dl) -> d to dl.maxBy { it.timestamp }.availableLimitMinor!! }
+                        .sortedBy { it.first }
+                }
             cards.map { c ->
                 val t = byCard[c.cardKey].orEmpty()
                 CardSummary(
@@ -226,6 +267,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     monthOutMinor = t.filter { it.type == TxnType.TRANSFER_OUT.name || it.type == TxnType.PURCHASE.name }.sumOf { it.amountAedMinor ?: 0L },
                     latestBalanceMinor = latestBalance[c.cardKey],
                     due = dueByCard[c.cardKey],
+                    balanceHistory = history[c.cardKey].orEmpty(),
                 )
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -242,23 +284,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         amountMinor = amountMinor,
     )
 
+    /** Transactions for the selected period plus the one before it (for the comparison). */
+    private val periodAndPreviousTxns =
+        period.flatMapLatest { p ->
+            val from = p.previous()?.start ?: p.start
+            dao.txnsBetween(from?.startMs() ?: 0L, p.end?.plusDays(1)?.startMs() ?: Long.MAX_VALUE)
+        }
+
     val overview: StateFlow<OverviewState> =
-        combine(month, recentTxns, excludedCards) { m, txns, excluded ->
-            val sel = m ?: YearMonth.now(zone)
-            val all = txns.map { it.toInsight() }
-            val inMonth = all.filter { YearMonth.from(it.date) == sel }
-            val history = Insights.byMonth(all, excluded, YearMonth.now(zone), 12)
+        combine(period, periodAndPreviousTxns, recentTxns, excludedCards) { p, windowTxns, recent, excluded ->
+            val today = LocalDate.now(zone)
+            val window = windowTxns.map { it.toInsight() }
+            val inPeriod = window.filter { p.contains(it.date) }
+            val prev = p.previous()
+            val inPrev = if (prev == null) emptyList() else window.filter { prev.contains(it.date) }
+            fun total(l: List<InsightTxn>) = Spending.totalAedMinor(l.map { Spending.Item(it.type, it.amountAedMinor, it.cardKey) }, excluded)
+            val spent = total(inPeriod)
+            // Timeline: from the period start (or the first transaction for All) to its end, capped at today.
+            val tlStart = p.start ?: inPeriod.minOfOrNull { it.date } ?: today
+            val tlEnd = listOfNotNull(p.end, today).min().let { if (it.isBefore(tlStart)) tlStart else it }
+            val bucket = Timeline.bucketFor(tlStart, tlEnd)
+            val days = java.time.temporal.ChronoUnit.DAYS.between(tlStart, tlEnd) + 1
+            val recentAll = recent.map { it.toInsight() }
+            val counted = inPeriod.filter { it.cardKey == null || it.cardKey !in excluded }
             OverviewState(
-                month = sel,
-                spentMinor = Spending.totalAedMinor(inMonth.map { Spending.Item(it.type, it.amountAedMinor, it.cardKey) }, excluded),
-                previousMonthMinor = history.firstOrNull { it.month == sel.minusMonths(1) }?.amountMinor ?: 0L,
-                byCategory = Insights.byCategory(inMonth, excluded),
-                byCard = Insights.byCard(inMonth, excluded),
-                history = history,
-                byCurrency = Insights.byCurrency(inMonth, excluded),
-                recurring = Insights.recurring(all.filter { it.cardKey == null || it.cardKey !in excluded || it.merchantKey.startsWith("ACCOUNT DEBIT") }, LocalDate.now(zone)),
+                period = p,
+                spentMinor = spent,
+                previous = prev,
+                previousMinor = total(inPrev),
+                byCategory = Insights.byCategory(inPeriod, excluded),
+                byCard = Insights.byCard(inPeriod, excluded),
+                timeline = Timeline.of(inPeriod, excluded, tlStart, tlEnd, bucket),
+                bucket = bucket,
+                history = Insights.byMonth(recentAll, excluded, YearMonth.now(zone), 12),
+                byCurrency = Insights.byCurrency(inPeriod, excluded),
+                recurring = Insights.recurring(recentAll.filter { it.cardKey == null || it.cardKey !in excluded || it.merchantKey.startsWith("ACCOUNT DEBIT") }, today),
+                txnCount = counted.count { it.type == TxnType.PURCHASE || it.type == TxnType.REFUND },
+                avgPerDayMinor = if (days > 0) spent / days else 0L,
+                topMerchants = counted
+                    .groupBy { it.merchantKey.ifBlank { it.merchant } }
+                    .map { (_, l) -> l.last().merchant to l.sumOf { Spending.contributionAedMinor(it.type, it.amountAedMinor, true) } }
+                    .filter { it.second > 0 }
+                    .sortedByDescending { it.second }
+                    .take(5),
+                // Money in is shown for every account, counted or not: salary etc. is not spending.
+                moneyInMinor = inPeriod.filter { it.type == TxnType.TRANSFER_IN }.sumOf { it.amountAedMinor ?: 0L },
             )
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OverviewState(YearMonth.now(zone)))
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OverviewState(Period.of(PeriodKind.MONTH, LocalDate.now(zone))))
 
     val goals: StateFlow<List<GoalEntity>> =
         dao.goals().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -276,10 +348,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun refreshWidget() = SummaryWidget.requestUpdate(getApplication())
 
     // ---------------------------------------------------------------- filters
-    fun previousMonth() { month.value = (month.value ?: YearMonth.now(zone)).minusMonths(1) }
-    fun nextMonth() { month.value = (month.value ?: YearMonth.now(zone)).plusMonths(1) }
-    fun toggleAllMonths() { month.value = if (month.value == null) YearMonth.now(zone) else null }
-    fun selectMonth(m: YearMonth) { month.value = m }
+    fun selectPeriodKind(k: PeriodKind) { period.value = Period.of(k, LocalDate.now(zone)) }
+    fun shiftPeriod(steps: Int) { period.value.shift(steps)?.let { period.value = it } }
+    fun setCustomPeriod(from: LocalDate, to: LocalDate) { period.value = Period.custom(from, to) }
+    fun selectMonth(m: YearMonth) { period.value = Period.month(m) }
+    fun setSearch(q: String) { search.value = q }
     fun selectCard(key: String?) { cardFilter.value = key }
     fun selectCategory(id: Long?) { categoryFilter.value = id }
 

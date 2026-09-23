@@ -4,7 +4,7 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 
 ## Status
 
-v1.0 includes every phase below. Keep adding to this file for future ideas.
+v1.1 includes every phase below plus the redesign. Keep adding to this file for future ideas.
 
 ## Phase 1: SMS capture and core screens (done)
 
@@ -50,12 +50,20 @@ v1.0 includes every phase below. Keep adding to this file for future ideas.
 - **Paid / due status** is worked out on the fly (`core/CardStatus.kt`): payments to the card after its statement date, from the card's bank SMS and from your transfers without double counting. The planned `statements.paidAt` column was not needed.
 - **Reminders:** `notify/DueReminders.kt`. A WorkManager job twice a day, only while switched on, notifying 3 days before, 1 day before and on the due day while the minimum is unpaid.
 - **Categories:** keyword rules in `parser/CategoryRules.kt`. Learned rules go in `merchant_rules`, and per-SMS choices in `txn_overrides` (keyed by SMS dedupKey, so they survive Re-parse and backups).
-- **Charts:** plain Compose (`ui/OverviewScreen.kt`), single-hue bars, no chart library.
+- **Charts:** plain Compose, no chart library (see v1.1 below).
 - **Recurring detection:** `core/Insights.kt` (3+ roughly monthly charges of a similar amount).
 - **Widget:** a classic AppWidgetProvider (`widget/SummaryWidget.kt`), no Glance dependency.
 - **Multi-currency:** editable rates in `fx_rates`. Saving a rate recalculates past AED amounts.
 - **App lock:** PIN (salted SHA-256, 10k rounds) plus BiometricPrompt, with a re-lock timeout.
 - **Backup:** a zip of CSVs via the system file picker (`data/Backup.kt`).
+
+## v1.1: periods, redesign, more formats (done)
+
+- **Any period:** `core/Period.kt` (Month, 1W, 1M, 3M, 6M, 12M, All, Custom range) replaces the single month everywhere, with a same-length previous period for comparisons.
+- **Charts:** `ui/Charts.kt` in plain Compose Canvas: category arc chart, trend line with gradient and touch readout (`core/Period.kt` → `Timeline` picks day, week or month buckets), 12-month bars, share bars.
+- **Look:** `ui/Theme.kt`: dark theme, fixed colour and icon per category, bank-coloured card tiles, panels and pills.
+- **Transactions:** search, day groups, readable Net / Money in / Money out tiles for accounts.
+- **Parsing:** about 25 new formats from the Review list (Mashreq card purchases and ATM, Aani, ADCB online transfers, FAB PGS and Dubai First payments, Al Hilal refunds and due notices, ENBD Nol and card payments, negative balances, AM/PM and weekday dates) and many more ignore rules.
 
 ## Ideas for later
 

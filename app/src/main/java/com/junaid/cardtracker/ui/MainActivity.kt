@@ -11,14 +11,19 @@ import android.provider.Settings
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.fragment.app.FragmentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -38,10 +43,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -66,7 +68,11 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Dark bars always: the app is dark whatever the phone's theme.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         // Must be created in onCreate.
         biometricPrompt = BiometricPrompt(
             this, ContextCompat.getMainExecutor(this),
@@ -104,18 +110,6 @@ class MainActivity : FragmentActivity() {
     }
 }
 
-@Composable
-fun AppTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
-    val ctx = LocalContext.current
-    val scheme = when {
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> if (dark) dynamicDarkColorScheme(ctx) else dynamicLightColorScheme(ctx)
-        dark -> darkColorScheme()
-        else -> lightColorScheme()
-    }
-    MaterialTheme(colorScheme = scheme, content = content)
-}
-
 private fun granted(ctx: Context, permission: String) =
     ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED
 
@@ -131,7 +125,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     val scope = rememberCoroutineScope()
     var showSamsungTip by remember { mutableStateOf(false) }
 
-    val month by vm.month.collectAsStateWithLifecycle()
+    val period by vm.period.collectAsStateWithLifecycle()
     val cardFilter by vm.cardFilter.collectAsStateWithLifecycle()
     val cards by vm.cards.collectAsStateWithLifecycle()
     val excluded by vm.excludedCards.collectAsStateWithLifecycle()
@@ -226,16 +220,20 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
         runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: ""
     }
 
+    Box(Modifier.fillMaxSize().background(screenBrush)) {
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Ink.bg),
                 title = {
                     Text(
                         when (route) {
-                            is Route.Home -> route.tab.label
+                            is Route.Home -> if (route.tab == Tab.OVERVIEW) "Card Tracker" else route.tab.label
                             is Route.CardDetail -> "Card"
                             Route.Rates -> "Exchange rates"
                         },
+                        fontWeight = FontWeight.Bold,
                     )
                 },
                 navigationIcon = {
@@ -244,9 +242,13 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
             )
         },
         bottomBar = {
-            NavigationBar {
+            NavigationBar(containerColor = Ink.surface, tonalElevation = 0.dp) {
                 Tab.entries.forEach { tab ->
                     NavigationBarItem(
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = Ink.green, selectedTextColor = Ink.text, indicatorColor = Ink.green.copy(alpha = 0.16f),
+                            unselectedIconColor = Ink.muted, unselectedTextColor = Ink.muted,
+                        ),
                         selected = route is Route.Home && nav.currentTab == tab,
                         onClick = { nav.selectTab(tab) },
                         icon = {
@@ -272,12 +274,12 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                     )
                     Tab.TRANSACTIONS -> TransactionsScreen(
-                        vm, month, cardFilter, cards, excluded, txns,
+                        vm, period, cardFilter, cards, excluded, txns,
                         syncing = syncing, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
                         categories = categories, categoryFilter = categoryFilter,
                     )
                     Tab.CARDS -> CardsScreen(
-                        summaries, month,
+                        summaries, period,
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onToggleCounted = { key, on -> vm.setCardCounted(key, on) },
                     )
@@ -311,6 +313,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 }
                 is Route.CardDetail -> CardDetailScreen(
                     summary = summaries.firstOrNull { it.card.cardKey == route.cardKey },
+                    periodLabel = period.label(),
                     onSetType = { vm.setCardType(route.cardKey, it) },
                     onToggleCounted = { vm.setCardCounted(route.cardKey, it) },
                     onShowTransactions = { vm.selectCategory(null); vm.selectCard(route.cardKey); nav.selectTab(Tab.TRANSACTIONS) },
@@ -319,6 +322,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
             }
         }
+    }
     }
 }
 

@@ -144,9 +144,9 @@ class Repository(private val db: AppDatabase) {
         val group = rule?.pairGroup
         // A generic "amount debited" SMS (PURCHASE, e.g. an EMI) can be the same money as a transfer SMS.
         if (rule != null && group != null && key != null && (t.type == TxnType.TRANSFER_OUT || t.type == TxnType.PURCHASE)) {
-            val hasTo = rule.pattern.contains("{TO}")
+            val hasTo = rule.namesDestination
             val groupRules = (BankRules.banks.flatMap { it.rules } + BankRules.genericRules)
-                .filter { it.pairGroup == group && it.pattern.contains("{TO}") != hasTo }
+                .filter { it.pairGroup == group && it.namesDestination != hasTo }
                 .map { it.id }
             // The remittance SMS carries only a date (possibly the next value date), so allow up to a day apart.
             val window = 24 * 60 * 60 * 1000L
