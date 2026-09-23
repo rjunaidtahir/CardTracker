@@ -33,20 +33,22 @@ All bank formats live in **`app/src/main/java/com/junaid/cardtracker/parser/Bank
 
 ## Status of each bank
 
-| Bank | Sender ID | Purchases | Statement | Other |
+| Bank | Sender ID | Card SMS | Statements | Accounts / other |
 |---|---|---|---|---|
-| FAB | FAB | ✅ from sample (debit format assumed); account 8001 in/out, transfers, bill payments, rewards ✅ | ❌ no sample | – |
-| Emirates NBD | EmiratesNBD | ✅ from sample (no date in the SMS, so arrival time is used; debit format assumed) | ❌ no sample | – |
-| ADCB | ADCBAlert | ✅ from sample (debit format assumed) | ✅ from sample | – |
-| Al Hilal | AlHilal | ✅ from sample | ❌ no sample | declined and limit-change SMS are ignored |
-| HSBC | HSBC-UAE | ❌ no sample | ✅ from sample | payments ✅, cashback ✅ (stored as refund) |
-| Mashreq | Mashreq | generic guess (samples pending) | generic guess | adverts ignored |
+| FAB | FAB | purchases (·0831), cashback, payments to card (·3115) | ·3115 statements | ·8001/·8003/·8005: remittances, salary, deposits, credits, debits (EMIs), ATM, transfers, bills, rewards |
+| Emirates NBD | EmiratesNBD | "Purchase of…" and "Payment of … to …", refunds, payments received | Mini Stmt | – |
+| ADCB | ADCBAlert | both "was used for" formats, foreign-fee format, reversals, payments | Billing alert | account ·0001 credits/debits |
+| Al Hilal | AlHilal | purchases, cashback | – (no sample yet) | – |
+| HSBC | HSBC-UAE | purchases, reversals, cashback, payments | statements | – |
+| Mashreq | Mashreq | **no purchase sample yet** (generic guess) | – | accounts ·7639/·8902 in/out, card payments ·4680 |
 
-OTP, advert, scheduled-transfer, declined-transaction and limit-change messages are ignored.
+OTP and auth-code messages are dropped. Adverts, payment reminders, card-setting notices, approval prompts, transfer requests, scheduled transfers, declined transactions and limit changes are ignored.
 
 **Bank account and transfers.** FAB account 8001 is tracked as a *bank account*, with both money in and money out, and "Count in spending" is off by default. FAB often sends two SMS for one transfer ("Outward Remittance Debit" and "funds transfer … processed"). The app merges those into one transaction.
 
-Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any other credit card the app already knows) show as **payments received** on that card. Transfers to your wife's ENBD account ·7701 and Emirates Islamic card ·6901 are just money out. None of these count as spending. You can edit this list in `BankRules.knownAccounts`. Any bank SMS that contains an amount but doesn't match a rule shows up on the **Review** tab with its raw text.
+Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any other credit card the app already knows) show as **payments received** on that card. Transfers to your wife's ENBD account ·7701 and Emirates Islamic card ·6901 are just money out. None of these count as spending. You can edit this list in `BankRules.knownAccounts`.
+
+**EMIs and other account payments.** FAB "An amount of AED … has been debited from your FAB account" SMS (EMIs, direct debits), bill payments and ATM withdrawals are recorded as *purchases* on the account. Switch the account **on** (Show & count) on the Cards tab to include them in spending. Money coming in and transfers are never counted. If a debit SMS turns out to be the same money as a transfer SMS (same amount, within a day), the two are merged and it becomes a transfer instead. Any bank SMS that contains an amount but doesn't match a rule shows up on the **Review** tab with its raw text.
 
 ## How SMS get in
 
@@ -58,9 +60,10 @@ Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any ot
 
 - **Transactions:**
   - The Sync button, the "Add by typing" box, month arrows (tap the month name for all months) and card filter chips.
-  - Transactions on cards you've excluded are still listed, marked "not counted", but are left out of the total.
+  - Only cards switched **on** on the Cards tab appear (chips and list); switched-off cards are hidden and left out of totals. Typed entries without a card always show. To look at a switched-off card, open it on the Cards tab → Show transactions.
+  - When a bank account is selected (e.g. FAB ·8001), the top shows **Money in / Money out / Net** for the month, plus what's counted as spending.
   - Tap a row to see the raw SMS, or to delete it. Deleting also dismisses the SMS, so Re-parse doesn't bring it back.
-- **Cards:** each card shows credit or debit, a **Count in spending** switch (on for credit, off for debit by default), this month's spend, and the latest statement. Tap a card to change its type or open its transactions.
+- **Cards:** each card shows credit or debit, a **Show & count** switch (on for credit, off for debit cards and bank accounts by default), this month's spend, and the latest statement. Tap a card to change its type or open its transactions.
 - **Review:** bank SMS that contain an amount but didn't match a rule.
 - **Settings:** live listening, sync info, "Re-read whole inbox on next Sync", and "Re-parse all stored SMS".
 
@@ -68,5 +71,5 @@ Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any ot
 
 - Amounts are stored in minor units (fils/cents) with their original currency. Each one also has an AED equivalent.
 - SMS usually don't give an AED amount for foreign-currency spends, so the AED figure uses the approximate rates in `BankRules.fxToAed` and is flagged as an estimate.
-- Spend = purchases − refunds/cashback, on cards with "Count in spending" switched on, plus typed entries. Credit card payments never count. The rules are in `core/Spending.kt`.
+- Spend = purchases − refunds/cashback, on cards with "Show & count" switched on, plus typed entries. Credit card payments never count. The rules are in `core/Spending.kt`.
 - The database is laid out ready for Phases 2–4; see `ROADMAP.md`.

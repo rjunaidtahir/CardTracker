@@ -194,7 +194,7 @@ interface AppDao {
 
     /** The other half of a two-SMS transfer: same account, same amount, other rule of the same pair group, ±window. */
     @Query(
-        "SELECT * FROM transactions WHERE cardKey = :cardKey AND type = 'TRANSFER_OUT' AND amountMinor = :amountMinor " +
+        "SELECT * FROM transactions WHERE cardKey = :cardKey AND type IN ('TRANSFER_OUT', 'PURCHASE') AND amountMinor = :amountMinor " +
             "AND pairedSmsId IS NULL AND ruleId IN (:ruleIds) AND ruleId != :ruleId " +
             "AND timestamp BETWEEN :from AND :to ORDER BY ABS(timestamp - :ts) LIMIT 1",
     )
@@ -204,9 +204,11 @@ interface AppDao {
 
     @Query(
         "UPDATE transactions SET pairedSmsId = :smsId, merchant = :merchant, counterpartyKey = :counterpartyKey, " +
-            "availableLimitMinor = :availableLimitMinor, timestamp = :timestamp WHERE id = :id",
+            "availableLimitMinor = :availableLimitMinor, timestamp = :timestamp, type = :type WHERE id = :id",
     )
-    suspend fun mergePair(id: Long, smsId: Long, merchant: String, counterpartyKey: String?, availableLimitMinor: Long?, timestamp: Long)
+    suspend fun mergePair(
+        id: Long, smsId: Long, merchant: String, counterpartyKey: String?, availableLimitMinor: Long?, timestamp: Long, type: String,
+    )
 
     @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
     suspend fun deleteAllSmsTxns()

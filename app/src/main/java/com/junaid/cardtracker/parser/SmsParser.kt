@@ -14,8 +14,9 @@ object SmsParser {
 
     private const val NUMDATE = """\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"""
     private const val TIME = """\d{1,2}:\d{2}(?::\d{2})?"""
-    private const val WORDDATE = """[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}"""
-    private const val AMT = """\d[\d,]*(?:\.\d+)?"""
+    private const val WORDDATE = """[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|\d{1,2}[A-Za-z]{3}\d{2,4}"""
+    /** 1,234.56 / 90.90 / 4300 / .07 */
+    private const val AMT = """(?:\d[\d,]*(?:\.\d+)?|\.\d+)"""
 
     private val tokens = linkedMapOf(
         "{CUR}" to "(?<currency>[A-Z]{3})",
@@ -74,7 +75,11 @@ object SmsParser {
     fun normalizeBody(body: String): String =
         body.replace(' ', ' ').replace(Regex("""[ \t]*\r?\n[ \t]*"""), " ").trim()
 
-    private val looksFinancial = Regex("""\b[A-Z]{3}\s?\d|\d\s?[A-Z]{3}\b|\d+\.\d{2}\b""")
+    /** "Contains an amount": a known currency code next to a number (card masks like XXX3538 don't count). */
+    private val looksFinancial by lazy {
+        val cur = BankRules.fxToAed.keys.joinToString("|")
+        Regex("""\b(?:$cur)\s?\.?\d|\d\s?(?:$cur)\b""")
+    }
 
     fun parse(sender: String?, body: String, receivedAt: Long, zone: ZoneId = UAE_ZONE): ParseResult {
         val cb = compiledBankFor(sender) ?: return ParseResult.NotBank
@@ -177,6 +182,7 @@ object SmsParser {
     private val numericDate = Regex("""^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$""")
     private val monthFirst = Regex("""^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$""")
     private val dayFirst = Regex("""^(\d{1,2})\s+([A-Za-z]{3,9}),?\s+(\d{4})$""")
+    private val compact = Regex("""^(\d{1,2})([A-Za-z]{3})(\d{2}|\d{4})$""") // 11Jun25, 07Jul2025
     private val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
 
     /** Day-first dates as used by UAE banks. Returns the date-time and whether a time was present. */
@@ -194,6 +200,11 @@ object SmsParser {
         monthFirst.matchEntire(s)?.let { m ->
             val mo = monthIndex(m.groupValues[1]) ?: return null
             return LocalDate.of(m.groupValues[3].toInt(), mo, m.groupValues[2].toInt()).atStartOfDay() to false
+        }
+        compact.matchEntire(s)?.let { m ->
+            val mo = monthIndex(m.groupValues[2]) ?: return null
+            val y = m.groupValues[3].toInt().let { if (it < 100) 2000 + it else it }
+            return LocalDate.of(y, mo, m.groupValues[1].toInt()).atStartOfDay() to false
         }
         dayFirst.matchEntire(s)?.let { m ->
             val mo = monthIndex(m.groupValues[2]) ?: return null

@@ -10,7 +10,7 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 - **De-duplication:** a unique key per SMS: normalized sender, sent time (service-centre timestamp) and SHA-256 of the body. There's also a fallback check for when a sent time is missing.
 - **Filtering:** only your bank sender IDs are processed. OTP messages are dropped and never stored.
 - **Parsing:** rules live in `parser/BankRules.kt`. The raw SMS is stored, and anything that can't be parsed goes to the Review tab.
-- **Cards and accounts:** credit cards, debit cards and bank accounts (FAB ·8001: money in and out). Each has a "Count in spending" toggle: on for credit, off for debit and accounts by default. Card payments and transfers never count as spending. Two FAB SMS for one transfer are merged into one transaction, and transfers to your own cards show as payments received on that card.
+- **Cards and accounts:** credit cards, debit cards and bank accounts (FAB ·8001: money in and out). Each has a "Show & count" switch: on for credit, off for debit and accounts by default. Switched-off cards are hidden from the Transactions tab and left out of totals. Card payments and transfers never count as spending. Two FAB SMS for one transfer are merged into one transaction, and transfers to your own cards show as payments received on that card.
 - **Screens:** Transactions (month and card filters, add by typing), Cards, Card detail, Review, Settings.
 
 ## Phase 2: Cards and safety

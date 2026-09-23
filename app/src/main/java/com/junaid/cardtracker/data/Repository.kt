@@ -98,7 +98,8 @@ class Repository(private val db: AppDatabase) {
         // Only a message that names the destination pairs with one that doesn't (never two transfers with each other).
         val rule = BankRules.ruleById(r.ruleId)
         val group = rule?.pairGroup
-        if (rule != null && group != null && key != null && t.type == TxnType.TRANSFER_OUT) {
+        // A generic "amount debited" SMS (PURCHASE, e.g. an EMI) can be the same money as a transfer SMS.
+        if (rule != null && group != null && key != null && (t.type == TxnType.TRANSFER_OUT || t.type == TxnType.PURCHASE)) {
             val hasTo = rule.pattern.contains("{TO}")
             val groupRules = (BankRules.banks.flatMap { it.rules } + BankRules.genericRules)
                 .filter { it.pairGroup == group && it.pattern.contains("{TO}") != hasTo }
@@ -116,6 +117,8 @@ class Repository(private val db: AppDatabase) {
                     availableLimitMinor = other.availableLimitMinor ?: availMinor,
                     // The "processed" SMS has the exact time; the remittance only a date.
                     timestamp = if (hasTo) t.timestamp else other.timestamp,
+                    // Once a transfer SMS explains a debit, it's a transfer (not spending).
+                    type = if (t.type == TxnType.TRANSFER_OUT || other.type == TxnType.TRANSFER_OUT.name) TxnType.TRANSFER_OUT.name else other.type,
                 )
                 dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${other.id} (merged)")
                 return IngestOutcome.MERGED

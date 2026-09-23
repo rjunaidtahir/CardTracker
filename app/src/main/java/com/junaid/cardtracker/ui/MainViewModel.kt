@@ -73,9 +73,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         else m.atDay(1).atStartOfDay(zone).toInstant().toEpochMilli() to
             m.plusMonths(1).atDay(1).atStartOfDay(zone).toInstant().toEpochMilli()
 
+    /**
+     * Transactions tab list. With "All cards", cards switched OFF on the Cards tab are hidden
+     * (typed entries with no card always show). Picking a switched-off card explicitly
+     * (Card detail → Show transactions) still shows its transactions.
+     */
     val transactions: StateFlow<List<TransactionEntity>> =
         combine(month, cardFilter) { m, c -> m to c }
-            .flatMapLatest { (m, c) -> val (from, to) = range(m); dao.txns(from, to, c) }
+            .flatMapLatest { (m, c) ->
+                val (from, to) = range(m)
+                combine(dao.txns(from, to, c), dao.cards()) { list, cards ->
+                    if (c != null) list
+                    else {
+                        val hidden = cards.filterNot { it.countInSpending }.map { it.cardKey }.toSet()
+                        list.filter { it.cardKey == null || it.cardKey !in hidden }
+                    }
+                }
+            }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val cards: StateFlow<List<CardEntity>> =

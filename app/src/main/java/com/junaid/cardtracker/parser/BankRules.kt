@@ -50,6 +50,13 @@ object BankRules {
         KnownAccount("0831", "FAB credit card", AccountKind.OWN_CARD, bank = "FAB"),
         KnownAccount("9940", "ENBD credit card", AccountKind.OWN_CARD, bank = "Emirates NBD"),
         KnownAccount("3976", "Al Hilal credit card", AccountKind.OWN_CARD, bank = "Al Hilal"),
+        KnownAccount("8003", "FAB account", AccountKind.OWN_ACCOUNT, bank = "FAB"),
+        KnownAccount("8005", "FAB account", AccountKind.OWN_ACCOUNT, bank = "FAB"),
+        KnownAccount("3115", "FAB credit card", AccountKind.OWN_CARD, bank = "FAB"),
+        KnownAccount("3944", "ENBD credit card", AccountKind.OWN_CARD, bank = "Emirates NBD"),
+        KnownAccount("3538", "ADCB credit card", AccountKind.OWN_CARD, bank = "ADCB"),
+        KnownAccount("5258", "HSBC credit card", AccountKind.OWN_CARD, bank = "HSBC"),
+        KnownAccount("4680", "Mashreq credit card", AccountKind.OWN_CARD, bank = "Mashreq"),
         KnownAccount("7701", "Wife's ENBD current account", AccountKind.FAMILY),
         KnownAccount("6901", "Wife's Emirates Islamic credit card", AccountKind.FAMILY),
     )
@@ -88,7 +95,7 @@ object BankRules {
                     type = TxnType.TRANSFER_IN,
                     cardType = CardType.ACCOUNT,
                     fixedMerchant = "Inward remittance",
-                    pattern = """Inward Remittance\s+Credit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+Date\s+{DATETIME}(?:\s+Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                    pattern = """Inward Remittance\s+Credit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+(?:Value\s+)?Date\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
                 ),
                 // Outward Remittance / Debit / Account XXXX8001 / AED 1000.00 / Date 17/09/2026 / Balance AED 2386.00
                 // FAB also sends a "funds transfer ... processed" SMS for the same money: pairGroup merges them.
@@ -99,7 +106,7 @@ object BankRules {
                     cardType = CardType.ACCOUNT,
                     fixedMerchant = "Outward remittance",
                     pairGroup = "fab-transfer",
-                    pattern = """Outward Remittance\s+Debit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+Date\s+{DATETIME}(?:\s+Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                    pattern = """Outward Remittance\s+Debit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+(?:Value\s+)?Date\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
                 ),
                 // Dear Customer, your funds transfer request of  AED 1,000.00 to IBAN/Account/Card XXXX9940  has been
                 // processed successfully from your account/card XXXX8001 on 17/09/2026 21:45
@@ -110,6 +117,98 @@ object BankRules {
                     cardType = CardType.ACCOUNT,
                     pairGroup = "fab-transfer",
                     pattern = """funds transfer request of\s+{CUR}\s*{AMOUNT}\s+to\s+IBAN/Account/Card\s+{TO}\s+has been processed successfully from your account/card\s+{CARD}\s+on\s+{DATETIME}""",
+                ),
+                // funds transfer request of 200.00 AED to IBAN/Account/Card XXXX2001  has been processed successfully from ... (amount first)
+                Rule(
+                    id = "fab-funds-transfer-amount-first",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    pairGroup = "fab-transfer",
+                    pattern = """funds transfer request of\s+{AMOUNT}\s*{CUR}\s+to\s+IBAN/Account/Card\s+{TO}\s+has been processed successfully from your account/card\s+{CARD}\s+on\s+{DATETIME}""",
+                ),
+                // your funds transfer request of AED 6,000.00 from account XXXX8001 to account XXXX8003 has been processed on 05/08/2026 07:17
+                Rule(
+                    id = "fab-account-to-account",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    pairGroup = "fab-transfer",
+                    pattern = """funds transfer request of\s+{CUR}\s*{AMOUNT}\s+from account\s+{CARD}\s+to account\s+{TO}\s+has been processed on\s+{DATETIME}""",
+                ),
+                // Salary Credit / Account XXXX8001 / AED 20000.00 / 23/05/25 / Available Balance AED 38841.91
+                Rule(
+                    id = "fab-salary",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_IN,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Salary",
+                    pattern = """Salary Credit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+(?:Date\s+)?{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
+                // Cash Deposit / Credit / Account XXXX8001 / AED 9900.00 / Date 25/05/26
+                Rule(
+                    id = "fab-cash-deposit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_IN,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Cash deposit",
+                    pattern = """Cash Deposit\s+Credit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+(?:Value\s+)?Date\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
+                // ATM Cash withdrawal / Debit Account XXXX8001 / Card XXXX5919 / AED 302.00 / 14/10/25 09:37 / Available Balance AED ...
+                // Counted as spending on the account (cash you'll spend). Change type to TRANSFER_OUT if you'd rather not.
+                Rule(
+                    id = "fab-atm",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PURCHASE,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "ATM cash withdrawal",
+                    pattern = """ATM Cash withdrawal\s*/?\s*Debit\s+Account\s+{CARD}\s+Card\s+[X*\d]+\s+{CUR}\s*{AMOUNT}\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
+                // An amount of AED 110.81 has been credited to your FAB account XXXX8003 on 14/06/25 .Your Available Balance is AED 21377.94
+                Rule(
+                    id = "fab-account-credit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_IN,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Account credit",
+                    pattern = """An amount of\s+{CUR}\s*{AMOUNT}\s+has been credited to your FAB account\s+{CARD}\s+on\s+{DATETIME}\s*\.?\s*Your (?:Available )?Balance is\s+{ANYCUR}\s*{AVAIL}""",
+                ),
+                // An amount of AED 3865.95 has been debited from your FAB account XXXX8001 on 24/01/25 .Your Available Balance is AED 28186.08
+                // Typically EMIs / direct debits: a PURCHASE on the account. If a transfer SMS for the same money
+                // exists (same amount, within a day) the two are merged and it becomes a transfer instead.
+                Rule(
+                    id = "fab-account-debit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PURCHASE,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Account debit (EMI / direct debit)",
+                    pairGroup = "fab-transfer",
+                    pattern = """An amount of\s+{CUR}\s*{AMOUNT}\s+has been debited from your FAB account\s+{CARD}\s+on\s+{DATETIME}\s*\.?\s*Your (?:Available )?Balance is\s+{ANYCUR}\s*{AVAIL}""",
+                ),
+                // Dear Customer, your payment of AED 100.00 for card 5492XXXXXXXX3115 has been processed on 06/01/2025
+                Rule(
+                    id = "fab-card-payment-2",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    defaultCardLast4 = FAB_ACCOUNT,
+                    pairGroup = "fab-transfer",
+                    pattern = """your payment of\s+{CUR}\s*{AMOUNT}\s+for card\s+{TO}\s+has been processed on\s+{DATETIME}""",
+                ),
+                // Dear Customer, your cashback amount of AED 100.00 has been credited to your credit card account with the card number ending 5492XXXXXXXX3115
+                Rule(
+                    id = "fab-card-cashback",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    fixedMerchant = "Cashback",
+                    pattern = """cashback amount of\s+{CUR}\s*{AMOUNT}\s+has been credited to your credit card account with the card number ending\s+{CARD}""",
+                ),
+                // Your statement of the card ending with 3115 dated 11Jun25 has been sent ... The total amount due is AED 8,101.92.
+                // Minimum due is AED 405.10. Due date is 07Jul25
+                Rule(
+                    id = "fab-statement",
+                    kind = RuleKind.STATEMENT,
+                    pattern = """statement of the card ending with\s+{CARD}\s+dated\s+{STMTDATE}\b.*?total amount due is\s+{CUR}\s*{TOTAL}\.?\s+Minimum due is\s+{ANYCUR}\s*{MIN}\.?\s+Due date is\s+{DUE}""",
                 ),
                 // Dear Customer, Your payment instructions of AED 500.00 to 5425********0831 has been processed on 15/09/2026 06:24
                 // (paying a card from the account; the SMS doesn't say which account, so defaultCardLast4 is used)
@@ -162,6 +261,41 @@ object BankRules {
                     // Debit variant assumed ("with Debit Card ending ... Avl Bal"): not yet verified.
                     pattern = """Purchase of {CUR}\s*{AMOUNT} with {CARDTYPE} Card ending {CARD} at {MERCHANT}{CITY}\.\s+Avl (?:Cr\.? Limit|Bal(?:ance)?) is {ANYCUR}\s*{AVAIL}""",
                 ),
+                // Payment of AED 300.00 to ADNOC WALLET with Credit Card ending 9940. Avl Cr. Limit is AED 51,843.37.
+                Rule(
+                    id = "enbd-payment-to",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """Payment of {CUR}\s*{AMOUNT} to {MERCHANT} with {CARDTYPE} Card ending {CARD}\.\s+Avl (?:Cr\.? Limit|Bal(?:ance)?) is {ANYCUR}\s*{AVAIL}""",
+                ),
+                // Amount of AED 10,960.00 from EMIRATES0002209069196 has been credited to your card ending with 9940. (a payment from an account)
+                Rule(
+                    id = "enbd-card-payment-received",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PAYMENT,
+                    fixedMerchant = "Card payment received",
+                    pattern = """Amount of {CUR}\s*{AMOUNT} from [A-Z]*\d{8,} has been credited to your card ending(?: with)? {CARD}""",
+                ),
+                // Amount of AED 43.81 from Amazon.ae has been credited to your card ending with 3944. Available limit is AED 54,081.68.
+                Rule(
+                    id = "enbd-refund-credited",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    pattern = """Amount of {CUR}\s*{AMOUNT} from {MERCHANT} has been credited to your card ending(?: with)? {CARD}""",
+                ),
+                // Purchase amount of AED 1.00 at ADNOC on your Credit Card ending 9940 has been refunded to your card account.
+                Rule(
+                    id = "enbd-purchase-refunded",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    pattern = """Purchase amount of {CUR}\s*{AMOUNT} at {MERCHANT} on your {CARDTYPE} Card ending {CARD} has been refunded""",
+                ),
+                // Emirates NBD Credit Card Mini Stmt for Card ending 9940: Statement date 09/05/26. Total Amt Due AED 7209.66,
+                // Due Date 03/06/26. Min Amt Due AED 360.48
+                Rule(
+                    id = "enbd-statement",
+                    kind = RuleKind.STATEMENT,
+                    pattern = """Mini Stmt for Card ending {CARD}:?\s*Statement date {STMTDATE}\.?\s+Total Amt Due {CUR}\s*{TOTAL},?\s+Due Date {DUE}\.?\s+Min Amt Due {ANYCUR}\s*{MIN}""",
+                ),
             ),
         ),
 
@@ -185,6 +319,51 @@ object BankRules {
                     kind = RuleKind.STATEMENT,
                     pattern = """Cr\.?\s*Card {CARD} Billing alert:\s*Total due.*?:\s*{CUR}\s*{TOTAL}\.?\s+Due date {DUE};?\s+Pay min\.?\s*{ANYCUR}\s*{MIN}""",
                 ),
+                // Your Cr.Card XXX3538 was used for AED59.50 on 18/08/2026 14:06:42 at talabat.com,DUBAI-AE. Avl. Cr.limit is AED5897.94
+                Rule(
+                    id = "adcb-purchase-2",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """Cr\.?\s*Card {CARD} was used for {CUR}\s*{AMOUNT} on {DATETIME} at {MERCHANT}{CITY}\.\s+Avl\.?\s*Cr\.?\s*limit is\s*{ANYCUR}\s*{AVAIL}""",
+                ),
+                // Credit Card XXX3538 used for AED1213.94 (+2.99% foreign txn fee) on 12/03/2026 10:00:26 at AGODA.COM AL HAMRA R,London-GB.
+                // Avl. Cr.limit AED1671.82
+                Rule(
+                    id = "adcb-purchase-fee",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """Credit Card {CARD} used for {CUR}\s*{AMOUNT}(?:\s*\([^)]*\))? on {DATETIME} at {MERCHANT}{CITY}\.\s+Avl\.?\s*Cr\.?\s*limit(?: is)?\s*{ANYCUR}\s*{AVAIL}""",
+                ),
+                // Your payment of AED 102 against Credit Card no. XXX3538 was received at 08:21 AM on 24/08/2026. Thank you.
+                Rule(
+                    id = "adcb-payment",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PAYMENT,
+                    fixedMerchant = "Card payment",
+                    pattern = """Your payment of {CUR}\s*{AMOUNT} against Credit Card no\.?\s*{CARD} was received at [\d:]+\s*[AP]M on {DATETIME}""",
+                ),
+                // An amount of AED510.15 has been reversed to your Credit Card XXX3538 on 21/12/2025 17:28:53 by AGODA.COM AL HAMRA V,INTERNET-GB.
+                Rule(
+                    id = "adcb-reversal",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    pattern = """amount of {CUR}\s*{AMOUNT} has been reversed to your Credit Card {CARD} on {DATETIME} by {MERCHANT}{CITY}\.?$""",
+                ),
+                // A Cr. transaction of AED 1558.46 on your account number XXX810001 was successful.Available balance is 9643.48.
+                Rule(
+                    id = "adcb-account-credit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_IN,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Account credit",
+                    pattern = """A Cr\. transaction of {CUR}\s*{AMOUNT} on your account number {CARD} was successful\.?\s*(?:Available balance is\s*{AVAIL})?""",
+                ),
+                Rule(
+                    id = "adcb-account-debit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PURCHASE,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Account debit",
+                    pattern = """A Dr\. transaction of {CUR}\s*{AMOUNT} on your account number {CARD} was successful\.?\s*(?:Available balance is\s*{AVAIL})?""",
+                ),
             ),
         ),
 
@@ -199,6 +378,14 @@ object BankRules {
                     id = "alhilal-purchase",
                     kind = RuleKind.TRANSACTION,
                     pattern = """Purchase of {AMOUNT}\s*{CUR} at {MERCHANT} on {DATETIME},?\s+card {CARD}(?:\.\s+Limit:\s*{AVAIL})?""",
+                ),
+                // A cashback amount of 3.14 AED was credited to your credit card ending with 3976. Your available limit is now 4,093.50 AED.
+                Rule(
+                    id = "alhilal-cashback",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    fixedMerchant = "Cashback",
+                    pattern = """cashback amount of {AMOUNT}\s*{CUR} was credited to your credit card ending with {CARD}(?:.*?available limit is now {AVAIL})?""",
                 ),
             ),
         ),
@@ -231,6 +418,20 @@ object BankRules {
                     fixedMerchant = "Cashback",
                     pattern = """earned cashback of {CUR}\s*{AMOUNT} credited to your card ending {CARD}""",
                 ),
+                // From HSBC: Your Credit Card ending with *** 5258 has been used for AED 33.25 on 02/12/2024 at W Z D WEST ZONE SUPERM.
+                // Your available limit is AED 3277.07
+                Rule(
+                    id = "hsbc-purchase",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """Credit Card ending with {CARD} has been used for {CUR}\s*{AMOUNT} on {DATETIME} at {MERCHANT}\.\s+Your available limit is {ANYCUR}\s*{AVAIL}""",
+                ),
+                // An amount of AED 41.53 has been reversed to your HSBC card ending *** 5258 (Amazon.ae). Your available limit is AED 8,786.31.
+                Rule(
+                    id = "hsbc-reversal",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    pattern = """amount of {CUR}\s*{AMOUNT} has been reversed to your HSBC card ending {CARD}\s*\((?<merchant>[^)]+)\)(?:.*?available limit is {ANYCUR}\s*{AVAIL})?""",
+                ),
             ),
         ),
 
@@ -239,7 +440,41 @@ object BankRules {
         Bank(
             name = "Mashreq",
             senderIds = listOf("Mashreq", "MashreqBank"),
-            rules = emptyList(),
+            rules = listOf(
+                // Your AC No:XXXXXXXX7639 is debited with AED 20000.00 for Aani Instant Payments (Local IPP Transfer). Login to ...
+                Rule(
+                    id = "mashreq-account-debit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    pattern = """AC No:?\s*{CARD} is debited with {CUR}\s*{AMOUNT} for {MERCHANT}\.\s+Login""",
+                ),
+                // Your AC No: XXXXXXXX7639 is credited with AED 20000.00 for Salary. / ... as Joining Bonus.
+                Rule(
+                    id = "mashreq-account-credit",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_IN,
+                    cardType = CardType.ACCOUNT,
+                    pattern = """AC No:?\s*{CARD} is credited with {CUR}\s*{AMOUNT} (?:for|as) {MERCHANT}\.\s+Login""",
+                ),
+                // Amount of AED 20000.00 has been debited from your Mashreq account no. XXXXXXXX7639 for Account to Account Transfer.
+                Rule(
+                    id = "mashreq-account-debit-2",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    pattern = """Amount of {CUR}\s*{AMOUNT} has been debited from your Mashreq account no\.?\s*{CARD} for {MERCHANT}\.\s+Login""",
+                ),
+                // Your payment of AED 1993 has been received against your Mashreq Cashback card ending 4680 on 05/09/2026.
+                Rule(
+                    id = "mashreq-card-payment",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PAYMENT,
+                    fixedMerchant = "Card payment",
+                    pattern = """payment of {CUR}\s*{AMOUNT} has been received against your Mashreq .*?card ending {CARD}(?: on {DATETIME})?""",
+                ),
+            ),
+            // Card purchase SMS not seen yet: generic rules as a fallback until you send samples.
             useGenericRules = true,
         ),
     )
@@ -271,17 +506,23 @@ object BankRules {
      */
     val otpPreCheck = IgnoreRule(
         "OTP",
-        """^(?=.*\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode)\b)(?=.*(\b\d{6,8}\b|\b(is|:)\s*\d{4,8}\b|\b\d{4,8}\s+is\s+(your|the)\b)).*""",
+        """^(?=.*\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|auth(?:entication|ori[sz]ation)?\s+code)\b)(?=.*(\b\d{6,8}\b|\b(is|:)\s*\d{4,8}\b|\b\d{4,8}\s+is\s+(your|the)\b)).*""",
         store = false,
     )
 
     /** Checked only when no transaction/statement rule matched. Applies to every bank. */
     val globalIgnore: List<IgnoreRule> = listOf(
         IgnoreRule("OTP", """\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN\s+is)\b""", store = false),
-        IgnoreRule("Declined transaction", """\b(declined|unsuccessful|was not successful)\b"""),
+        IgnoreRule("Declined transaction", """\b(declined|unsuccessful|was not successful|could not be completed)\b"""),
+        IgnoreRule("Approval request", """\btap to approve\b|\bSecurePass\b|\bapprove it\b"""),
+        IgnoreRule("Payment reminder", """Payment for .{0,40}card ending \d{4} is due"""),
+        IgnoreRule("Card setting / service notice", """\bsetting for your Credit Card\b|\bdigital card\b|\bService Request\b|\bbeneficiary has been added\b"""),
+        IgnoreRule("Transfer request (not yet processed)", """\bRequest received for fund transfer\b"""),
         IgnoreRule(
             "Advert",
-            """\bSTOP\b.{0,8}\d{3,5}\b|\bT&C|\bapply\s+(now|via|to|for|on)\b|\beligible\b|\bpre-?approved\b""",
+            """STOP\s*(?:to\s*)?\d{3,5}\b|\bT&C|\bapply\s+(now|via|to|for|on)\b|\beligible\b|\bpre-?approved\b|\bConvert now\b|""" +
+                """\bOpt-?out\b|\bConditions apply\b|\bSMS\s+\w+\s+to\s+\d{4}\b|\bSpecial Offer\b|\beasy monthly instalments\b|""" +
+                """\bValid until\b|\bOffer valid\b|\bLearn more\b|\bPay as low as\b""",
         ),
         IgnoreRule("Limit change", """\blimit\b.*\b(has been|was)\s+(changed|updated|increased|decreased|set)\b"""),
     )
@@ -309,6 +550,7 @@ object BankRules {
         "CAD" to "2.65",
         "AUD" to "2.40",
         "EGP" to "0.075",
+        "AZN" to "2.16",
     ).mapValues { BigDecimal(it.value) }
 
     const val BASE_CURRENCY = "AED"

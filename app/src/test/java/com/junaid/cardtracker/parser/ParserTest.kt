@@ -336,6 +336,128 @@ class ParserTest {
         }
     }
 
+    // ------------------------------------------ formats from "Share unparsed SMS" (Sep 2026)
+
+    private data class TxnCase(
+        val sender: String, val body: String, val type: TxnType, val card: String?, val amount: String,
+        val currency: String = "AED", val merchant: String? = null, val cardType: CardType? = null, val to: String? = null,
+    )
+
+    @Test fun shared_transaction_formats() {
+        val cases = listOf(
+            // Emirates NBD
+            TxnCase("EmiratesNBD", "Payment of AED 300.00 to ADNOC WALLET with Credit Card ending 9940. Avl Cr. Limit is AED 51,843.37.", TxnType.PURCHASE, "9940", "300.00", merchant = "ADNOC WALLET"),
+            TxnCase("EmiratesNBD", "Payment of AED 1,109.53 to BNKNT UTLTY PYMNT-DEWA with Credit Card ending 9940. Avl Cr. Limit is AED 52,972.15.", TxnType.PURCHASE, "9940", "1109.53", merchant = "BNKNT UTLTY PYMNT-DEWA"),
+            TxnCase("EmiratesNBD", "Payment of AED 96.75 to TEMU.COM with Credit Card ending 9940. Avl Cr. Limit is AED 38,404.74.", TxnType.PURCHASE, "9940", "96.75", merchant = "TEMU.COM"),
+            TxnCase("EmiratesNBD", "Payment of AED 318.11 to BNKNT UTLTY PYMNT-ETISALAT with Credit Card ending 9940. Avl Cr. Limit is AED 0.00.", TxnType.PURCHASE, "9940", "318.11"),
+            TxnCase("EmiratesNBD", "Amount of AED 43.81 from Amazon.ae has been credited to your card ending with 3944. Available limit is AED 54,081.68.", TxnType.REFUND, "3944", "43.81", merchant = "Amazon.ae"),
+            TxnCase("EmiratesNBD", "Dear Customer, Amount of AED 53.72 from Amazon.ae has been credited to your card ending 3944. Available Limit is AED 39,354.08.", TxnType.REFUND, "3944", "53.72"),
+            TxnCase("EmiratesNBD", "Amount of AED 10,960.00 from EMIRATES0002209069196 has been credited to your card ending with 9940. Available limit is AED 54,081.68.", TxnType.PAYMENT, "9940", "10960.00"),
+            TxnCase("EmiratesNBD", "Purchase amount of AED 1.00 at ADNOC on your Credit Card ending 9940 has been refunded to your card account. Avl Limit is AED 40,464.60.", TxnType.REFUND, "9940", "1.00", merchant = "ADNOC"),
+            // ADCB
+            TxnCase("ADCBAlert", "Your Cr.Card XXX3538 was used for AED59.50 on 18/08/2026 14:06:42 at talabat.com,DUBAI-AE. Avl. Cr.limit is AED5897.94", TxnType.PURCHASE, "3538", "59.50", merchant = "talabat.com"),
+            TxnCase("ADCBAlert", "Your Cr.Card XXX3538 was used for AZN5.00 on 23/03/2025 13:15:41 at I TICKET,BAKU-AZ. Avl. Cr.limit is AED2160.83", TxnType.PURCHASE, "3538", "5.00", currency = "AZN", merchant = "I TICKET"),
+            TxnCase("ADCBAlert", "Credit Card XXX3538 used for AED1213.94 (+2.99% foreign txn fee) on 12/03/2026 10:00:26 at AGODA.COM AL HAMRA R,London-GB. Avl. Cr.limit AED1671.82", TxnType.PURCHASE, "3538", "1213.94", merchant = "AGODA.COM AL HAMRA R"),
+            TxnCase("ADCBAlert", "Your payment of AED 102 against Credit Card no. XXX3538 was received at 08:21 AM on 24/08/2026. Thank you.", TxnType.PAYMENT, "3538", "102"),
+            TxnCase("ADCBAlert", "An amount of AED510.15 has been reversed to your Credit Card XXX3538 on 21/12/2025 17:28:53 by AGODA.COM AL HAMRA V,INTERNET-GB.", TxnType.REFUND, "3538", "510.15", merchant = "AGODA.COM AL HAMRA V"),
+            TxnCase("ADCBAlert", "An amount of USD1.00 has been reversed to your Credit Card XXX3538 on 29/04/2026 06:38:55 by AGODA.COM HOLIDAY IN,London-GB.", TxnType.REFUND, "3538", "1.00", currency = "USD"),
+            TxnCase("ADCBAlert", "A Cr. transaction of AED 1558.46 on your account number XXX810001 was successful.Available balance is 9643.48.", TxnType.TRANSFER_IN, "0001", "1558.46", cardType = CardType.ACCOUNT),
+            TxnCase("ADCBAlert", "A Dr. transaction of AED 1000.00 on your account number XXX810001 was successful.Available balance is 4084.63.", TxnType.PURCHASE, "0001", "1000.00", cardType = CardType.ACCOUNT),
+            // FAB account
+            TxnCase("FAB", "Outward Remittance \nDebit \nAccount XXXX8001 \nAED 2000.00\nValue Date 13/06/25  \nAvailable Balance AED 19051.83", TxnType.TRANSFER_OUT, "8001", "2000.00", cardType = CardType.ACCOUNT),
+            TxnCase("FAB", "Inward Remittance \nCredit  \nAccount XXXX8001 \nAED 2000.00\nValue Date 13/10/2025 \nAvailable Balance AED 10952.54", TxnType.TRANSFER_IN, "8001", "2000.00"),
+            TxnCase("FAB", "Outward Remittance\nDebit\nAccount XXXX8003\nAED 5000.00\nValue Date 29/06/24 \nAvailable Balance AED 135681.10", TxnType.TRANSFER_OUT, "8003", "5000.00"),
+            TxnCase("FAB", "An amount of AED 110.81 has been credited to your FAB account XXXX8003 on 14/06/25 .Your Available Balance is AED 21377.94", TxnType.TRANSFER_IN, "8003", "110.81"),
+            TxnCase("FAB", "An amount of AED 600.00 has been credited to your FAB account XXXX8001 on 24/10/2025\nYour Available Balance is AED 13457.48", TxnType.TRANSFER_IN, "8001", "600.00"),
+            TxnCase("FAB", "An amount of AED 74.55 has been credited to your FAB account XXXX8001 on 10/09/2026 .Your balance is AED 8851.42", TxnType.TRANSFER_IN, "8001", "74.55"),
+            TxnCase("FAB", "An amount of AED 3865.95 has been debited from your FAB account XXXX8001 on 24/01/25 .Your Available Balance is AED 28186.08", TxnType.PURCHASE, "8001", "3865.95", merchant = "Account debit (EMI / direct debit)", cardType = CardType.ACCOUNT),
+            TxnCase("FAB", "An amount of AED 4810.00 has been debited from your FAB account XXXX8001 on 31/08/2026. Your balance is AED 20691.73", TxnType.PURCHASE, "8001", "4810.00"),
+            TxnCase("FAB", "An amount of AED .07 has been debited from your FAB account XXXX8001 on 26/09/23 .Your Available Balance is AED 17872.98", TxnType.PURCHASE, "8001", "0.07"),
+            TxnCase("FAB", "Salary Credit\nAccount XXXX8001\nAED 20000.00\n23/05/25\nAvailable Balance AED 38841.91", TxnType.TRANSFER_IN, "8001", "20000.00", merchant = "Salary"),
+            TxnCase("FAB", "Salary Credit\nAccount XXXX8001\nAED 20000.00\n29/08/2026\nBalance AED 26482.21", TxnType.TRANSFER_IN, "8001", "20000.00"),
+            TxnCase("FAB", "ATM Cash withdrawal \nDebit Account XXXX8001 \nCard XXXX5919 \nAED 302.00 \n14/10/25 09:37 \nAvailable Balance AED 10652.54", TxnType.PURCHASE, "8001", "302.00", merchant = "ATM cash withdrawal"),
+            TxnCase("FAB", "ATM Cash Withdrawal / Debit\nAccount XXXX8001\nCard XXXX9222\nAED 202.00\n01/08/26 20:47\nBalance AED 17153.88", TxnType.PURCHASE, "8001", "202.00"),
+            TxnCase("FAB", "ATM Cash withdrawal\nDebit\nAccount XXXX8001\nCard XXXX1279\nAED 200.00\n16/06/24 20:42\nAvailable Balance AED 630.07", TxnType.PURCHASE, "8001", "200.00"),
+            TxnCase("FAB", "Cash Deposit\nCredit\nAccount XXXX8001\nAED 9900.00\nDate 25/05/26", TxnType.TRANSFER_IN, "8001", "9900.00", merchant = "Cash deposit"),
+            TxnCase("FAB", "Dear Customer, your funds transfer request of AED 6,000.00 from account XXXX8001 to account XXXX8003 has been processed on 05/08/2026 07:17. For more information please call 600525500 (+97126811511 if calling from overseas).", TxnType.TRANSFER_OUT, "8001", "6000.00", merchant = "Transfer to FAB account ·8003", to = "8003"),
+            TxnCase("FAB", "Dear Customer, your funds transfer request of 200.00 AED to IBAN/Account/Card XXXX2001  has been processed successfully from your account/card XXXX8001 on 04/04/2026 15:01", TxnType.TRANSFER_OUT, "8001", "200.00", merchant = "Transfer to ·2001", to = "2001"),
+            TxnCase("FAB", "Dear Customer, your payment of AED 100.00 for card 5492XXXXXXXX3115 has been processed on 06/01/2025", TxnType.TRANSFER_OUT, "8001", "100.00", merchant = "Payment to FAB credit card ·3115", to = "3115"),
+            TxnCase("FAB", "Dear Customer, your cashback amount of AED 100.00 has been credited to your credit card account with the card number ending 5492XXXXXXXX3115", TxnType.REFUND, "3115", "100.00", merchant = "Cashback"),
+            // HSBC
+            TxnCase("HSBC-UAE", "From HSBC: Your Credit Card ending with *** 5258 has been used for AED 33.25 on 02/12/2024 at W Z D WEST ZONE SUPERM. Your available limit is AED 3277.07", TxnType.PURCHASE, "5258", "33.25", merchant = "W Z D WEST ZONE SUPERM"),
+            TxnCase("HSBC-UAE", "From HSBC: Your Credit Card ending with *** 5258 has been used for AED 130.55 on 29/12/2024 at Amazon.ae. Your available limit is AED 5596.50", TxnType.PURCHASE, "5258", "130.55", merchant = "Amazon.ae"),
+            TxnCase("HSBC-UAE", "An amount of AED 41.53 has been reversed to your HSBC card ending *** 5258 (Amazon.ae). Your available limit is AED 8,786.31.\nتم إعادة مبلغ قدره 41.53  AED إلى بطاقة HSBC", TxnType.REFUND, "5258", "41.53", merchant = "Amazon.ae"),
+            // Al Hilal
+            TxnCase("AlHilal", "A cashback amount of 3.14 AED was credited to your credit card ending with 3976. Your available limit is now 4,093.50 AED.", TxnType.REFUND, "3976", "3.14"),
+            // Mashreq
+            TxnCase("Mashreq", "Your AC No:XXXXXXXX7639 is debited with AED 20000.00 for Aani Instant Payments (Local IPP Transfer). Login to Online Banking for details", TxnType.TRANSFER_OUT, "7639", "20000.00", merchant = "Aani Instant Payments (Local IPP Transfer)", cardType = CardType.ACCOUNT),
+            TxnCase("Mashreq", "Your AC No: XXXXXXXX7639 is credited with AED 20000.00 for Salary. Login to Online Banking for details.", TxnType.TRANSFER_IN, "7639", "20000.00", merchant = "Salary"),
+            TxnCase("Mashreq", "Your AC No: XXXXXXXX7639 is credited with AED 166.66 as Joining Bonus. Login to Online Banking for details.", TxnType.TRANSFER_IN, "7639", "166.66", merchant = "Joining Bonus"),
+            TxnCase("Mashreq", "Amount of AED 20000.00 has been debited from your Mashreq account no. XXXXXXXX7639 for Account to Account Transfer. Login to Online Banking for details.", TxnType.TRANSFER_OUT, "7639", "20000.00"),
+            TxnCase("Mashreq", "Your payment of AED 1993 has been received against your Mashreq Cashback card ending 4680 on 05/09/2026. Mashreq.com/mmb", TxnType.PAYMENT, "4680", "1993"),
+        )
+        for (c in cases) {
+            val t = txn(c.sender, c.body)
+            assertEquals(c.type, t.type, c.body)
+            assertEquals(c.card, t.cardLast4, c.body)
+            assertEquals(0, bd(c.amount).compareTo(t.amount), "amount: ${c.body}")
+            assertEquals(c.currency, t.currency, c.body)
+            c.merchant?.let { assertEquals(it, t.merchant, c.body) }
+            c.cardType?.let { assertEquals(it, t.cardType, c.body) }
+            c.to?.let { assertEquals(it, t.toLast4, c.body) }
+        }
+    }
+
+    @Test fun shared_statement_formats() {
+        val enbd = stmt("EmiratesNBD", "Emirates NBD Credit Card Mini Stmt for Card ending 9940: Statement date 09/05/26. Total Amt Due AED 7209.66, Due Date 03/06/26. Min Amt Due AED 360.48")
+        assertEquals("9940", enbd.cardLast4)
+        assertEquals(bd("7209.66"), enbd.statementBalance)
+        assertEquals(bd("360.48"), enbd.minimumDue)
+        assertEquals(LocalDate.of(2026, 6, 3), enbd.dueDate)
+        assertEquals(LocalDate.of(2026, 5, 9), enbd.statementDate)
+
+        val fab = stmt(
+            "FAB",
+            "Your statement of the card ending with 3115 dated 11Jun25 has been sent to you and can also be viewed in the new FAB mobile banking app, " +
+                "download it from the App Store goo.gl/FB7qEZ or Google Play goo.gl/7dXnNc. The total amount due is AED 8,101.92. Minimum due is AED 405.10. Due date is 07Jul25",
+        )
+        assertEquals("3115", fab.cardLast4)
+        assertEquals(bd("8101.92"), fab.statementBalance)
+        assertEquals(bd("405.10"), fab.minimumDue)
+        assertEquals(LocalDate.of(2025, 7, 7), fab.dueDate)
+        assertEquals(LocalDate.of(2025, 6, 11), fab.statementDate)
+    }
+
+    @Test fun shared_ignored_formats() {
+        val cases = listOf(
+            "EmiratesNBD" to "DO NOT SHARE! The Auth code is 976688 for AED 200.00 at SMART DUBAI GOVERNMENT for card ending 9940. Use in 5 mins. If not requested call +971600540000",
+            "EmiratesNBD" to "Payment for Credit Card ending 9940 is due on 03/09/26. Total Amt - AED 2862.26; Min Amt - AED 132.61. Please pay by due date to avoid charges.",
+            "EmiratesNBD" to "Payment for Emirates NBD card ending 0866 is due on 28/02/25 and will be deducted from your bank account per your standing instruction. Please ensure the account is funded. Total Amt Due AED 110.09, Min Amt Due AED 100.00.",
+            "EmiratesNBD" to "*Convert now* Pay as low as AED 51.36 per month for the purchase of AED 1289.81 at BNKNT UTLTY PYMNT-DEWA with credit card ending 9940 via clicking https://www.emiratesnbd.com/en/ipp/?ipp=901742725537144452647307139052",
+            "EmiratesNBD" to "Brighten your summer! Get up to AED 4M personal loan with low rates & a payment holiday. Visit https://emiratesnbd.com/plsum Optout https://emiratesnbd.com/opto",
+            "ADCBAlert" to "Ecommerce Transactions setting for your Credit Card XXX3538 updated on 11-06-2026 09:34:50. Call 600502030 if you did not initiate this request.",
+            "ADCBAlert" to "Special Offer. Earn AED1,000 cashback on a minimum spend of AED15,000 with your ADCB Credit Card, from 1Apr24 to 30Jun24. To enrol, SMS SPD to 2626. adcb.com/spd",
+            "ADCBAlert" to "Transaction of AED658.41 made at AGODA.COM LUMIAN HOT NA AE on 01/10/2025 07:27:02 on your Cr.Card XXX3538 could not be completed as you have exceeded your set daily limit.",
+            "ADCBAlert" to "Review your transaction\nTap to approve your transaction at ADNOC for AED2.00 on your ADCB Card XXX3538, valid for 10 minutes.",
+            "ADCBAlert" to "Enjoy easy monthly instalments on your purchase of AED 658.41 at AGODA.COM LUMIAN HOT INTERNET with an attractive interest rate and zero processing fee adcb.com/mobileapp",
+            "ADCBAlert" to "Get 0.03 XAU when you open a Gold Account with 1 XAU or increase your balance by 1 XAU. Valid until 31 Dec 2025. For details visit: adcb.com/goldsilver",
+            "ADCBAlert" to "Your digital card assigned to ADCB Credit Card XXX3538 for Samsung Pay has been de-activated. Please call 600502030 if you have not initiated this request.",
+            "FAB" to "Get up to AED 150 on your international spends this winter. Spend AED 1000 equivalent in non-AED to get AED 50, and boost it to AED 150 when you reach AED 1500 with your FAB Card ending 3115. SMS INTL to 2121 to register. Conditions apply: bit.ly/47x0u8J",
+            "FAB" to "Congratulations! You have successfully redeemed 2000 FAB Rewards.\nRedemption Type: Games\nRequest ID: 2982416245\nTime: 2026-09-01 06:02:04\nAvailable Balance: 18196 FAB Rewards",
+            "Mashreq" to "Request received for fund transfer of AED 20000 (excl. applicable charges) with ref. no. MLC2908261552448. Contact  +971 4 424 4444 if you haven't initiated this.",
+            "Mashreq" to "Your beneficiary has been added. It will be activated within the next 04:00 hour(s), until then you can do 2 transaction(s) up to AED 2,000.",
+            "Mashreq" to "حول رصيدك المستحق على البطاقة الائتمانية المنتهية بـ 4680 إلى أقساط شهرية. استمتع بفائدة 0.49% شهرياً دون رسوم. سجل الدخول إلى المشرق موبايل. تطبق الشروط STOP4250",
+        )
+        for ((sender, body) in cases) {
+            val r = SmsParser.parse(sender, body, received)
+            assertIs<ParseResult.Ignored>(r, "Expected ignored: $body -> $r")
+        }
+        // Auth codes are OTPs: never stored.
+        val auth = SmsParser.parse("EmiratesNBD", cases[0].second, received)
+        assertIs<ParseResult.Ignored>(auth)
+        assertEquals(false, auth.store)
+    }
+
     // ------------------------------------------------------ Mashreq (generic)
 
     @Test fun mashreq_generic_rule() {

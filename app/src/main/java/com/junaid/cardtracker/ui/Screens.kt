@@ -165,7 +165,7 @@ fun TransactionsScreen(
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { FilterChip(selected = cardFilter == null, onClick = { vm.selectCard(null) }, label = { Text("All cards") }) }
-                items(cards, key = { it.cardKey }) { c ->
+                items(cards.filter { it.countInSpending || it.cardKey == cardFilter }, key = { it.cardKey }) { c ->
                     FilterChip(selected = cardFilter == c.cardKey, onClick = { vm.selectCard(c.cardKey) }, label = { Text(c.cardKey) })
                 }
             }
@@ -175,12 +175,41 @@ fun TransactionsScreen(
             // Card payments: PAYMENT SMS from the card's bank, plus transfers from your account to your own cards.
             val payments = txns.filter { it.type == TxnType.PAYMENT.name || it.counterpartyKey != null }.sumOf { it.amountAedMinor ?: 0L }
             val notCounted = txns.count { it.cardKey != null && it.cardKey in excluded }
+            val selected = cards.firstOrNull { it.cardKey == cardFilter }
+            val moneyIn = txns.filter { it.type == TxnType.TRANSFER_IN.name || (selected?.cardType == CardTypes.ACCOUNT && it.type == TxnType.REFUND.name) }
+                .sumOf { it.amountAedMinor ?: 0L }
+            val moneyOut = txns.filter { it.type == TxnType.TRANSFER_OUT.name || (selected?.cardType == CardTypes.ACCOUNT && it.type == TxnType.PURCHASE.name) }
+                .sumOf { it.amountAedMinor ?: 0L }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                Text("Spent ${fmtMoney(spend)}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
-                val extra = mutableListOf("${txns.size} transactions")
-                if (payments > 0) extra += "card payments ${fmtMoney(payments)}"
-                if (notCounted > 0) extra += "$notCounted not counted"
-                Text(extra.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (selected != null && selected.cardType == CardTypes.ACCOUNT) {
+                    // Bank account view: money in / out first, spending second.
+                    Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                        Column {
+                            Text("Money in", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(fmtMoney(moneyIn), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Column {
+                            Text("Money out", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(fmtMoney(moneyOut), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        }
+                        Column {
+                            Text("Net", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            val net = moneyIn - moneyOut
+                            Text((if (net >= 0) "+" else "−") + fmtMoney(kotlin.math.abs(net)), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    val spendNote = if (selected.countInSpending) "Counted as spending: ${fmtMoney(spend)} (EMIs, bills, ATM)"
+                    else "Not counted in spending: switch on in Cards to include EMIs, bills and ATM"
+                    Text("${txns.size} transactions · $spendNote", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    Text("Spent ${fmtMoney(spend)}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
+                    val extra = mutableListOf("${txns.size} transactions")
+                    if (payments > 0) extra += "card payments ${fmtMoney(payments)}"
+                    if (moneyIn > 0 || moneyOut > 0) extra += "account in ${fmtMoney(moneyIn)} / out ${fmtMoney(moneyOut)}"
+                    if (notCounted > 0) extra += "switched off on Cards tab (not in total)"
+                    Text(extra.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
             HorizontalDivider()
         }
@@ -287,7 +316,7 @@ fun CardsScreen(
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Switch(checked = s.card.countInSpending, onCheckedChange = { onToggleCounted(s.card.cardKey, it) })
-                            Text("Count in spending", style = MaterialTheme.typography.labelSmall)
+                            Text("Show & count", style = MaterialTheme.typography.labelSmall)
                         }
                     }
                     Spacer(Modifier.height(4.dp))
@@ -353,15 +382,15 @@ fun CardDetailScreen(
             FilterChip(selected = c.cardType == CardTypes.ACCOUNT, onClick = { onSetType(CardType.ACCOUNT) }, label = { Text("Account") })
         }
         Text(
-            "Changing the type resets \"Count in spending\" to its default (on for credit, off for debit and accounts).",
+            "Changing the type resets \"Show & count\" to its default (on for credit, off for debit and accounts).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Count in spending", style = MaterialTheme.typography.titleSmall)
+                Text("Show & count", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "When off, this card's transactions stay in the list but are left out of all totals and charts.",
+                    "When off, this card is hidden from the Transactions tab and left out of all totals and charts. \"Show transactions\" below still lists them.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
