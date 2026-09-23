@@ -3,11 +3,21 @@ package com.junaid.cardtracker.parser
 import java.math.BigDecimal
 import java.time.LocalDate
 
-enum class TxnType { PURCHASE, REFUND, PAYMENT }
+/**
+ * PURCHASE / REFUND (incl. cashback) / PAYMENT (a card receiving a payment).
+ * TRANSFER_OUT / TRANSFER_IN: money leaving / arriving in a bank account (never spending).
+ */
+enum class TxnType { PURCHASE, REFUND, PAYMENT, TRANSFER_OUT, TRANSFER_IN }
 
 enum class RuleKind { TRANSACTION, STATEMENT }
 
-enum class CardType { CREDIT, DEBIT }
+/** ACCOUNT = a bank account (e.g. FAB current account) tracked like a debit card. */
+enum class CardType { CREDIT, DEBIT, ACCOUNT }
+
+enum class AccountKind { OWN_CARD, OWN_ACCOUNT, FAMILY, OTHER }
+
+/** A card/account that shows up as the destination of transfers. See BankRules.knownAccounts. */
+data class KnownAccount(val last4: String, val label: String, val kind: AccountKind, val bank: String? = null)
 
 /** One regex template. See BankRules.kt for the placeholder tokens you can use. */
 data class Rule(
@@ -19,6 +29,14 @@ data class Rule(
     val fixedMerchant: String? = null,
     /** Card type when the pattern has no {CARDTYPE} token. */
     val cardType: CardType = CardType.CREDIT,
+    /** Card/account last 4 to use when the SMS doesn't name one (e.g. FAB bill payments). */
+    val defaultCardLast4: String? = null,
+    /**
+     * Rules whose SMS describe the SAME money movement from two angles (FAB sends both
+     * "Outward Remittance Debit" and "funds transfer ... processed"). Transactions from
+     * different rules in the same group, same account, same amount, within 3 hours are merged.
+     */
+    val pairGroup: String? = null,
 )
 
 /** [store] = false means the SMS is dropped entirely (not even the raw text is kept), e.g. OTPs. */
@@ -46,6 +64,8 @@ data class ParsedTransaction(
     val timestamp: Long,
     val dateFromSms: Boolean,
     val availableLimit: BigDecimal? = null,
+    /** Last 4 of the destination account/card for transfers and card payments. */
+    val toLast4: String? = null,
 )
 
 data class ParsedStatement(

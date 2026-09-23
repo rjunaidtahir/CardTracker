@@ -26,6 +26,7 @@ object SmsParser {
         "{MIN}" to "(?<min>$AMT)",
         "{CARDTYPE}" to "(?<cardtype>Credit|Debit)",
         "{CARD}" to """(?:[X*\d]+\s*)?(?<card>\d{4})\b""",
+        "{TO}" to """(?:[X*\d]+\s*)?(?<to>\d{4})\b""",
         "{MERCHANT}" to "(?<merchant>.+?)",
         "{CITY}" to """(?:,\s*[^.,]+?)?""",
         "{DATETIME}" to "(?<date>$NUMDATE(?:,?\\s+$TIME)?)",
@@ -110,7 +111,11 @@ object SmsParser {
     private fun buildTxn(bank: Bank, rule: Rule, m: MatchResult, receivedAt: Long, zone: ZoneId): ParsedTransaction {
         val amount = parseAmount(m.g("amount") ?: error("no amount"))
         val currency = (m.g("currency") ?: BankRules.BASE_CURRENCY).uppercase()
-        val merchant = rule.fixedMerchant ?: cleanMerchant(m.g("merchant") ?: error("no merchant"))
+        val toLast4 = m.g("to")
+        val merchant = rule.fixedMerchant
+            ?: m.g("merchant")?.let { cleanMerchant(it) }
+            ?: toLast4?.let { BankRules.counterpartyLabel(it) }
+            ?: error("no merchant")
         require(merchant.isNotBlank()) { "empty merchant" }
         val dateText = m.g("date")
         val ts = if (dateText != null) {
@@ -126,7 +131,7 @@ object SmsParser {
         } else receivedAt
         return ParsedTransaction(
             bank = bank.name,
-            cardLast4 = m.g("card"),
+            cardLast4 = m.g("card") ?: rule.defaultCardLast4,
             cardType = cardTypeOf(rule, m),
             merchant = merchant,
             amount = amount,
@@ -135,6 +140,7 @@ object SmsParser {
             timestamp = ts,
             dateFromSms = dateText != null,
             availableLimit = m.g("avail")?.let { parseAmount(it) },
+            toLast4 = toLast4,
         )
     }
 

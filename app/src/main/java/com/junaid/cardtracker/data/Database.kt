@@ -14,7 +14,7 @@ import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
 /*
- * Schema v2. Columns marked "Phase N" are unused for now but exist so later phases don't need
+ * Schema v3 (v2 + transactions.counterpartyKey / pairedSmsId). Columns marked "Phase N" are unused for now but exist so later phases don't need
  * table rebuilds. New tables planned for later phases (see ROADMAP.md) get added with a Room
  * Migration in Migrations.kt: never by bumping the version with destructive fallback.
  */
@@ -90,6 +90,10 @@ data class TransactionEntity(
     /** Phase 3: recurring payment group */
     val recurringGroupId: Long? = null,
     val note: String? = null,
+    /** For transfers/card payments to one of your own cards: that card's key (shows as a payment on it). */
+    val counterpartyKey: String? = null,
+    /** A second SMS describing the same money movement, merged into this transaction. */
+    val pairedSmsId: Long? = null,
 )
 
 @Entity(tableName = "statements", indices = [Index(value = ["smsId"]), Index(value = ["cardKey"])])
@@ -113,6 +117,7 @@ data class StatementEntity(
 object CardTypes {
     const val CREDIT = "CREDIT"
     const val DEBIT = "DEBIT"
+    const val ACCOUNT = "ACCOUNT"
 }
 
 @Entity(tableName = "cards")
@@ -120,7 +125,7 @@ data class CardEntity(
     @PrimaryKey val cardKey: String,
     val bank: String,
     val last4: String?,
-    /** CREDIT or DEBIT */
+    /** CREDIT, DEBIT or ACCOUNT (bank account) */
     val cardType: String,
     /** Default ON for credit, OFF for debit. Excluded cards stay in lists but not in totals/charts. */
     val countInSpending: Boolean,
@@ -168,6 +173,9 @@ interface AppDao {
     @Query("SELECT * FROM sms WHERE status = 'FAILED' ORDER BY receivedAt DESC")
     fun failedSms(): Flow<List<SmsEntity>>
 
+    @Query("SELECT * FROM sms WHERE status = 'FAILED' ORDER BY receivedAt DESC")
+    suspend fun failedSmsList(): List<SmsEntity>
+
     @Query("SELECT status, COUNT(*) AS n FROM sms GROUP BY status")
     fun smsStatusCounts(): Flow<List<StatusCount>>
 
@@ -180,6 +188,31 @@ interface AppDao {
 
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun deleteTxn(id: Long)
+
+    @Query("UPDATE transactions SET pairedSmsId = NULL WHERE pairedSmsId = :smsId")
+    suspend fun unpairSms(smsId: Long)
+
+    /** The other half of a two-SMS transfer: same account, same amount, other rule of the same pair group, ±window. */
+    @Query(
+        "SELECT * FROM transactions WHERE cardKey = :cardKey AND type = 'TRANSFER_OUT' AND amountMinor = :amountMinor " +
+            "AND pairedSmsId IS NULL AND ruleId IN (:ruleIds) AND ruleId != :ruleId " +
+            "AND timestamp BETWEEN :from AND :to ORDER BY ABS(timestamp - :ts) LIMIT 1",
+    )
+    suspend fun findTransferPair(
+        cardKey: String, amountMinor: Long, ruleIds: List<String>, ruleId: String, from: Long, to: Long, ts: Long,
+    ): TransactionEntity?
+
+    @Query(
+        "UPDATE transactions SET pairedSmsId = :smsId, merchant = :merchant, counterpartyKey = :counterpartyKey, " +
+            "availableLimitMinor = :availableLimitMinor, timestamp = :timestamp WHERE id = :id",
+    )
+    suspend fun mergePair(id: Long, smsId: Long, merchant: String, counterpartyKey: String?, availableLimitMinor: Long?, timestamp: Long)
+
+    @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
+    suspend fun deleteAllSmsTxns()
+
+    @Query("DELETE FROM statements")
+    suspend fun deleteAllStatements()
 
     @Query(
         "SELECT * FROM transactions WHERE timestamp >= :from AND timestamp < :to " +
@@ -222,7 +255,7 @@ data class StatusCount(val status: String, val n: Int)
 
 @Database(
     entities = [SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

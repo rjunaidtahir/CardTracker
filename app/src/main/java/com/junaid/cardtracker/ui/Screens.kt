@@ -78,7 +78,11 @@ private val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
 fun fmtDateTime(ms: Long): String = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).format(dateTimeFmt)
 fun fmtEpochDay(day: Long): String = LocalDate.ofEpochDay(day).format(dateFmt)
 
-private fun typeLabel(t: String) = if (t == CardTypes.DEBIT) "Debit" else "Credit"
+private fun typeLabel(t: String) = when (t) {
+    CardTypes.DEBIT -> "Debit card"
+    CardTypes.ACCOUNT -> "Bank account"
+    else -> "Credit card"
+}
 
 // ---------------------------------------------------------- transactions tab
 
@@ -168,7 +172,8 @@ fun TransactionsScreen(
         }
         item {
             val spend = spendingTotal(txns, excluded)
-            val payments = txns.filter { it.type == TxnType.PAYMENT.name }.sumOf { it.amountAedMinor ?: 0L }
+            // Card payments: PAYMENT SMS from the card's bank, plus transfers from your account to your own cards.
+            val payments = txns.filter { it.type == TxnType.PAYMENT.name || it.counterpartyKey != null }.sumOf { it.amountAedMinor ?: 0L }
             val notCounted = txns.count { it.cardKey != null && it.cardKey in excluded }
             Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
                 Text("Spent ${fmtMoney(spend)}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.SemiBold)
@@ -208,16 +213,21 @@ private fun TransactionRow(vm: MainViewModel, t: TransactionEntity, counted: Boo
                 val tags = mutableListOf(card, fmtDateTime(t.timestamp))
                 if (t.type == TxnType.REFUND.name) tags += "refund"
                 if (t.type == TxnType.PAYMENT.name) tags += "card payment"
+                if (t.type == TxnType.TRANSFER_IN.name) tags += "money in"
+                if (t.type == TxnType.TRANSFER_OUT.name) tags += if (t.counterpartyKey != null) "card payment" else "money out"
                 if (t.source == "MANUAL") tags += "typed"
                 if (!counted) tags += "not counted"
                 Text(tags.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.width(12.dp))
             Column(horizontalAlignment = Alignment.End) {
-                val sign = if (t.type == TxnType.PURCHASE.name) "" else "+"
+                val sign = when (t.type) {
+                    TxnType.PURCHASE.name, TxnType.TRANSFER_OUT.name -> ""
+                    else -> "+"
+                }
                 val color = when {
                     !counted -> MaterialTheme.colorScheme.onSurfaceVariant
-                    t.type == TxnType.PURCHASE.name -> MaterialTheme.colorScheme.onSurface
+                    t.type == TxnType.PURCHASE.name || t.type == TxnType.TRANSFER_OUT.name -> MaterialTheme.colorScheme.onSurface
                     else -> MaterialTheme.colorScheme.primary
                 }
                 Text(sign + fmtMoney(t.amountMinor, t.currency), color = color, fontWeight = FontWeight.Medium)
@@ -270,7 +280,7 @@ fun CardsScreen(
                         Column(Modifier.weight(1f)) {
                             Text(s.card.cardKey, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(
-                                "${typeLabel(s.card.cardType)} card",
+                                typeLabel(s.card.cardType),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -281,12 +291,28 @@ fun CardsScreen(
                         }
                     }
                     Spacer(Modifier.height(4.dp))
-                    val suffix = if (s.card.countInSpending) "" else " (not in totals)"
-                    Text("$monthLabel: ${fmtMoney(s.monthSpendAedMinor)} · ${s.monthTxnCount} txns$suffix")
+                    CardFigures(s, monthLabel)
                     StatementLines(s)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CardFigures(s: CardSummary, monthLabel: String) {
+    if (s.card.cardType == CardTypes.ACCOUNT) {
+        Text("$monthLabel: in ${fmtMoney(s.monthInMinor)} · out ${fmtMoney(s.monthOutMinor)} · ${s.monthTxnCount} txns")
+    } else {
+        val suffix = if (s.card.countInSpending) "" else " (not in totals)"
+        Text("$monthLabel: ${fmtMoney(s.monthSpendAedMinor)} · ${s.monthTxnCount} txns$suffix")
+    }
+    if (s.monthPaidInMinor > 0) {
+        Text("Payments received: ${fmtMoney(s.monthPaidInMinor)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+    }
+    s.latestBalanceMinor?.let {
+        val label = if (s.card.cardType == CardTypes.ACCOUNT) "Balance" else "Available"
+        Text("$label (latest SMS): ${fmtMoney(it)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -324,9 +350,10 @@ fun CardDetailScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(selected = c.cardType == CardTypes.CREDIT, onClick = { onSetType(CardType.CREDIT) }, label = { Text("Credit") })
             FilterChip(selected = c.cardType == CardTypes.DEBIT, onClick = { onSetType(CardType.DEBIT) }, label = { Text("Debit") })
+            FilterChip(selected = c.cardType == CardTypes.ACCOUNT, onClick = { onSetType(CardType.ACCOUNT) }, label = { Text("Account") })
         }
         Text(
-            "Changing the type resets \"Count in spending\" to its default (on for credit, off for debit).",
+            "Changing the type resets \"Count in spending\" to its default (on for credit, off for debit and accounts).",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -342,7 +369,7 @@ fun CardDetailScreen(
             Switch(checked = c.countInSpending, onCheckedChange = onToggleCounted)
         }
         HorizontalDivider()
-        Text("This month: ${fmtMoney(summary.monthSpendAedMinor)} · ${summary.monthTxnCount} txns")
+        CardFigures(summary, "This month")
         StatementLines(summary)
         OutlinedButton(onClick = onShowTransactions) { Text("Show transactions") }
     }
@@ -351,7 +378,13 @@ fun CardDetailScreen(
 // ---------------------------------------------------------------- review tab
 
 @Composable
-fun ReviewScreen(failed: List<SmsEntity>, counts: Map<String, Int>, onDismiss: (Long) -> Unit, onReparse: () -> Unit) {
+fun ReviewScreen(
+    failed: List<SmsEntity>,
+    counts: Map<String, Int>,
+    onDismiss: (Long) -> Unit,
+    onReparse: () -> Unit,
+    onShare: () -> Unit,
+) {
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -370,7 +403,10 @@ fun ReviewScreen(failed: List<SmsEntity>, counts: Map<String, Int>, onDismiss: (
                     "These bank SMS contain an amount but no rule matched. Add a rule in BankRules.kt, install the new build, then tap Re-parse.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedButton(onClick = onReparse, modifier = Modifier.padding(top = 8.dp)) { Text("Re-parse all SMS") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
+                    OutlinedButton(onClick = onReparse) { Text("Re-parse all SMS") }
+                    OutlinedButton(onClick = onShare, enabled = failed.isNotEmpty()) { Text("Share unparsed SMS") }
+                }
             }
         }
         if (failed.isEmpty()) item { Text("Nothing to review.", fontWeight = FontWeight.Medium) }

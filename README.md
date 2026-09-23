@@ -35,14 +35,18 @@ All bank formats live in **`app/src/main/java/com/junaid/cardtracker/parser/Bank
 
 | Bank | Sender ID | Purchases | Statement | Other |
 |---|---|---|---|---|
-| FAB | FAB | ✅ from sample (debit format assumed) | ❌ no sample | – |
+| FAB | FAB | ✅ from sample (debit format assumed); account 8001 in/out, transfers, bill payments, rewards ✅ | ❌ no sample | – |
 | Emirates NBD | EmiratesNBD | ✅ from sample (no date in the SMS, so arrival time is used; debit format assumed) | ❌ no sample | – |
 | ADCB | ADCBAlert | ✅ from sample (debit format assumed) | ✅ from sample | – |
 | Al Hilal | AlHilal | ✅ from sample | ❌ no sample | declined and limit-change SMS are ignored |
 | HSBC | HSBC-UAE | ❌ no sample | ✅ from sample | payments ✅, cashback ✅ (stored as refund) |
-| Mashreq | Mashreq (unverified) | generic guess | generic guess | – |
+| Mashreq | Mashreq | generic guess (samples pending) | generic guess | adverts ignored |
 
-OTP, declined-transaction and limit-change messages are ignored. Any bank SMS that contains an amount but doesn't match a rule shows up on the **Review** tab with its raw text.
+OTP, advert, scheduled-transfer, declined-transaction and limit-change messages are ignored.
+
+**Bank account and transfers.** FAB account 8001 is tracked as a *bank account*, with both money in and money out, and "Count in spending" is off by default. FAB often sends two SMS for one transfer ("Outward Remittance Debit" and "funds transfer … processed"). The app merges those into one transaction.
+
+Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any other credit card the app already knows) show as **payments received** on that card. Transfers to your wife's ENBD account ·7701 and Emirates Islamic card ·6901 are just money out. None of these count as spending. You can edit this list in `BankRules.knownAccounts`. Any bank SMS that contains an amount but doesn't match a rule shows up on the **Review** tab with its raw text.
 
 ## How SMS get in
 

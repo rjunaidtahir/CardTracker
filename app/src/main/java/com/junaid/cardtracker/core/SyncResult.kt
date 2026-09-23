@@ -1,7 +1,8 @@
 package com.junaid.cardtracker.core
 
 /** What happened to one SMS offered to the repository. */
-enum class IngestOutcome { TRANSACTION, STATEMENT, FAILED, IGNORED, OTP_SKIPPED, DUPLICATE, NOT_BANK }
+/** MERGED = second SMS for a money movement already recorded (e.g. FAB remittance + transfer). */
+enum class IngestOutcome { TRANSACTION, MERGED, STATEMENT, FAILED, IGNORED, OTP_SKIPPED, DUPLICATE, NOT_BANK }
 
 data class SyncResult(val scanned: Int, val outcomes: Map<IngestOutcome, Int>) {
     fun count(o: IngestOutcome) = outcomes[o] ?: 0

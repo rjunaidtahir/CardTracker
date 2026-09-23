@@ -13,8 +13,8 @@ android {
         applicationId = "com.junaid.cardtracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2-phase1"
+        versionCode = 3
+        versionName = "0.3-phase1"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.

@@ -45,11 +45,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val vm: MainViewModel by viewModels()
@@ -85,6 +87,7 @@ fun AppRoot(vm: MainViewModel) {
     val ctx = LocalContext.current
     val nav = vm.nav
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
     var showSamsungTip by remember { mutableStateOf(false) }
 
     val month by vm.month.collectAsStateWithLifecycle()
@@ -203,7 +206,20 @@ fun AppRoot(vm: MainViewModel) {
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onToggleCounted = { key, on -> vm.setCardCounted(key, on) },
                     )
-                    Tab.REVIEW -> ReviewScreen(failed, counts, onDismiss = { vm.dismiss(it) }, onReparse = { vm.reparseAll() })
+                    Tab.REVIEW -> ReviewScreen(
+                        failed, counts,
+                        onDismiss = { vm.dismiss(it) },
+                        onReparse = { vm.reparseAll() },
+                        onShare = {
+                            scope.launch {
+                                val text = vm.reviewExportText()
+                                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                                    .putExtra(Intent.EXTRA_SUBJECT, "Card Tracker unparsed SMS")
+                                    .putExtra(Intent.EXTRA_TEXT, text)
+                                ctx.startActivity(Intent.createChooser(send, "Share unparsed SMS"))
+                            }
+                        },
+                    )
                     Tab.SETTINGS -> SettingsScreen(
                         liveOn = liveOn,
                         lastSyncAt = lastSyncAt,

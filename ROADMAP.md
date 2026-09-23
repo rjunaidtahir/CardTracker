@@ -10,7 +10,7 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 - **De-duplication:** a unique key per SMS: normalized sender, sent time (service-centre timestamp) and SHA-256 of the body. There's also a fallback check for when a sent time is missing.
 - **Filtering:** only your bank sender IDs are processed. OTP messages are dropped and never stored.
 - **Parsing:** rules live in `parser/BankRules.kt`. The raw SMS is stored, and anything that can't be parsed goes to the Review tab.
-- **Cards:** credit and debit. Each card has a "Count in spending" toggle: on for credit, off for debit by default. Card payments never count as spending.
+- **Cards and accounts:** credit cards, debit cards and bank accounts (FAB ·8001: money in and out). Each has a "Count in spending" toggle: on for credit, off for debit and accounts by default. Card payments and transfers never count as spending. Two FAB SMS for one transfer are merged into one transaction, and transfers to your own cards show as payments received on that card.
 - **Screens:** Transactions (month and card filters, add by typing), Cards, Card detail, Review, Settings.
 
 ## Phase 2: Cards and safety
@@ -18,8 +18,8 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 | Feature | Plan / where it plugs in |
 |---|---|
 | Card profiles: limit, statement day, due day | `cards.creditLimitMinor`, `statementDay`, `dueDay` already exist. Extend `CardDetailScreen` into an edit form. |
-| Due-date reminders | A new `reminders` table (migration v2→v3). WorkManager periodic job plus notifications, using `cards.remindersEnabled` (already exists). Runs only if reminders are on. |
-| Auto-mark paid from payment SMS | `statements.paidAt` and `paidByTxnId` already exist. When a PAYMENT transaction arrives, match the latest unpaid statement on the same card: amount ≥ minimum due marks it paid, ≥ balance marks it fully paid. |
+| Due-date reminders | A new `reminders` table (migration v3→v4). WorkManager periodic job plus notifications, using `cards.remindersEnabled` (already exists). Runs only if reminders are on. |
+| Auto-mark paid from payment SMS | `statements.paidAt` and `paidByTxnId` already exist. When a PAYMENT transaction arrives, or a TRANSFER_OUT whose `counterpartyKey` is the card (already recorded from v3), match the latest unpaid statement on the same card: amount ≥ minimum due marks it paid, ≥ balance marks it fully paid. |
 | Balances side by side with utilization % | Available limit comes from `transactions.availableLimitMinor` (latest per card), limit comes from the profile. Utilization = (limit − available) / limit. |
 | App lock: biometric with PIN fallback, re-lock after background timeout | `ui/AppLockGate` already wraps the whole UI. Add androidx.biometric, a PIN hash in Prefs, and a timeout measured from `ON_STOP`. |
 | CSV export/import backup | Storage Access Framework (`CreateDocument` / `OpenDocument`), one CSV per table. Import de-duplicates on `sms.dedupKey` and on the transaction id. |

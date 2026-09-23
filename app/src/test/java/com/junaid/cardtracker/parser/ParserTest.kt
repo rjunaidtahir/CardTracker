@@ -229,6 +229,113 @@ class ParserTest {
         assertEquals(CardType.CREDIT, stmt("ADCBAlert", "Cr.Card XXX3538 Billing alert: Total due to avoid fin. charges: AED1263.92. Due date Oct 14 2026; Pay min. AED100.00 by due date to avoid AED241.50 late fees.").cardType)
     }
 
+    // ----------------------------------------------------- FAB bank account
+    // Real samples from the Review tab (23 Sep 2026).
+
+    @Test fun fab_inward_remittance_is_account_credit() {
+        val t = txn("FAB", "Inward Remittance\nCredit\nAccount XXXX8001\nAED 200.00\nDate 21/09/2026\nBalance AED 2586.00")
+        assertEquals(TxnType.TRANSFER_IN, t.type)
+        assertEquals(CardType.ACCOUNT, t.cardType)
+        assertEquals("8001", t.cardLast4)
+        assertEquals(bd("200.00"), t.amount)
+        assertEquals(bd("2586.00"), t.availableLimit)
+        assertEquals("Inward remittance", t.merchant)
+    }
+
+    @Test fun fab_outward_remittance_is_account_debit() {
+        val t = txn("FAB", "Outward Remittance\nDebit\nAccount XXXX8001\nAED 1000.00\nDate 17/09/2026\nBalance AED 2386.00")
+        assertEquals(TxnType.TRANSFER_OUT, t.type)
+        assertEquals(CardType.ACCOUNT, t.cardType)
+        assertEquals(bd("1000.00"), t.amount)
+        assertEquals(bd("2386.00"), t.availableLimit)
+    }
+
+    @Test fun fab_funds_transfer_to_own_and_family_cards() {
+        val own = txn(
+            "FAB",
+            "Dear Customer, your funds transfer request of  AED 1,000.00 to IBAN/Account/Card XXXX9940  has been processed " +
+                "successfully from your account/card XXXX8001 on 17/09/2026 21:45",
+        )
+        assertEquals(TxnType.TRANSFER_OUT, own.type)
+        assertEquals("8001", own.cardLast4)
+        assertEquals("9940", own.toLast4)
+        assertEquals("Payment to ENBD credit card ·9940", own.merchant)
+        assertEquals(ts(2026, 9, 17, 21, 45), own.timestamp)
+
+        val alHilal = txn(
+            "FAB",
+            "Dear Customer, your funds transfer request of  AED 2,500.00 to IBAN/Account/Card XXXX3976  has been processed " +
+                "successfully from your account/card XXXX8001 on 17/09/2026 20:55",
+        )
+        assertEquals(bd("2500.00"), alHilal.amount)
+        assertEquals("Payment to Al Hilal credit card ·3976", alHilal.merchant)
+
+        val wife = txn(
+            "FAB",
+            "Dear Customer, your funds transfer request of  AED 4,200.00 to IBAN/Account/Card XXXX6901  has been processed " +
+                "successfully from your account/card XXXX8001 on 14/09/2026 19:29",
+        )
+        assertEquals("Transfer to Wife's Emirates Islamic credit card ·6901", wife.merchant)
+    }
+
+    @Test fun fab_card_payment_from_account() {
+        val t = txn("FAB", "Dear Customer, Your payment instructions of AED 500.00 to 5425********0831 has been processed on 15/09/2026 06:24")
+        assertEquals(TxnType.TRANSFER_OUT, t.type)
+        assertEquals("8001", t.cardLast4, "SMS doesn't name the paying account: defaults to FAB_ACCOUNT")
+        assertEquals("0831", t.toLast4)
+        assertEquals("Payment to FAB credit card ·0831", t.merchant)
+    }
+
+    @Test fun fab_bill_payment_is_purchase_on_account() {
+        val t = txn("FAB", "Dear Customer, Your payment instructions of AED 313.95 to HomeInternet for consumer number 045923079 has been processed on 15/09/2026 14:23")
+        assertEquals(TxnType.PURCHASE, t.type)
+        assertEquals(CardType.ACCOUNT, t.cardType)
+        assertEquals("8001", t.cardLast4)
+        assertEquals("HomeInternet", t.merchant)
+        assertEquals(bd("313.95"), t.amount)
+        assertNull(t.toLast4)
+    }
+
+    @Test fun fab_rewards_redemption_is_cashback() {
+        val t = txn(
+            "FAB",
+            "Congratulations! You have successfully redeemed 20000 FAB Rewards to save on your bills.\nValue: AED 50\n" +
+                "Redemption Type: Utility Bill\nRequest ID: 2999071897\n2026-09-15 14:23:31\nAvailable Balance: 74 FAB Rewards",
+        )
+        assertEquals(TxnType.REFUND, t.type)
+        assertEquals(bd("50"), t.amount)
+        assertNull(t.cardLast4, "not tied to a card, so it always counts")
+    }
+
+    @Test fun fab_scheduled_and_standing_instructions_are_ignored() {
+        val r1 = SmsParser.parse(
+            "FAB",
+            "Dear Customer, your Within UAE Fund transfer to ENBD ANNUM Account/Card No. XXXX7701 has been scheduled. Transfer of AED 500.0 will be done on 28/09/2026.",
+            received,
+        )
+        assertEquals(ParseResult.Ignored("FAB", "Scheduled / standing instruction"), r1)
+        val r2 = SmsParser.parse(
+            "FAB",
+            "Dear Customer, you have deregistered your standing Instruction service for Within UAE Fund transfer of AED 1,500.00 to ENBD ANNUM Account/Card No. XXXX7701",
+            received,
+        )
+        assertIs<ParseResult.Ignored>(r2)
+    }
+
+    @Test fun adverts_are_ignored() {
+        val ads = listOf(
+            "Mashreq" to "Federal Government Treasury Sukuk is open till 28 Sep 2026. Subscriptions start at AED 1,000 and multiples thereafter. Apply to mashreq.com/retailoffering T&C STOP 4250",
+            "Mashreq" to "Get Easy Cash up to AED 50000 instantly on your Mashreq Credit Card, with monthly instalments starting from AED 1237. Apply via Mashreq Mobile App. T&C STOP 4250",
+            "Mashreq" to "You are eligible for a Mashreq Personal Loan of up to AED 375000*. Apply now on mashreq.com/enpl *T&C apply. STOP to 4250",
+            "ADCBAlert" to "Get AED 200 cashback! Apply for a Credit Card on the ADCB Mobile App & spend AED 5,000 within 45 days of card issuance. Validity 30Sep26.T&C:adcb.com/ecb",
+        )
+        for ((sender, body) in ads) {
+            val r = SmsParser.parse(sender, body, received)
+            assertIs<ParseResult.Ignored>(r, body)
+            assertEquals("Advert", r.reason, body)
+        }
+    }
+
     // ------------------------------------------------------ Mashreq (generic)
 
     @Test fun mashreq_generic_rule() {

@@ -37,6 +37,33 @@ import java.math.BigDecimal
  */
 object BankRules {
 
+    /** Your FAB bank account (last 4). Used for FAB SMS that don't say which account paid. */
+    const val FAB_ACCOUNT = "8001"
+
+    /**
+     * Destinations that appear in transfer SMS. OWN_CARD transfers are shown as a payment to that
+     * card (never spending). FAMILY / OTHER transfers are just money leaving the account.
+     * A destination not listed here that matches one of your credit cards is treated as OWN_CARD.
+     */
+    val knownAccounts: List<KnownAccount> = listOf(
+        KnownAccount(FAB_ACCOUNT, "FAB account", AccountKind.OWN_ACCOUNT, bank = "FAB"),
+        KnownAccount("0831", "FAB credit card", AccountKind.OWN_CARD, bank = "FAB"),
+        KnownAccount("9940", "ENBD credit card", AccountKind.OWN_CARD, bank = "Emirates NBD"),
+        KnownAccount("3976", "Al Hilal credit card", AccountKind.OWN_CARD, bank = "Al Hilal"),
+        KnownAccount("7701", "Wife's ENBD current account", AccountKind.FAMILY),
+        KnownAccount("6901", "Wife's Emirates Islamic credit card", AccountKind.FAMILY),
+    )
+
+    fun ruleById(id: String?): Rule? = id?.let { rid -> (banks.flatMap { it.rules } + genericRules).firstOrNull { it.id == rid } }
+
+    fun knownAccount(last4: String): KnownAccount? = knownAccounts.firstOrNull { it.last4 == last4 }
+
+    /** Merchant text for a transfer: "Payment to ENBD credit card ·9940", "Transfer to Wife's ... ·7701". */
+    fun counterpartyLabel(last4: String): String {
+        val k = knownAccount(last4) ?: return "Transfer to ·$last4"
+        return if (k.kind == AccountKind.OWN_CARD) "Payment to ${k.label} ·$last4" else "Transfer to ${k.label} ·$last4"
+    }
+
     val banks: List<Bank> = listOf(
 
         // ---------------------------------------------------------------- FAB
@@ -52,6 +79,73 @@ object BankRules {
                     // Debit variant ("Debit Card Purchase") assumed to follow the same layout: not yet verified.
                     pattern = """{CARDTYPE} Card Purchase\s+Card No\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+{MERCHANT}\s+{DATETIME}(?:\s+Avl Bal\s+{ANYCUR}\s*{AVAIL})?""",
                 ),
+
+                // ---- FAB bank account (tracked as an ACCOUNT, both money in and out) ----
+                // Inward Remittance / Credit / Account XXXX8001 / AED 200.00 / Date 21/09/2026 / Balance AED 2586.00
+                Rule(
+                    id = "fab-inward-remittance",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_IN,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Inward remittance",
+                    pattern = """Inward Remittance\s+Credit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+Date\s+{DATETIME}(?:\s+Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
+                // Outward Remittance / Debit / Account XXXX8001 / AED 1000.00 / Date 17/09/2026 / Balance AED 2386.00
+                // FAB also sends a "funds transfer ... processed" SMS for the same money: pairGroup merges them.
+                Rule(
+                    id = "fab-outward-remittance",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    fixedMerchant = "Outward remittance",
+                    pairGroup = "fab-transfer",
+                    pattern = """Outward Remittance\s+Debit\s+Account\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+Date\s+{DATETIME}(?:\s+Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
+                // Dear Customer, your funds transfer request of  AED 1,000.00 to IBAN/Account/Card XXXX9940  has been
+                // processed successfully from your account/card XXXX8001 on 17/09/2026 21:45
+                Rule(
+                    id = "fab-funds-transfer",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    pairGroup = "fab-transfer",
+                    pattern = """funds transfer request of\s+{CUR}\s*{AMOUNT}\s+to\s+IBAN/Account/Card\s+{TO}\s+has been processed successfully from your account/card\s+{CARD}\s+on\s+{DATETIME}""",
+                ),
+                // Dear Customer, Your payment instructions of AED 500.00 to 5425********0831 has been processed on 15/09/2026 06:24
+                // (paying a card from the account; the SMS doesn't say which account, so defaultCardLast4 is used)
+                Rule(
+                    id = "fab-card-payment",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    defaultCardLast4 = FAB_ACCOUNT,
+                    pairGroup = "fab-transfer",
+                    pattern = """payment instructions of\s+{CUR}\s*{AMOUNT}\s+to\s+{TO}\s+has been processed on\s+{DATETIME}""",
+                ),
+                // Dear Customer, Your payment instructions of AED 313.95 to HomeInternet for consumer number 045923079
+                // has been processed on 15/09/2026 14:23   (a bill paid from the account: a PURCHASE on the account)
+                Rule(
+                    id = "fab-bill-payment",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.PURCHASE,
+                    cardType = CardType.ACCOUNT,
+                    defaultCardLast4 = FAB_ACCOUNT,
+                    pattern = """payment instructions of\s+{CUR}\s*{AMOUNT}\s+to\s+{MERCHANT}\s+for consumer number\s+\S+\s+has been processed on\s+{DATETIME}""",
+                ),
+                // Congratulations! You have successfully redeemed 20000 FAB Rewards to save on your bills. Value: AED 50 ...
+                // Logged as cashback (REFUND), with no card, so it reduces spending.
+                Rule(
+                    id = "fab-rewards-redemption",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    fixedMerchant = "FAB Rewards redemption",
+                    pattern = """redeemed\s+[\d,]+\s+FAB Rewards.*?Value:\s*{CUR}\s*{AMOUNT}""",
+                ),
+            ),
+            ignore = listOf(
+                // "...has been scheduled. Transfer of AED 500.0 will be done on 28/09/2026" / "deregistered your standing
+                // Instruction": nothing has moved yet; the "processed" SMS is recorded when it happens.
+                IgnoreRule("Scheduled / standing instruction", """has been scheduled|standing\s+instruction"""),
             ),
         ),
 
@@ -185,6 +279,10 @@ object BankRules {
     val globalIgnore: List<IgnoreRule> = listOf(
         IgnoreRule("OTP", """\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN\s+is)\b""", store = false),
         IgnoreRule("Declined transaction", """\b(declined|unsuccessful|was not successful)\b"""),
+        IgnoreRule(
+            "Advert",
+            """\bSTOP\b.{0,8}\d{3,5}\b|\bT&C|\bapply\s+(now|via|to|for|on)\b|\beligible\b|\bpre-?approved\b""",
+        ),
         IgnoreRule("Limit change", """\blimit\b.*\b(has been|was)\s+(changed|updated|increased|decreased|set)\b"""),
     )
 

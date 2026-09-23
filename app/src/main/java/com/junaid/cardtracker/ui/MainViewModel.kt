@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.junaid.cardtracker.CardTrackerApp
 import com.junaid.cardtracker.core.IngestOutcome
+import com.junaid.cardtracker.core.ReviewExport
 import com.junaid.cardtracker.core.Spending
 import com.junaid.cardtracker.data.CardEntity
 import com.junaid.cardtracker.data.SmsEntity
@@ -33,6 +34,12 @@ data class CardSummary(
     val monthSpendAedMinor: Long,
     val monthTxnCount: Int,
     val latestStatement: StatementEntity?,
+    /** Payments received this month: PAYMENT SMS on the card + transfers to it from your account. */
+    val monthPaidInMinor: Long = 0,
+    /** Bank accounts: money in / out this month and the latest balance from the SMS. */
+    val monthInMinor: Long = 0,
+    val monthOutMinor: Long = 0,
+    val latestBalanceMinor: Long? = null,
 )
 
 fun TransactionEntity.txnType(): TxnType = runCatching { TxnType.valueOf(type) }.getOrDefault(TxnType.PURCHASE)
@@ -87,9 +94,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         ) { cards, txns, statements ->
             val byCard = txns.groupBy { it.cardKey }
             val latest = statements.groupBy { it.cardKey }.mapValues { (_, v) -> v.maxByOrNull { it.receivedAt } }
+            val paidInto = txns.filter { it.counterpartyKey != null }.groupBy { it.counterpartyKey }
             cards.map { c ->
                 val t = byCard[c.cardKey].orEmpty()
-                CardSummary(c, spendingTotal(t, emptySet()), t.size, latest[c.cardKey])
+                val bankPayments = t.filter { it.type == TxnType.PAYMENT.name }
+                // A transfer the card's own bank also reported as a PAYMENT (same amount, within 3 days) counts once.
+                val transfers = paidInto[c.cardKey].orEmpty().filterNot { tr ->
+                    bankPayments.any { p -> p.amountMinor == tr.amountMinor && kotlin.math.abs(p.timestamp - tr.timestamp) <= 3 * 86_400_000L }
+                }
+                val paid = bankPayments.sumOf { it.amountAedMinor ?: 0L } + transfers.sumOf { it.amountAedMinor ?: 0L }
+                CardSummary(
+                    card = c,
+                    monthSpendAedMinor = spendingTotal(t, emptySet()),
+                    monthTxnCount = t.size,
+                    latestStatement = latest[c.cardKey],
+                    monthPaidInMinor = paid,
+                    monthInMinor = t.filter { it.type == TxnType.TRANSFER_IN.name || it.type == TxnType.REFUND.name }.sumOf { it.amountAedMinor ?: 0L },
+                    monthOutMinor = t.filter { it.type == TxnType.TRANSFER_OUT.name || it.type == TxnType.PURCHASE.name }.sumOf { it.amountAedMinor ?: 0L },
+                    latestBalanceMinor = t.filter { it.availableLimitMinor != null }.maxByOrNull { it.timestamp }?.availableLimitMinor,
+                )
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -169,8 +192,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun reparseAll() = viewModelScope.launch {
         val c = repo.reparseAll()
         message.value = "Re-parsed: ${c[IngestOutcome.TRANSACTION] ?: 0} transactions, " +
-            "${c[IngestOutcome.STATEMENT] ?: 0} statements, ${c[IngestOutcome.FAILED] ?: 0} need review"
+            "${c[IngestOutcome.MERGED] ?: 0} merged, ${c[IngestOutcome.STATEMENT] ?: 0} statements, ${c[IngestOutcome.FAILED] ?: 0} need review"
     }
+
+    /** Grouped text of all unparsed SMS, for sharing. */
+    suspend fun reviewExportText(): String =
+        ReviewExport.summarize(dao.failedSmsList().map { ReviewExport.Item(it.bank ?: it.sender, it.body) })
 
     fun dismiss(smsId: Long) = viewModelScope.launch { dao.setSmsStatus(smsId, SmsStatus.DISMISSED) }
 }

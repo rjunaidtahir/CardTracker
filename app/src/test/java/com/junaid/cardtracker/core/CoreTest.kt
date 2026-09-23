@@ -59,8 +59,33 @@ class CoreTest {
         assertEquals(10_000L - 2_500 + 5_000 + 4_500, Spending.totalAedMinor(items, excludedCardKeys = emptySet()))
     }
 
-    @Test fun payments_never_count_even_on_counted_cards() {
+    @Test fun payments_and_transfers_never_count_even_on_counted_cards() {
         assertEquals(0L, Spending.contributionAedMinor(TxnType.PAYMENT, 90_000, cardCounted = true))
+        assertEquals(0L, Spending.contributionAedMinor(TxnType.TRANSFER_OUT, 90_000, cardCounted = true))
+        assertEquals(0L, Spending.contributionAedMinor(TxnType.TRANSFER_IN, 90_000, cardCounted = true))
+    }
+
+    @Test fun accounts_are_not_counted_by_default() {
+        assertEquals(false, Spending.defaultCountInSpending(CardType.ACCOUNT))
+    }
+
+    @Test fun rewards_redemption_without_card_reduces_spending() {
+        val items = listOf(Spending.Item(TxnType.PURCHASE, 31_395, null), Spending.Item(TxnType.REFUND, 5_000, null))
+        assertEquals(26_395L, Spending.totalAedMinor(items, emptySet()))
+    }
+
+    // -------------------------------------------------------- review export
+
+    @Test fun review_export_groups_by_shape() {
+        val items = listOf(
+            ReviewExport.Item("Mashreq", "Get Easy Cash up to AED 50000. STOP 4250"),
+            ReviewExport.Item("Mashreq", "Get Easy Cash up to AED 30000. STOP 4250"),
+            ReviewExport.Item("FAB", "Something new AED 12.00"),
+        )
+        val text = ReviewExport.summarize(items)
+        assertEquals(true, text.startsWith("Card Tracker: 3 unparsed SMS in 2 formats"))
+        assertEquals(true, text.contains("#1 · Mashreq · 2×"), text)
+        assertEquals(true, text.contains("#2 · FAB · 1×"), text)
     }
 
     // ---------------------------------------------------------- sync result
