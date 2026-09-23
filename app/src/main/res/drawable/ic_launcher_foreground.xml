@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- card body -->
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M30,38 h48 a4,4 0 0 1 4,4 v26 a4,4 0 0 1 -4,4 h-48 a4,4 0 0 1 -4,-4 v-26 a4,4 0 0 1 4,-4 z" />
+    <!-- stripe -->
+    <path android:fillColor="#FF0E5E4E" android:pathData="M26,45 h56 v6 h-56 z" />
+    <!-- chip -->
+    <path android:fillColor="#FFE0B040" android:pathData="M33,56 h10 v8 h-10 z" />
+</vector>
