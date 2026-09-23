@@ -8,7 +8,9 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import androidx.activity.ComponentActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -53,13 +55,52 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.launch
 
-class MainActivity : ComponentActivity() {
+/** FragmentActivity (a ComponentActivity) because BiometricPrompt needs one. */
+class MainActivity : FragmentActivity() {
     private val vm: MainViewModel by viewModels()
+    private lateinit var biometricPrompt: BiometricPrompt
+
+    // Android 9+ only: older versions would need an AppCompat theme for the library's own dialog.
+    private fun biometricAvailable(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && BiometricManager.from(this).canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_WEAK) == BiometricManager.BIOMETRIC_SUCCESS
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setContent { AppTheme { AppLockGate { AppRoot(vm) } } }
+        // Must be created in onCreate.
+        biometricPrompt = BiometricPrompt(
+            this, ContextCompat.getMainExecutor(this),
+            object : BiometricPrompt.AuthenticationCallback() {
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    vm.unlockWithBiometric()
+                }
+            },
+        )
+        val promptInfo = BiometricPrompt.PromptInfo.Builder()
+            .setTitle("Unlock Card Tracker")
+            .setNegativeButtonText("Use PIN")
+            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+            .build()
+        val showBiometric = { biometricPrompt.authenticate(promptInfo) }
+        setContent {
+            AppTheme {
+                val bioOn by vm.biometricOn.collectAsStateWithLifecycle()
+                val canBio = remember { biometricAvailable() }
+                AppLockGate(vm, onBiometric = if (bioOn && canBio) showBiometric else null) {
+                    AppRoot(vm, biometricAvailable = canBio)
+                }
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        vm.onForeground()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (!isChangingConfigurations) vm.onBackground()
     }
 }
 
@@ -83,7 +124,7 @@ private const val RESTRICTED_HINT =
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppRoot(vm: MainViewModel) {
+fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     val ctx = LocalContext.current
     val nav = vm.nav
     val snackbar = remember { SnackbarHostState() }
@@ -102,6 +143,33 @@ fun AppRoot(vm: MainViewModel) {
     val syncing by vm.syncing.collectAsStateWithLifecycle()
     val lastSyncAt by vm.lastSyncAt.collectAsStateWithLifecycle()
     val liveOn by vm.liveListening.collectAsStateWithLifecycle()
+    val categories by vm.categories.collectAsStateWithLifecycle()
+    val categoryFilter by vm.categoryFilter.collectAsStateWithLifecycle()
+    val rates by vm.rates.collectAsStateWithLifecycle()
+
+    // Notifications (Android 13+) are asked for only when you switch reminders on.
+    val notifyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) {
+            vm.setReminders(true)
+        } else {
+            vm.message.value = "Reminders need permission to show notifications."
+        }
+    }
+    val onRemindersToggle: (Boolean) -> Unit = { on ->
+        when {
+            !on -> vm.setReminders(false)
+            Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS) -> vm.setReminders(true)
+            else -> notifyLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // Backup: system file pickers (nothing leaves the phone unless you choose where to save it).
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) vm.exportBackup(uri)
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.importBackup(uri)
+    }
 
     // READ_SMS: asked the first time you tap Sync.
     val readSmsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
@@ -166,6 +234,7 @@ fun AppRoot(vm: MainViewModel) {
                         when (route) {
                             is Route.Home -> route.tab.label
                             is Route.CardDetail -> "Card"
+                            Route.Rates -> "Exchange rates"
                         },
                     )
                 },
@@ -197,9 +266,15 @@ fun AppRoot(vm: MainViewModel) {
         Box(Modifier.padding(padding).fillMaxSize()) {
             when (route) {
                 is Route.Home -> when (route.tab) {
+                    Tab.OVERVIEW -> OverviewScreen(
+                        vm,
+                        onOpenCategory = { id -> vm.selectCard(null); vm.selectCategory(id); nav.selectTab(Tab.TRANSACTIONS) },
+                        onOpenCard = { nav.push(Route.CardDetail(it)) },
+                    )
                     Tab.TRANSACTIONS -> TransactionsScreen(
                         vm, month, cardFilter, cards, excluded, txns,
                         syncing = syncing, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
+                        categories = categories, categoryFilter = categoryFilter,
                     )
                     Tab.CARDS -> CardsScreen(
                         summaries, month,
@@ -221,12 +296,16 @@ fun AppRoot(vm: MainViewModel) {
                         },
                     )
                     Tab.SETTINGS -> SettingsScreen(
+                        vm = vm,
                         liveOn = liveOn,
                         lastSyncAt = lastSyncAt,
                         onLiveToggle = onLiveToggle,
                         onShowSamsungTip = { showSamsungTip = true },
-                        onResetSync = { vm.resetSyncPointer() },
-                        onReparse = { vm.reparseAll() },
+                        onRemindersToggle = onRemindersToggle,
+                        onExport = { exportLauncher.launch("cardtracker-backup-${java.time.LocalDate.now()}.zip") },
+                        onImport = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
+                        onOpenRates = { nav.push(Route.Rates) },
+                        biometricAvailable = biometricAvailable,
                         versionName = versionName,
                     )
                 }
@@ -234,8 +313,10 @@ fun AppRoot(vm: MainViewModel) {
                     summary = summaries.firstOrNull { it.card.cardKey == route.cardKey },
                     onSetType = { vm.setCardType(route.cardKey, it) },
                     onToggleCounted = { vm.setCardCounted(route.cardKey, it) },
-                    onShowTransactions = { vm.selectCard(route.cardKey); nav.selectTab(Tab.TRANSACTIONS) },
+                    onShowTransactions = { vm.selectCategory(null); vm.selectCard(route.cardKey); nav.selectTab(Tab.TRANSACTIONS) },
+                    onSaveProfile = { n, l, sd, dd, r -> vm.saveCardProfile(route.cardKey, n, l, sd, dd, r) },
                 )
+                Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
             }
         }
     }

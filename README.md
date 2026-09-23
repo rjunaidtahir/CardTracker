@@ -58,18 +58,42 @@ Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any ot
 
 ## Screens
 
+- **Overview (home):**
+  - Month picker and total spent, compared with last month.
+  - **Card payments due:** amount still to pay, due date, and paid / minimum paid / overdue.
+  - **Spending by category:** tap a category to see its transactions.
+  - **Last 12 months:** bar chart; tap a bar to switch month.
+  - **By card.**
+  - **Recurring payments:** subscriptions and EMIs, with the next expected date.
+  - **Foreign-currency spending in AED.**
+  - **Savings goals:** add a goal, add money, see the monthly amount needed to reach the target date.
 - **Transactions:**
-  - The Sync button, the "Add by typing" box, month arrows (tap the month name for all months) and card filter chips.
-  - Only cards switched **on** on the Cards tab appear (chips and list); switched-off cards are hidden and left out of totals. Typed entries without a card always show. To look at a switched-off card, open it on the Cards tab → Show transactions.
-  - When a bank account is selected (e.g. FAB ·8001), the top shows **Money in / Money out / Net** for the month, plus what's counted as spending.
-  - Tap a row to see the raw SMS, or to delete it. Deleting also dismisses the SMS, so Re-parse doesn't bring it back.
-- **Cards:** each card shows credit or debit, a **Show & count** switch (on for credit, off for debit cards and bank accounts by default), this month's spend, and the latest statement. Tap a card to change its type or open its transactions.
-- **Review:** bank SMS that contain an amount but didn't match a rule.
-- **Settings:** live listening, sync info, "Re-read whole inbox on next Sync", and "Re-parse all stored SMS".
+  - Sync button, "Add by typing", month and card filters.
+  - When a bank account is selected, **Money in / Money out / Net** at the top.
+  - Each row shows its category. Tap a row, then **Change** to re-categorise; "Apply to all" teaches the app that merchant for the past and future.
+  - Tap a row to see the raw SMS or delete it.
+- **Cards:**
+  - **Balances:** available, limit and % used side by side, once you've entered limits.
+  - Each card shows this month's spend, payments received, and the latest statement with its paid/due status.
+  - Tap a card for its profile: nickname, credit limit, statement day, due day, per-card reminders, utilisation, payments to the card, card type and **Show & count**.
+- **Review:** unparsed SMS, with **Share unparsed SMS**.
+- **Settings:**
+  - Live listening and **due-date reminders**.
+  - **App lock:** PIN plus fingerprint/face, re-lock after immediately / 1 / 5 / 15 min.
+  - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
+- **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
+
+## First steps after installing v1.0
+
+1. **Re-parse all SMS** (Review or Settings) so every transaction gets a category.
+2. On the Cards tab, open each credit card and enter its **credit limit** (optional: statement day and due day).
+3. In Settings, switch on **Due-date reminders** and allow notifications.
+4. Optionally switch on **App lock**, and **Export backup** now and then (save it to Google Drive or Files).
 
 ## Data model
 
 - Amounts are stored in minor units (fils/cents) with their original currency. Each one also has an AED equivalent.
 - SMS usually don't give an AED amount for foreign-currency spends, so the AED figure uses the approximate rates in `BankRules.fxToAed` and is flagged as an estimate.
 - Spend = purchases − refunds/cashback, on cards with "Show & count" switched on, plus typed entries. Credit card payments never count. The rules are in `core/Spending.kt`.
-- The database is laid out ready for Phases 2–4; see `ROADMAP.md`.
+- Categories: `parser/CategoryRules.kt` holds the default categories and the keywords that auto-assign them. Your corrections take priority over the keywords.
+- See `ROADMAP.md` for how each feature is built and ideas for later.

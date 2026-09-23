@@ -14,7 +14,8 @@ import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
 /*
- * Schema v3 (v2 + transactions.counterpartyKey / pairedSmsId). Columns marked "Phase N" are unused for now but exist so later phases don't need
+ * Schema v4: v3 + categories, learned merchant rules, per-SMS category overrides, savings goals,
+ * editable exchange rates and transactions.merchantKey. Columns marked "Phase N" are unused for now but exist so later phases don't need
  * table rebuilds. New tables planned for later phases (see ROADMAP.md) get added with a Room
  * Migration in Migrations.kt: never by bumping the version with destructive fallback.
  */
@@ -61,7 +62,10 @@ data class SmsEntity(
 
 @Entity(
     tableName = "transactions",
-    indices = [Index(value = ["smsId"]), Index(value = ["timestamp"]), Index(value = ["cardKey"]), Index(value = ["categoryId"])],
+    indices = [
+        Index(value = ["smsId"]), Index(value = ["timestamp"]), Index(value = ["cardKey"]), Index(value = ["categoryId"]),
+        Index(value = ["merchantKey"]),
+    ],
 )
 data class TransactionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -94,6 +98,48 @@ data class TransactionEntity(
     val counterpartyKey: String? = null,
     /** A second SMS describing the same money movement, merged into this transaction. */
     val pairedSmsId: Long? = null,
+    /** Normalised merchant (CategoryRules.merchantKey) used to learn categories. */
+    val merchantKey: String? = null,
+)
+
+@Entity(tableName = "categories")
+data class CategoryEntity(
+    @PrimaryKey val id: Long,
+    val name: String,
+    val sortOrder: Int,
+    val archived: Boolean = false,
+)
+
+/** Learned when you re-categorise a merchant with "apply to all". */
+@Entity(tableName = "merchant_rules")
+data class MerchantRuleEntity(
+    @PrimaryKey val merchantKey: String,
+    val categoryId: Long,
+)
+
+/** Your category choice for one SMS transaction, keyed by the SMS dedupKey so it survives Re-parse and backups. */
+@Entity(tableName = "txn_overrides")
+data class TxnOverrideEntity(
+    @PrimaryKey val dedupKey: String,
+    val categoryId: Long?,
+)
+
+@Entity(tableName = "savings_goals")
+data class GoalEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val targetMinor: Long,
+    val savedMinor: Long,
+    val targetDateEpochDay: Long?,
+    val createdAt: Long,
+)
+
+/** Editable AED rates (seeded from BankRules.fxToAed). Stored as text to keep BigDecimal precision. */
+@Entity(tableName = "fx_rates")
+data class FxRateEntity(
+    @PrimaryKey val currency: String,
+    val rateToAed: String,
+    val updatedAt: Long,
 )
 
 @Entity(tableName = "statements", indices = [Index(value = ["smsId"]), Index(value = ["cardKey"])])
@@ -251,13 +297,129 @@ interface AppDao {
 
     @Query("UPDATE cards SET cardType = :type, countInSpending = :counted WHERE cardKey = :key")
     suspend fun setCardType(key: String, type: String, counted: Boolean)
+
+    @Query(
+        "UPDATE cards SET nickname = :nickname, creditLimitMinor = :limitMinor, statementDay = :statementDay, " +
+            "dueDay = :dueDay, remindersEnabled = :reminders WHERE cardKey = :key",
+    )
+    suspend fun updateCardProfile(key: String, nickname: String?, limitMinor: Long?, statementDay: Int?, dueDay: Int?, reminders: Boolean)
+
+    @Query("SELECT * FROM cards")
+    suspend fun allCards(): List<CardEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCards(c: List<CardEntity>)
+
+    // --- categories & learning
+    @Query("SELECT * FROM categories WHERE archived = 0 ORDER BY sortOrder, name")
+    fun categories(): Flow<List<CategoryEntity>>
+
+    @Query("SELECT * FROM categories")
+    suspend fun allCategories(): List<CategoryEntity>
+
+    @Query("SELECT COUNT(*) FROM categories")
+    suspend fun categoryCount(): Int
+
+    @Query("SELECT COALESCE(MAX(id), 0) FROM categories")
+    suspend fun maxCategoryId(): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertCategories(c: List<CategoryEntity>)
+
+    @Query("SELECT categoryId FROM merchant_rules WHERE merchantKey = :key")
+    suspend fun ruleFor(key: String): Long?
+
+    @Query("SELECT * FROM merchant_rules")
+    suspend fun allRules(): List<MerchantRuleEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRules(r: List<MerchantRuleEntity>)
+
+    @Query("SELECT * FROM txn_overrides WHERE dedupKey = :dedupKey")
+    suspend fun overrideFor(dedupKey: String): TxnOverrideEntity?
+
+    @Query("SELECT * FROM txn_overrides")
+    suspend fun allOverrides(): List<TxnOverrideEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertOverrides(o: List<TxnOverrideEntity>)
+
+    @Query("SELECT dedupKey FROM sms WHERE id = :smsId")
+    suspend fun dedupKeyOf(smsId: Long): String?
+
+    @Query("UPDATE transactions SET categoryId = :categoryId, categoryUserSet = 1 WHERE id = :id")
+    suspend fun setTxnCategory(id: Long, categoryId: Long?)
+
+    /** Apply a learned rule to other transactions from the same merchant that you haven't set by hand. */
+    @Query(
+        "UPDATE transactions SET categoryId = :categoryId WHERE merchantKey = :key AND categoryUserSet = 0 " +
+            "AND type IN ('PURCHASE', 'REFUND')",
+    )
+    suspend fun applyRule(key: String, categoryId: Long)
+
+    @Query("SELECT * FROM transactions WHERE merchantKey IS NULL")
+    suspend fun txnsWithoutMerchantKey(): List<TransactionEntity>
+
+    @Query("UPDATE transactions SET merchantKey = :key, categoryId = :categoryId WHERE id = :id")
+    suspend fun setMerchantKeyAndCategory(id: Long, key: String, categoryId: Long?)
+
+    @Query("SELECT * FROM transactions WHERE timestamp >= :from ORDER BY timestamp")
+    suspend fun txnsSince(from: Long): List<TransactionEntity>
+
+    // --- goals
+    @Query("SELECT * FROM savings_goals ORDER BY createdAt")
+    fun goals(): Flow<List<GoalEntity>>
+
+    @Query("SELECT * FROM savings_goals")
+    suspend fun allGoals(): List<GoalEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGoal(g: GoalEntity): Long
+
+    @Query("DELETE FROM savings_goals WHERE id = :id")
+    suspend fun deleteGoal(id: Long)
+
+    // --- exchange rates
+    @Query("SELECT * FROM fx_rates ORDER BY currency")
+    fun rates(): Flow<List<FxRateEntity>>
+
+    @Query("SELECT * FROM fx_rates")
+    suspend fun allRates(): List<FxRateEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRates(r: List<FxRateEntity>)
+
+    @Query("SELECT * FROM transactions WHERE currency != 'AED'")
+    suspend fun foreignTxns(): List<TransactionEntity>
+
+    @Query("UPDATE transactions SET amountAedMinor = :aedMinor, fxEstimated = 1 WHERE id = :id")
+    suspend fun setAed(id: Long, aedMinor: Long?)
+
+    // --- backup
+    @Query("SELECT * FROM sms ORDER BY receivedAt")
+    suspend fun allSms(): List<SmsEntity>
+
+    @Query("SELECT * FROM transactions ORDER BY timestamp")
+    suspend fun allTxns(): List<TransactionEntity>
+
+    @Query("SELECT * FROM transactions WHERE source = 'MANUAL' ORDER BY timestamp")
+    suspend fun manualTxns(): List<TransactionEntity>
+
+    @Query("SELECT COUNT(*) FROM transactions WHERE source = 'MANUAL' AND timestamp = :ts AND amountMinor = :amountMinor AND merchant = :merchant")
+    suspend fun countManual(ts: Long, amountMinor: Long, merchant: String): Int
+
+    @Query("SELECT * FROM statements")
+    suspend fun allStatements(): List<StatementEntity>
 }
 
 data class StatusCount(val status: String, val n: Int)
 
 @Database(
-    entities = [SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class],
-    version = 3,
+    entities = [
+        SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
+        CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
+    ],
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

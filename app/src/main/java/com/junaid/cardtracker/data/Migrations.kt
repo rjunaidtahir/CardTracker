@@ -18,5 +18,32 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_2_3)
+    /** v3 -> v4: categories, learning, goals, exchange rates (Phases 2-4). */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN merchantKey TEXT")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_transactions_merchantKey` ON `transactions` (`merchantKey`)")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `categories` (`id` INTEGER NOT NULL, `name` TEXT NOT NULL, " +
+                    "`sortOrder` INTEGER NOT NULL, `archived` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `merchant_rules` (`merchantKey` TEXT NOT NULL, `categoryId` INTEGER NOT NULL, " +
+                    "PRIMARY KEY(`merchantKey`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `txn_overrides` (`dedupKey` TEXT NOT NULL, `categoryId` INTEGER, PRIMARY KEY(`dedupKey`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `savings_goals` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`targetMinor` INTEGER NOT NULL, `savedMinor` INTEGER NOT NULL, `targetDateEpochDay` INTEGER, `createdAt` INTEGER NOT NULL)",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `fx_rates` (`currency` TEXT NOT NULL, `rateToAed` TEXT NOT NULL, " +
+                    "`updatedAt` INTEGER NOT NULL, PRIMARY KEY(`currency`))",
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_2_3, MIGRATION_3_4)
 }

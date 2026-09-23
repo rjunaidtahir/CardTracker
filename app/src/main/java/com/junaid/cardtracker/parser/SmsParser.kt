@@ -224,9 +224,9 @@ object Money {
     fun fromMinor(minor: Long): BigDecimal = BigDecimal.valueOf(minor, 2)
 
     /** Returns (AED minor units, isEstimate). Unknown currency -> null. */
-    fun toAedMinor(amount: BigDecimal, currency: String): Pair<Long, Boolean>? {
+    fun toAedMinor(amount: BigDecimal, currency: String, rates: Map<String, BigDecimal> = BankRules.fxToAed): Pair<Long, Boolean>? {
         if (currency.equals(BankRules.BASE_CURRENCY, ignoreCase = true)) return toMinor(amount) to false
-        val rate = BankRules.fxToAed[currency.uppercase()] ?: return null
+        val rate = rates[currency.uppercase()] ?: return null
         return toMinor(amount.multiply(rate)) to true
     }
 }

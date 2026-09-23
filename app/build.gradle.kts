@@ -13,8 +13,8 @@ android {
         applicationId = "com.junaid.cardtracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.4.1-phase1"
+        versionCode = 7
+        versionName = "1.0"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.
@@ -70,6 +70,10 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // App lock (fingerprint / face). BiometricPrompt needs a FragmentActivity.
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))

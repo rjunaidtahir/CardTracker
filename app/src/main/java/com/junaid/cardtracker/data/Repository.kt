@@ -12,13 +12,55 @@ import com.junaid.cardtracker.parser.ManualEntry
 import com.junaid.cardtracker.parser.Money
 import com.junaid.cardtracker.parser.ParseResult
 import com.junaid.cardtracker.parser.SmsParser
+import com.junaid.cardtracker.parser.CategoryRules
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.math.BigDecimal
 
 /** Shared by Sync and live listening: same parser, same de-duplication. */
 class Repository(private val db: AppDatabase) {
     val dao = db.dao()
     private val lock = Mutex()
+
+    /** Current AED rates (from the fx_rates table; defaults from BankRules.fxToAed). */
+    @Volatile
+    var rates: Map<String, BigDecimal> = BankRules.fxToAed
+        private set
+
+    // ------------------------------------------------------------ setup
+
+    /** Seeds categories and exchange rates, and categorises older transactions once. Safe to call every start. */
+    suspend fun ensureDefaults() {
+        if (dao.categoryCount() == 0) {
+            dao.upsertCategories(CategoryRules.defaults.mapIndexed { i, c -> CategoryEntity(c.id, c.name, i) })
+        }
+        val stored = dao.allRates()
+        val missing = BankRules.fxToAed.filterKeys { k -> stored.none { it.currency == k } }
+        if (missing.isNotEmpty()) {
+            dao.upsertRates(missing.map { (c, r) -> FxRateEntity(c, r.toPlainString(), System.currentTimeMillis()) })
+        }
+        loadRates()
+        // Transactions created before categories existed (v0.4 and earlier).
+        for (t in dao.txnsWithoutMerchantKey()) {
+            val key = CategoryRules.merchantKey(t.merchant)
+            val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
+            val cat = if (t.categoryUserSet) t.categoryId else resolveCategory(null, key, t.merchant, type)
+            dao.setMerchantKeyAndCategory(t.id, key, cat)
+        }
+    }
+
+    private suspend fun loadRates() {
+        rates = dao.allRates().mapNotNull { r -> r.rateToAed.toBigDecimalOrNull()?.let { r.currency to it } }.toMap() +
+            (BankRules.BASE_CURRENCY to BigDecimal.ONE)
+    }
+
+    /** Your choice for this SMS > learned merchant rule > keyword guess. */
+    private suspend fun resolveCategory(dedupKey: String?, merchantKey: String, merchant: String, type: TxnType): Long? {
+        if (type != TxnType.PURCHASE && type != TxnType.REFUND) return null
+        dedupKey?.let { dao.overrideFor(it) }?.let { return it.categoryId }
+        if (merchantKey.isNotEmpty()) dao.ruleFor(merchantKey)?.let { return it }
+        return CategoryRules.guess(merchant, type)
+    }
 
     suspend fun ingestSms(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): IngestOutcome =
         lock.withLock {
@@ -42,7 +84,8 @@ class Repository(private val db: AppDatabase) {
                         bank = bank.name, status = SmsStatus.PENDING,
                     ),
                 )
-                if (id == -1L) IngestOutcome.DUPLICATE else applyParse(id, parsed, receivedAt)
+                val dedupKey = SmsKey.of(sender, sent, receivedAt, body)
+                if (id == -1L) IngestOutcome.DUPLICATE else applyParse(id, dedupKey, parsed, receivedAt)
             }
         }
 
@@ -56,7 +99,7 @@ class Repository(private val db: AppDatabase) {
             dao.deleteAllSmsTxns()
             dao.deleteAllStatements()
             for (s in all) {
-                val o = applyParse(s.id, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt)
+                val o = applyParse(s.id, s.dedupKey, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt)
                 counts[o] = (counts[o] ?: 0) + 1
             }
         }
@@ -85,11 +128,12 @@ class Repository(private val db: AppDatabase) {
         return dao.cardsByLast4(last4).singleOrNull { it.cardType == CardTypes.CREDIT }?.cardKey
     }
 
-    private suspend fun applyTransaction(smsId: Long, r: ParseResult.Transaction): IngestOutcome {
+    private suspend fun applyTransaction(smsId: Long, dedupKey: String, r: ParseResult.Transaction): IngestOutcome {
         val t = r.txn
         val key = t.cardLast4?.let { cardKeyOf(t.bank, it) }
         if (key != null) ensureCard(key, t.bank, t.cardLast4, t.cardType)
-        val aed = Money.toAedMinor(t.amount, t.currency)
+        val aed = Money.toAedMinor(t.amount, t.currency, rates)
+        val merchantKey = CategoryRules.merchantKey(t.merchant)
         val amountMinor = Money.toMinor(t.amount)
         val counterpartyKey = t.toLast4?.let { ownCardKeyFor(it) }
         val availMinor = t.availableLimit?.let { Money.toMinor(it) }
@@ -133,6 +177,9 @@ class Repository(private val db: AppDatabase) {
                 amountAedMinor = aed?.first, fxEstimated = aed?.second ?: false,
                 type = t.type.name, availableLimitMinor = availMinor,
                 ruleId = r.ruleId, counterpartyKey = counterpartyKey,
+                merchantKey = merchantKey,
+                categoryId = resolveCategory(dedupKey, merchantKey, t.merchant, t.type),
+                categoryUserSet = dao.overrideFor(dedupKey) != null,
             ),
         )
         val note = if (aed == null) "No AED rate for ${t.currency}" else null
@@ -140,12 +187,12 @@ class Repository(private val db: AppDatabase) {
         return IngestOutcome.TRANSACTION
     }
 
-    private suspend fun applyParse(smsId: Long, r: ParseResult, receivedAt: Long): IngestOutcome {
+    private suspend fun applyParse(smsId: Long, dedupKey: String, r: ParseResult, receivedAt: Long): IngestOutcome {
         dao.deleteTxnsForSms(smsId)
         dao.deleteStatementsForSms(smsId)
         dao.unpairSms(smsId)
         return when (r) {
-            is ParseResult.Transaction -> applyTransaction(smsId, r)
+            is ParseResult.Transaction -> applyTransaction(smsId, dedupKey, r)
             is ParseResult.Statement -> {
                 val s = r.statement
                 val key = cardKeyOf(s.bank, s.cardLast4)
@@ -185,7 +232,8 @@ class Repository(private val db: AppDatabase) {
     suspend fun addManual(entry: ManualEntry, timestamp: Long = System.currentTimeMillis()) {
         // Attach to a known card if the last 4 digits match exactly one card.
         val card = entry.cardLast4?.let { dao.cardsByLast4(it).singleOrNull() }
-        val aed = Money.toAedMinor(entry.amount, entry.currency)
+        val aed = Money.toAedMinor(entry.amount, entry.currency, rates)
+        val merchantKey = CategoryRules.merchantKey(entry.description)
         dao.insertTxn(
             TransactionEntity(
                 smsId = null, source = "MANUAL", timestamp = timestamp,
@@ -193,8 +241,58 @@ class Repository(private val db: AppDatabase) {
                 cardKey = card?.cardKey, merchant = entry.description,
                 amountMinor = Money.toMinor(entry.amount), currency = entry.currency,
                 amountAedMinor = aed?.first, fxEstimated = aed?.second ?: false, type = entry.type.name,
+                merchantKey = merchantKey,
+                categoryId = resolveCategory(null, merchantKey, entry.description, entry.type),
             ),
         )
+    }
+
+    // -------------------------------------------------------- categories
+
+    /**
+     * Sets a transaction's category. For SMS transactions the choice is remembered per SMS (survives Re-parse).
+     * With [applyToMerchant], the app also learns "this merchant = this category" for the past and future.
+     */
+    suspend fun setCategory(t: TransactionEntity, categoryId: Long, applyToMerchant: Boolean) = db.withTransaction {
+        dao.setTxnCategory(t.id, categoryId)
+        t.smsId?.let { dao.dedupKeyOf(it) }?.let { dao.upsertOverrides(listOf(TxnOverrideEntity(it, categoryId))) }
+        val key = t.merchantKey ?: CategoryRules.merchantKey(t.merchant)
+        if (applyToMerchant && key.isNotEmpty()) {
+            dao.upsertRules(listOf(MerchantRuleEntity(key, categoryId)))
+            dao.applyRule(key, categoryId)
+        }
+        Unit
+    }
+
+    suspend fun addCategory(name: String): Long {
+        val id = dao.maxCategoryId() + 1
+        dao.upsertCategories(listOf(CategoryEntity(id, name.trim(), id.toInt())))
+        return id
+    }
+
+    // -------------------------------------------------------------- cards
+
+    suspend fun updateCardProfile(key: String, nickname: String?, limitMinor: Long?, statementDay: Int?, dueDay: Int?, reminders: Boolean) =
+        dao.updateCardProfile(key, nickname?.trim()?.ifEmpty { null }, limitMinor, statementDay, dueDay, reminders)
+
+    // -------------------------------------------------------------- goals
+
+    suspend fun saveGoal(g: GoalEntity) { dao.upsertGoal(g) }
+    suspend fun deleteGoal(id: Long) = dao.deleteGoal(id)
+
+    // -------------------------------------------------------------- rates
+
+    /** Saves a rate and recalculates the AED amount of every transaction in that currency. */
+    suspend fun setRate(currency: String, rate: BigDecimal) = lock.withLock {
+        db.withTransaction {
+            dao.upsertRates(listOf(FxRateEntity(currency.uppercase(), rate.toPlainString(), System.currentTimeMillis())))
+            loadRates()
+            for (t in dao.foreignTxns().filter { it.currency.equals(currency, true) }) {
+                val aed = Money.toAedMinor(Money.fromMinor(t.amountMinor), t.currency, rates)
+                dao.setAed(t.id, aed?.first)
+            }
+            Unit
+        }
     }
 
     /** Deleting an SMS transaction also dismisses its SMS, so Re-parse doesn't bring it back. */

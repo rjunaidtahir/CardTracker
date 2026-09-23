@@ -2,7 +2,11 @@
 
 A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE card spending. Base currency is AED.
 
-## Phase 1: SMS capture and core screens (current)
+## Status
+
+v1.0 includes every phase below. Keep adding to this file for future ideas.
+
+## Phase 1: SMS capture and core screens (done)
 
 - **Two capture modes, one parser and one de-duplication path:**
   - **Manual Sync:** reads the inbox from the last successful sync; the first run reads everything.
@@ -13,7 +17,7 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 - **Cards and accounts:** credit cards, debit cards and bank accounts (FAB ·8001: money in and out). Each has a "Show & count" switch: on for credit, off for debit and accounts by default. Switched-off cards are hidden from the Transactions tab and left out of totals. Card payments and transfers never count as spending. Two FAB SMS for one transfer are merged into one transaction, and transfers to your own cards show as payments received on that card.
 - **Screens:** Transactions (month and card filters, add by typing), Cards, Card detail, Review, Settings.
 
-## Phase 2: Cards and safety
+## Phase 2: Cards and safety (done in v1.0)
 
 | Feature | Plan / where it plugs in |
 |---|---|
@@ -24,7 +28,7 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 | App lock: biometric with PIN fallback, re-lock after background timeout | `ui/AppLockGate` already wraps the whole UI. Add androidx.biometric, a PIN hash in Prefs, and a timeout measured from `ON_STOP`. |
 | CSV export/import backup | Storage Access Framework (`CreateDocument` / `OpenDocument`), one CSV per table. Import de-duplicates on `sms.dedupKey` and on the transaction id. |
 
-## Phase 3: Insights
+## Phase 3: Insights (done in v1.0)
 
 | Feature | Plan / where it plugs in |
 |---|---|
@@ -33,13 +37,31 @@ A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE 
 | Month-by-month history chart | Same Insights tab, same `core.Spending` rule. |
 | Recurring payment detection | `transactions.recurringGroupId` already exists. Group by merchant, similar amount, and a roughly monthly or weekly interval. |
 
-## Phase 4: Extras
+## Phase 4: Extras (done in v1.0)
 
 | Feature | Plan / where it plugs in |
 |---|---|
 | Home screen widgets | Jetpack Glance: this month's spend and next due date. Reads the same DAO. |
 | Savings goals | New `savings_goals` table (migration) and a new Route. |
 | Full multi-currency reporting in AED | Every transaction already stores the original amount and currency plus an AED figure (`fxEstimated` flags approximate rates). Add a rates table with dated rates to replace the static `BankRules.fxToAed`, and per-currency breakdowns. |
+
+## How v1.0 implemented it
+
+- **Paid / due status** is worked out on the fly (`core/CardStatus.kt`): payments to the card after its statement date, from the card's bank SMS and from your transfers without double counting. The planned `statements.paidAt` column was not needed.
+- **Reminders:** `notify/DueReminders.kt`. A WorkManager job twice a day, only while switched on, notifying 3 days before, 1 day before and on the due day while the minimum is unpaid.
+- **Categories:** keyword rules in `parser/CategoryRules.kt`. Learned rules go in `merchant_rules`, and per-SMS choices in `txn_overrides` (keyed by SMS dedupKey, so they survive Re-parse and backups).
+- **Charts:** plain Compose (`ui/OverviewScreen.kt`), single-hue bars, no chart library.
+- **Recurring detection:** `core/Insights.kt` (3+ roughly monthly charges of a similar amount).
+- **Widget:** a classic AppWidgetProvider (`widget/SummaryWidget.kt`), no Glance dependency.
+- **Multi-currency:** editable rates in `fx_rates`. Saving a rate recalculates past AED amounts.
+- **App lock:** PIN (salted SHA-256, 10k rounds) plus BiometricPrompt, with a re-lock timeout.
+- **Backup:** a zip of CSVs via the system file picker (`data/Backup.kt`).
+
+## Ideas for later
+
+- A manual recurring-payments list for EMIs that don't send an SMS.
+- Monthly budget per category, with a warning when close.
+- Dated exchange rates (a rate per month) instead of one current rate.
 
 ## Design rules to keep
 

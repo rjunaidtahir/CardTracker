@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Card Tracker</string>
+    <string name="widget_description">This month\'s spending and the next card payment due</string>
 </resources>
