@@ -1,6 +1,16 @@
 package com.junaid.cardtracker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.border
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.drawBehind
@@ -130,7 +140,7 @@ fun TransactionsScreen(
     val query by vm.search.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
     val catNames = categories.associate { it.id to it.name }
-    val cardNames = cards.associate { it.cardKey to (it.nickname ?: it.cardKey) }
+    val cardNames = cards.associate { it.cardKey to CardArts.displayName(it) }
     val zone = ZoneId.systemDefault()
     val today = LocalDate.now(zone)
     if (adding) QuickAddDialog(onAdd = { text -> vm.addManual(text) }, onDismiss = { adding = false })
@@ -144,7 +154,7 @@ fun TransactionsScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Button(onClick = onSync, enabled = !syncing, shape = RoundedCornerShape(50)) {
-                    if (syncing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Ink.bg)
+                    if (syncing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Ink.onAccent)
                     else Icon(Icons.Filled.Refresh, contentDescription = null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(if (syncing) "Syncing…" else "Sync")
@@ -190,7 +200,7 @@ fun TransactionsScreen(
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 item { Pill("All cards", cardFilter == null, onClick = { vm.selectCard(null) }, tint = Ink.violet) }
                 items(cards.filter { it.countInSpending || it.cardKey == cardFilter }, key = { it.cardKey }) { c ->
-                    Pill(c.nickname ?: c.cardKey, cardFilter == c.cardKey, onClick = { vm.selectCard(c.cardKey) }, tint = Ink.violet)
+                    Pill(CardArts.displayName(c), cardFilter == c.cardKey, onClick = { vm.selectCard(c.cardKey) }, tint = Ink.violet)
                 }
             }
         }
@@ -253,7 +263,7 @@ private fun AccountSummary(account: CardEntity, txns: List<TransactionEntity>) {
     val net = moneyIn - moneyOut
     val spend = spendingTotal(txns, emptySet())
     Panel(Modifier.fillMaxWidth()) {
-        Eyebrow("Net · ${account.nickname ?: account.cardKey}")
+        Eyebrow("Net · ${CardArts.displayName(account)}")
         Text(
             (if (net >= 0) "+" else "−") + fmtMoney(kotlin.math.abs(net)),
             style = MaterialTheme.typography.headlineMedium,
@@ -439,8 +449,10 @@ fun CardsScreen(
     period: Period,
     onOpenCard: (String) -> Unit,
     onToggleCounted: (String, Boolean) -> Unit,
+    onReorder: (List<String>) -> Unit,
 ) {
     val periodLabel = period.label()
+    var arranging by rememberSaveable { mutableStateOf(false) }
     val withLimit = summaries.filter { it.card.cardType == CardTypes.CREDIT && it.card.creditLimitMinor != null && it.latestBalanceMinor != null }
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -450,89 +462,181 @@ fun CardsScreen(
         if (summaries.isEmpty()) {
             item { Text("Cards appear here after your first Sync.", color = Ink.muted) }
         }
-        if (withLimit.isNotEmpty()) {
-            item { BalancesPanel(withLimit) }
-        } else if (summaries.any { it.card.cardType == CardTypes.CREDIT }) {
-            item {
-                Text(
-                    "Tip: open a credit card and enter its limit to see balances side by side with utilisation.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Ink.muted,
-                )
+        if (!arranging) {
+            if (withLimit.isNotEmpty()) {
+                item { BalancesPanel(withLimit) }
+            } else if (summaries.any { it.card.cardType == CardTypes.CREDIT }) {
+                item {
+                    Text(
+                        "Tip: open a credit card and enter its limit to see balances side by side with utilisation.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Ink.muted,
+                    )
+                }
             }
         }
-        item { Eyebrow("Figures for $periodLabel · change it on Overview or Transactions") }
-        items(summaries, key = { it.card.cardKey }) { s ->
-            CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
+        if (summaries.isNotEmpty()) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Eyebrow(if (arranging) "Drag the handles to reorder" else "Figures for $periodLabel", Modifier.weight(1f))
+                    if (arranging) {
+                        Button(onClick = { arranging = false }, shape = RoundedCornerShape(50)) { Text("Done") }
+                    } else {
+                        OutlinedButton(onClick = { arranging = true }, shape = RoundedCornerShape(50)) {
+                            Icon(Icons.Filled.DragHandle, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Arrange")
+                        }
+                    }
+                }
+            }
+        }
+        if (arranging) {
+            item { ArrangeCards(summaries.map { it.card }, onReorder) }
+        } else {
+            items(summaries, key = { it.card.cardKey }) { s ->
+                CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
+            }
         }
     }
 }
 
-/** A card drawn like a bank card: bank gradient, name, masked number, period figure, available / balance, due strip. */
+/**
+ * Drag-to-reorder list. Rows have a fixed height, so a row swaps with its neighbour once it has been
+ * dragged more than half a row. The new order is saved when you let go.
+ */
+@Composable
+private fun ArrangeCards(cards: List<CardEntity>, onReorder: (List<String>) -> Unit) {
+    val byKey = cards.associateBy { it.cardKey }
+    val order = remember(cards.map { it.cardKey }) { mutableStateListOf<String>().apply { addAll(cards.map { it.cardKey }) } }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var offset by remember { mutableFloatStateOf(0f) }
+    val density = LocalDensity.current
+    val rowPx = with(density) { (64.dp + 8.dp).toPx() }
+    Column {
+        order.forEach { k ->
+            val c = byKey[k] ?: return@forEach
+            key(k) {
+                val art = CardArts.forCard(c)
+                val isDragged = dragging == k
+                Row(
+                    Modifier
+                        .zIndex(if (isDragged) 1f else 0f)
+                        .graphicsLayer {
+                            translationY = if (isDragged) offset else 0f
+                            shadowElevation = if (isDragged) 16f else 0f
+                            scaleX = if (isDragged) 1.02f else 1f
+                            scaleY = if (isDragged) 1.02f else 1f
+                        }
+                        .fillMaxWidth()
+                        .height(64.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (isDragged) Ink.surfaceHighest else Ink.surface)
+                        .border(1.dp, if (isDragged) Ink.green else Ink.border, RoundedCornerShape(16.dp))
+                        .padding(horizontal = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CardSwatch(art, 56.dp, 36.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(CardArts.displayName(c), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("${c.bank} · •••• ${c.last4 ?: "----"}", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                    }
+                    Icon(
+                        Icons.Filled.DragHandle, "Drag to move",
+                        tint = if (isDragged) Ink.green else Ink.muted,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .padding(10.dp)
+                            .pointerInput(k, order) {
+                                detectDragGestures(
+                                    onDragStart = { dragging = k; offset = 0f },
+                                    onDragEnd = { dragging = null; offset = 0f; onReorder(order.toList()) },
+                                    onDragCancel = { dragging = null; offset = 0f; onReorder(order.toList()) },
+                                ) { change, amount ->
+                                    change.consume()
+                                    offset += amount.y
+                                    val i = order.indexOf(k)
+                                    if (i < 0) return@detectDragGestures
+                                    if (offset > rowPx / 2 && i < order.lastIndex) {
+                                        order.removeAt(i); order.add(i + 1, k); offset -= rowPx
+                                    } else if (offset < -rowPx / 2 && i > 0) {
+                                        order.removeAt(i); order.add(i - 1, k); offset += rowPx
+                                    }
+                                }
+                            },
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+/** A card drawn in its own look: gradient + pattern, bank badge, name, masked number, period figure, available / balance, due strip. */
 @Composable
 fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onToggle: ((Boolean) -> Unit)?) {
     val c = s.card
+    val art = CardArts.forCard(c)
+    val fg = art.content
+    val fgMuted = art.contentMuted
     val shape = RoundedCornerShape(24.dp)
-    val white = androidx.compose.ui.graphics.Color.White
-    var m = Modifier.fillMaxWidth().clip(shape).background(bankBrush(c.bank))
+    var m = Modifier.fillMaxWidth().alpha(if (c.countInSpending) 1f else 0.6f).clip(shape).cardArt(art)
     if (onClick != null) m = m.clickable(onClick = onClick)
-    Column(
-        m
-            .drawBehind {
-                drawCircle(white.copy(alpha = 0.07f), radius = size.width * 0.42f, center = androidx.compose.ui.geometry.Offset(size.width * 0.95f, 0f))
-                drawCircle(white.copy(alpha = 0.05f), radius = size.width * 0.30f, center = androidx.compose.ui.geometry.Offset(size.width * 0.78f, size.height * 1.05f))
-            }
-            .alpha(if (c.countInSpending) 1f else 0.6f)
-            .padding(18.dp),
-    ) {
+    Column(m.padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Eyebrow(typeLabel(c.cardType) + " · " + c.bank, color = white.copy(alpha = 0.8f), modifier = Modifier.weight(1f))
+            BankBadge(c.bank, onDarkCard = art.lightText)
+            Spacer(Modifier.width(8.dp))
+            Eyebrow(typeLabel(c.cardType), color = fgMuted, modifier = Modifier.weight(1f))
             if (onToggle != null) {
                 Switch(
                     checked = c.countInSpending, onCheckedChange = onToggle,
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = white, checkedTrackColor = white.copy(alpha = 0.35f),
-                        uncheckedThumbColor = white.copy(alpha = 0.7f), uncheckedTrackColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.25f),
-                        uncheckedBorderColor = white.copy(alpha = 0.4f), checkedBorderColor = androidx.compose.ui.graphics.Color.Transparent,
+                        checkedThumbColor = fg, checkedTrackColor = fg.copy(alpha = 0.35f),
+                        uncheckedThumbColor = fg.copy(alpha = 0.7f), uncheckedTrackColor = Color.Black.copy(alpha = 0.2f),
+                        uncheckedBorderColor = fg.copy(alpha = 0.4f), checkedBorderColor = Color.Transparent,
                     ),
                 )
             }
         }
-        Text(c.nickname ?: c.cardKey, style = MaterialTheme.typography.titleLarge, color = white, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text("•••• " + (c.last4 ?: "----"), style = MaterialTheme.typography.bodyMedium, color = white.copy(alpha = 0.75f), fontFamily = FontFamily.Monospace)
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(CardArts.displayName(c), style = MaterialTheme.typography.titleLarge, color = fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("•••• " + (c.last4 ?: "----"), style = MaterialTheme.typography.bodyMedium, color = fgMuted, fontFamily = FontFamily.Monospace)
+        Spacer(Modifier.height(14.dp))
         Row(verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f)) {
                 if (c.cardType == CardTypes.ACCOUNT) {
                     val net = s.monthInMinor - s.monthOutMinor
-                    Eyebrow("Net · $periodLabel", color = white.copy(alpha = 0.75f))
-                    Text((if (net >= 0) "+" else "−") + fmtMoney(kotlin.math.abs(net)), style = MaterialTheme.typography.titleLarge, color = white, maxLines = 1)
-                    Text("in ${fmtMoney(s.monthInMinor)} · out ${fmtMoney(s.monthOutMinor)}", style = MaterialTheme.typography.bodySmall, color = white.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Eyebrow("Net · $periodLabel", color = fgMuted)
+                    Text((if (net >= 0) "+" else "−") + fmtMoney(kotlin.math.abs(net)), style = MaterialTheme.typography.titleLarge, color = fg, maxLines = 1)
+                    Text("in ${fmtMoney(s.monthInMinor)} · out ${fmtMoney(s.monthOutMinor)}", style = MaterialTheme.typography.bodySmall, color = fgMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 } else {
-                    Eyebrow("Spent · $periodLabel", color = white.copy(alpha = 0.75f))
-                    Text(fmtMoney(s.monthSpendAedMinor), style = MaterialTheme.typography.titleLarge, color = white, maxLines = 1)
+                    Eyebrow("Spent · $periodLabel", color = fgMuted)
+                    Text(fmtMoney(s.monthSpendAedMinor), style = MaterialTheme.typography.titleLarge, color = fg, maxLines = 1)
                     Text(
                         "${s.monthTxnCount} txns" + (if (s.monthPaidInMinor > 0) " · paid in ${fmtMoney(s.monthPaidInMinor)}" else "") + if (c.countInSpending) "" else " · not in totals",
-                        style = MaterialTheme.typography.bodySmall, color = white.copy(alpha = 0.8f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodySmall, color = fgMuted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            s.latestBalanceMinor?.let {
-                Column(horizontalAlignment = Alignment.End) {
-                    Eyebrow(if (c.cardType == CardTypes.ACCOUNT) "Balance" else "Available", color = white.copy(alpha = 0.75f))
-                    Text(fmtMoney(it), style = MaterialTheme.typography.titleSmall, color = white, maxLines = 1)
+            Column(horizontalAlignment = Alignment.End) {
+                s.latestBalanceMinor?.let {
+                    Eyebrow(if (c.cardType == CardTypes.ACCOUNT) "Balance" else "Available", color = fgMuted)
+                    Text(fmtMoney(it), style = MaterialTheme.typography.titleSmall, color = fg, maxLines = 1)
+                    Spacer(Modifier.height(4.dp))
                 }
+                NetworkMark(art.network, fg)
             }
         }
         s.due?.let { d ->
             Spacer(Modifier.height(12.dp))
             val attention = d.status.state == DueState.UNPAID || d.status.state == DueState.OVERDUE
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.28f)).padding(horizontal = 12.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color.Black.copy(alpha = 0.55f)).padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text("Statement ${fmtMoney(d.statement.balanceMinor, d.statement.currency)} · due ${fmtEpochDay(d.statement.dueDateEpochDay)}", style = MaterialTheme.typography.bodySmall, color = white, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("Statement ${fmtMoney(d.statement.balanceMinor, d.statement.currency)} · due ${fmtEpochDay(d.statement.dueDateEpochDay)}", style = MaterialTheme.typography.bodySmall, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(dueStateText(d), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold, color = if (attention) Color(0xFFFFB4B4) else Color(0xFFB9F6CA))
                 }
             }
@@ -555,7 +659,7 @@ private fun BalancesPanel(cards: List<CardSummary>) {
             val u = Utilisation(s.card.creditLimitMinor ?: 0L, s.latestBalanceMinor ?: 0L)
             Column(Modifier.padding(vertical = 4.dp)) {
                 Row {
-                    Text(s.card.nickname ?: s.card.cardKey, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                    Text(CardArts.displayName(s.card), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                     Text("${u.percent}%", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 }
                 ShareBar(u.percent / 100f, utilColor(u.percent))
@@ -639,6 +743,7 @@ fun CardDetailScreen(
     onToggleCounted: (Boolean) -> Unit,
     onShowTransactions: () -> Unit,
     onSaveProfile: (nickname: String, limit: String, statementDay: String, dueDay: String, reminders: Boolean) -> Unit,
+    onSetTheme: (String?) -> Unit = {},
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -704,6 +809,32 @@ fun CardDetailScreen(
                                 }
                                 Text(fmtMoney(p.amountMinor, d.statement.currency), fontWeight = FontWeight.SemiBold, color = Ink.green)
                             }
+                        }
+                    }
+                }
+            }
+        }
+        // --- look
+        item {
+            Panel(Modifier.fillMaxWidth()) {
+                Text("Card look", style = MaterialTheme.typography.titleSmall)
+                Text("Automatic picks the look for this card's last 4 digits, or the bank's colours.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    item {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onSetTheme(null) }) {
+                            Box(
+                                Modifier.size(64.dp, 40.dp).clip(RoundedCornerShape(8.dp)).background(Ink.surfaceHigh)
+                                    .border(if (c.themeKey == null) 2.5.dp else 1.dp, if (c.themeKey == null) Ink.green else Ink.border, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) { Text("Auto", style = MaterialTheme.typography.labelMedium) }
+                            Text("Automatic", style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.muted, maxLines = 1)
+                        }
+                    }
+                    items(CardArts.presets, key = { it.key }) { a ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(72.dp).clickable { onSetTheme(a.key) }) {
+                            CardSwatch(a, selected = c.themeKey == a.key)
+                            Text(a.name, style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
@@ -834,7 +965,11 @@ fun SettingsScreen(
     onOpenRates: () -> Unit,
     biometricAvailable: Boolean,
     versionName: String,
+    onAlertsToggle: (Boolean) -> Unit = {},
+    onOpenFixed: () -> Unit = {},
+    onExportReport: () -> Unit = {},
 ) {
+    val themeId by vm.themeId.collectAsStateWithLifecycle()
     val remindersOn by vm.remindersOn.collectAsStateWithLifecycle()
     val lockOn by vm.lockEnabled.collectAsStateWithLifecycle()
     val bioOn by vm.biometricOn.collectAsStateWithLifecycle()
@@ -856,6 +991,8 @@ fun SettingsScreen(
     }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item { ThemePicker(themeId) { vm.setTheme(it) } }
+        item { HorizontalDivider(color = Ink.border) }
         item { SettingSwitch("Live listening", "Capture bank SMS the moment they arrive. When off, nothing runs in the background: use Sync instead.", liveOn, onLiveToggle) }
         if (liveOn) item { TextButton(onClick = onShowSamsungTip) { Text("Samsung: keep the app from sleeping") } }
         item {
@@ -864,6 +1001,13 @@ fun SettingsScreen(
                 "Notification 3 days before, 1 day before and on the due day while the minimum isn't paid. Checked twice a day in the background while on.",
                 remindersOn, onRemindersToggle,
             )
+        }
+        item { AlertsSettings(vm, onAlertsToggle) }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onOpenFixed) { Text("Fixed payments") }
+                OutlinedButton(onClick = onExportReport) { Text("Export report") }
+            }
         }
         item { HorizontalDivider() }
         item {

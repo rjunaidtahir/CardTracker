@@ -6,6 +6,7 @@ import com.junaid.cardtracker.core.SyncResult
 import com.junaid.cardtracker.data.Prefs
 import com.junaid.cardtracker.data.Repository
 import com.junaid.cardtracker.data.SmsSource
+import com.junaid.cardtracker.notify.Alerts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,6 +30,7 @@ class SmsSync(private val context: Context, private val repo: Repository, privat
                     .getOrElse { IngestOutcome.FAILED }
             }
             prefs.lastSyncAt = startedAt // only reached if everything above succeeded
+            runCatching { Alerts.onNewTransactions(context, repo.drainFresh()) }
             SyncResult.of(outcomes)
         }
     }

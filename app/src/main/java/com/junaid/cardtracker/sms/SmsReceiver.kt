@@ -11,6 +11,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.junaid.cardtracker.CardTrackerApp
 import com.junaid.cardtracker.data.SmsSource
+import com.junaid.cardtracker.notify.Alerts
 import com.junaid.cardtracker.parser.ParseResult
 import com.junaid.cardtracker.parser.SmsParser
 
@@ -47,7 +48,9 @@ class ProcessSmsWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         val body = inputData.getString("body") ?: return Result.failure()
         val receivedAt = inputData.getLong("receivedAt", System.currentTimeMillis())
         val sentAt = inputData.getLong("sentAt", 0L).takeIf { it > 0 }
-        (applicationContext as CardTrackerApp).repo.ingestSms(sender, body, receivedAt, sentAt, SmsSource.LIVE)
+        val app = applicationContext as CardTrackerApp
+        app.repo.ingestSms(sender, body, receivedAt, sentAt, SmsSource.LIVE)
+        runCatching { Alerts.onNewTransactions(applicationContext, app.repo.drainFresh()) }
         return Result.success()
     }
 }

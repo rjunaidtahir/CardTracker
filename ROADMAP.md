@@ -65,6 +65,15 @@ v1.1 includes every phase below plus the redesign. Keep adding to this file for 
 - **Transactions:** search, day groups, readable Net / Money in / Money out tiles for accounts.
 - **Parsing:** about 25 new formats from the Review list (Mashreq card purchases and ATM, Aani, ADCB online transfers, FAB PGS and Dubai First payments, Al Hilal refunds and due notices, ENBD Nol and card payments, negative balances, AM/PM and weekday dates) and many more ignore rules.
 
+## v1.2: refinements (done)
+
+- **Readability:** the default text colour now follows the theme (screens sit on a transparent background, so plain text used to fall back to black). Muted and faint text colours raised for contrast.
+- **Themes:** `ui/Theme.kt` `AppThemes` (4 dark, 2 light), saved in Prefs; system bar icons follow the theme.
+- **Card looks and order:** `ui/CardArt.kt` (gradient + simple pattern per card, bank-name badge, network label; automatic by last 4 digits, or pick one). Drag to reorder on the Cards tab (`cards.sortOrder`, DB v5).
+- **Budgets** (`budgets` table), **fixed payments** (`fixed_payments` table), logic in `core/Planning.kt` with tests.
+- **Alerts:** `notify/Alerts.kt`, run after Sync and live SMS.
+- **Reports:** `report/Report.kt` (PDF with Android's PdfDocument, and CSV).
+
 ## Ideas for later
 
 - A manual recurring-payments list for EMIs that don't send an SMS.

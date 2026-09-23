@@ -27,6 +27,12 @@ class Repository(private val db: AppDatabase) {
     var rates: Map<String, BigDecimal> = BankRules.fxToAed
         private set
 
+    /** New transactions from Sync / live SMS since the last drain, for alerts. Not filled by Re-parse. */
+    private val fresh = mutableListOf<TransactionEntity>()
+    @Volatile private var reparsing = false
+
+    fun drainFresh(): List<TransactionEntity> = synchronized(fresh) { fresh.toList().also { fresh.clear() } }
+
     // ------------------------------------------------------------ setup
 
     /** Seeds categories and exchange rates, and categorises older transactions once. Safe to call every start. */
@@ -93,7 +99,8 @@ class Repository(private val db: AppDatabase) {
     suspend fun reparseAll(): Map<IngestOutcome, Int> = lock.withLock {
         val all = dao.smsForReparse()
         val counts = mutableMapOf<IngestOutcome, Int>()
-        db.withTransaction {
+        reparsing = true
+        try { db.withTransaction {
             // Rebuild every SMS-based row from scratch, in time order, so two-SMS transfers pair up cleanly.
             // (Typed entries are untouched; card settings are kept.)
             dao.deleteAllSmsTxns()
@@ -102,7 +109,7 @@ class Repository(private val db: AppDatabase) {
                 val o = applyParse(s.id, s.dedupKey, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt)
                 counts[o] = (counts[o] ?: 0) + 1
             }
-        }
+        } } finally { reparsing = false }
         counts
     }
 
@@ -169,7 +176,7 @@ class Repository(private val db: AppDatabase) {
             }
         }
 
-        dao.insertTxn(
+        val entity =
             TransactionEntity(
                 smsId = smsId, source = "SMS", timestamp = t.timestamp, bank = t.bank,
                 cardLast4 = t.cardLast4, cardKey = key, merchant = t.merchant,
@@ -180,8 +187,9 @@ class Repository(private val db: AppDatabase) {
                 merchantKey = merchantKey,
                 categoryId = resolveCategory(dedupKey, merchantKey, t.merchant, t.type),
                 categoryUserSet = dao.overrideFor(dedupKey) != null,
-            ),
-        )
+            )
+        dao.insertTxn(entity)
+        if (!reparsing) synchronized(fresh) { fresh += entity }
         val note = if (aed == null) "No AED rate for ${t.currency}" else null
         dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, note)
         return IngestOutcome.TRANSACTION
@@ -300,6 +308,39 @@ class Repository(private val db: AppDatabase) {
         dao.deleteTxn(t.id)
         t.smsId?.let { dao.setSmsStatus(it, SmsStatus.DISMISSED) }
         t.pairedSmsId?.let { dao.setSmsStatus(it, SmsStatus.DISMISSED) }
+    }
+
+    /** Saves the Cards-tab order: [keys] top to bottom. */
+    suspend fun setCardOrder(keys: List<String>) = db.withTransaction {
+        keys.forEachIndexed { i, k -> dao.setCardOrder(k, i) }
+    }
+
+    suspend fun setCardTheme(key: String, theme: String?) = dao.setCardTheme(key, theme)
+
+    // ------------------------------------------------------------ budgets & fixed payments
+
+    suspend fun setBudgets(limits: Map<Long, Long?>) = db.withTransaction {
+        limits.forEach { (cat, v) -> if (v == null || v <= 0) dao.deleteBudget(cat) else dao.upsertBudgets(listOf(BudgetEntity(cat, v))) }
+    }
+
+    suspend fun saveFixedPayment(f: FixedPaymentEntity) { dao.upsertFixedPayment(f) }
+    suspend fun deleteFixedPayment(id: Long) = dao.deleteFixedPayment(id)
+
+    /** Records this month's payment as a typed transaction (so it counts in spending) and marks it paid. */
+    suspend fun markFixedPaid(f: FixedPaymentEntity, ym: String, timestamp: Long = System.currentTimeMillis()) = db.withTransaction {
+        val card = f.cardKey?.let { k -> dao.allCards().firstOrNull { it.cardKey == k } }
+        dao.insertTxn(
+            TransactionEntity(
+                smsId = null, source = "MANUAL", timestamp = timestamp,
+                bank = card?.bank ?: "Manual", cardLast4 = card?.last4, cardKey = card?.cardKey, merchant = f.name,
+                amountMinor = f.amountMinor, currency = BankRules.BASE_CURRENCY, amountAedMinor = f.amountMinor, fxEstimated = false,
+                type = TxnType.PURCHASE.name, merchantKey = CategoryRules.merchantKey(f.name),
+                categoryId = f.categoryId ?: CategoryRules.guess(f.name, TxnType.PURCHASE), categoryUserSet = f.categoryId != null,
+                note = "Fixed payment",
+            ),
+        )
+        dao.upsertFixedPayment(f.copy(lastPaidYm = ym))
+        Unit
     }
 
     suspend fun setCardType(key: String, type: CardType) =

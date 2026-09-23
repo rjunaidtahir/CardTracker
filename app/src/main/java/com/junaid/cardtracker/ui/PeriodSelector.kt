@@ -101,7 +101,7 @@ private fun RangePickerDialog(initial: Period, onDone: (LocalDate, LocalDate) ->
         containerColor = Ink.surface,
         dayInSelectionRangeContainerColor = Ink.green.copy(alpha = 0.22f),
         selectedDayContainerColor = Ink.green,
-        selectedDayContentColor = Ink.bg,
+        selectedDayContentColor = Ink.onAccent,
         todayDateBorderColor = Ink.green,
     )
     DatePickerDialog(

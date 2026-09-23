@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -89,6 +90,13 @@ class MainActivity : FragmentActivity() {
             .build()
         val showBiometric = { biometricPrompt.authenticate(promptInfo) }
         setContent {
+            // Status / navigation bar icons follow the theme (dark icons on the light themes).
+            val palette = AppThemes.current
+            LaunchedEffect(palette.isLight) {
+                val style = if (palette.isLight) SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT)
+                else SystemBarStyle.dark(android.graphics.Color.TRANSPARENT)
+                enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
+            }
             AppTheme {
                 val bioOn by vm.biometricOn.collectAsStateWithLifecycle()
                 val canBio = remember { biometricAvailable() }
@@ -155,6 +163,34 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
             Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS) -> vm.setReminders(true)
             else -> notifyLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+    val alertsNotifyLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) vm.setAlerts(true) else vm.message.value = "Alerts need permission to show notifications."
+    }
+    val onAlertsToggle: (Boolean) -> Unit = { on ->
+        when {
+            !on -> vm.setAlerts(false)
+            Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS) -> vm.setAlerts(true)
+            else -> alertsNotifyLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    // Reports: PDF or CSV for the selected period.
+    var showReport by remember { mutableStateOf(false) }
+    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) vm.exportReport(uri, pdf = true)
+    }
+    val csvLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri != null) vm.exportReport(uri, pdf = false)
+    }
+    val reportName = "cardtracker-report-" + period.label().replace(Regex("[^A-Za-z0-9]+"), "-").trim('-').lowercase()
+    if (showReport) {
+        ReportDialog(
+            periodLabel = period.label(),
+            onPdf = { pdfLauncher.launch("$reportName.pdf") },
+            onCsv = { csvLauncher.launch("$reportName.csv") },
+            onDismiss = { showReport = false },
+        )
     }
 
     // Backup: system file pickers (nothing leaves the phone unless you choose where to save it).
@@ -232,12 +268,18 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                             is Route.Home -> if (route.tab == Tab.OVERVIEW) "Card Tracker" else route.tab.label
                             is Route.CardDetail -> "Card"
                             Route.Rates -> "Exchange rates"
+                            Route.FixedPayments -> "Fixed payments"
                         },
                         fontWeight = FontWeight.Bold,
                     )
                 },
                 navigationIcon = {
                     if (nav.canGoBack) IconButton(onClick = { nav.back() }) { Icon(Icons.Filled.ArrowBack, "Back") }
+                },
+                actions = {
+                    if (route is Route.Home && (route.tab == Tab.OVERVIEW || route.tab == Tab.TRANSACTIONS)) {
+                        IconButton(onClick = { showReport = true }) { Icon(Icons.Filled.IosShare, "Export report") }
+                    }
                 },
             )
         },
@@ -272,6 +314,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         vm,
                         onOpenCategory = { id -> vm.selectCard(null); vm.selectCategory(id); nav.selectTab(Tab.TRANSACTIONS) },
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
+                        onOpenFixed = { nav.push(Route.FixedPayments) },
                     )
                     Tab.TRANSACTIONS -> TransactionsScreen(
                         vm, period, cardFilter, cards, excluded, txns,
@@ -282,6 +325,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         summaries, period,
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onToggleCounted = { key, on -> vm.setCardCounted(key, on) },
+                        onReorder = { vm.setCardOrder(it) },
                     )
                     Tab.REVIEW -> ReviewScreen(
                         failed, counts,
@@ -309,6 +353,9 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onOpenRates = { nav.push(Route.Rates) },
                         biometricAvailable = biometricAvailable,
                         versionName = versionName,
+                        onAlertsToggle = onAlertsToggle,
+                        onOpenFixed = { nav.push(Route.FixedPayments) },
+                        onExportReport = { showReport = true },
                     )
                 }
                 is Route.CardDetail -> CardDetailScreen(
@@ -318,8 +365,10 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     onToggleCounted = { vm.setCardCounted(route.cardKey, it) },
                     onShowTransactions = { vm.selectCategory(null); vm.selectCard(route.cardKey); nav.selectTab(Tab.TRANSACTIONS) },
                     onSaveProfile = { n, l, sd, dd, r -> vm.saveCardProfile(route.cardKey, n, l, sd, dd, r) },
+                    onSetTheme = { vm.setCardTheme(route.cardKey, it) },
                 )
                 Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
+                Route.FixedPayments -> FixedPaymentsScreen(vm)
             }
         }
     }

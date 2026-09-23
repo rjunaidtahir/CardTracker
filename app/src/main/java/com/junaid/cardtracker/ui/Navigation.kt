@@ -24,6 +24,8 @@ sealed interface Route {
     data class CardDetail(val cardKey: String) : Route
     /** Editable AED exchange rates. */
     data object Rates : Route
+    /** Fixed monthly payments you add by hand. */
+    data object FixedPayments : Route
 }
 
 class Navigator {

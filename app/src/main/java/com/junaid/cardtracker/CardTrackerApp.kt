@@ -28,6 +28,7 @@ class CardTrackerApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.junaid.cardtracker.ui.AppThemes.current = com.junaid.cardtracker.ui.AppThemes.byId(prefs.themeId)
         LiveListening.reconcile(this, prefs)
         // Earlier test builds scheduled a background inbox scan; make sure it's gone.
         WorkManager.getInstance(this).cancelUniqueWork("inbox-periodic-sync")

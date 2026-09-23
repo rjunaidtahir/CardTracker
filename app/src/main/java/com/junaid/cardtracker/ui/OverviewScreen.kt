@@ -92,14 +92,22 @@ fun OverviewScreen(
     vm: MainViewModel,
     onOpenCategory: (Long?) -> Unit,
     onOpenCard: (String) -> Unit,
+    onOpenFixed: () -> Unit = {},
 ) {
+    val budgetStatus by vm.budgetStatus.collectAsStateWithLifecycle()
+    val budgetLimits by vm.budgetLimits.collectAsStateWithLifecycle()
+    val fixed by vm.fixedPayments.collectAsStateWithLifecycle()
+    var editingBudgets by remember { mutableStateOf(false) }
     val o by vm.overview.collectAsStateWithLifecycle()
     val dues by vm.dues.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val goals by vm.goals.collectAsStateWithLifecycle()
     val cards by vm.cards.collectAsStateWithLifecycle()
     val names = categories.associate { it.id to it.name }
-    val cardNames = cards.associate { it.cardKey to (it.nickname ?: it.cardKey) }
+    if (editingBudgets) {
+        BudgetDialog(categories, budgetLimits, onSave = { vm.saveBudgets(it) }, onDismiss = { editingBudgets = false })
+    }
+    val cardNames = cards.associate { it.cardKey to CardArts.displayName(it) }
     var chartMode by rememberSaveable { mutableStateOf(0) } // 0 = arc, 1 = trend
     var selectedCat by remember(o.period) { mutableStateOf<Long?>(null) }
     var hasSel by remember(o.period) { mutableStateOf(false) }
@@ -227,6 +235,10 @@ fun OverviewScreen(
                 }
             }
         }
+
+        // ---- budgets and fixed payments
+        item { BudgetsPanel(budgetStatus, names, onEdit = { editingBudgets = true }, modifier = Modifier.padding(horizontal = 16.dp)) }
+        item { FixedPaymentsPanel(fixed, onManage = onOpenFixed, onPaid = { vm.markFixedPaid(it) }, modifier = Modifier.padding(horizontal = 16.dp)) }
 
         // ---- upcoming dues
         val open = dues.filter { it.status.state == DueState.UNPAID || it.status.state == DueState.OVERDUE || it.status.state == DueState.MIN_PAID }

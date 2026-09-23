@@ -17,6 +17,10 @@ import com.junaid.cardtracker.core.PeriodKind
 import com.junaid.cardtracker.core.Timeline
 import com.junaid.cardtracker.core.TimePoint
 import com.junaid.cardtracker.core.Bucket
+import com.junaid.cardtracker.core.BudgetStatus
+import com.junaid.cardtracker.core.Budgets
+import com.junaid.cardtracker.data.FixedPaymentEntity
+import com.junaid.cardtracker.report.ReportBuilder
 import com.junaid.cardtracker.core.RecurringPayment
 import com.junaid.cardtracker.core.ReviewExport
 import com.junaid.cardtracker.core.Slice
@@ -43,6 +47,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -331,6 +336,108 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 moneyInMinor = inPeriod.filter { it.type == TxnType.TRANSFER_IN }.sumOf { it.amountAedMinor ?: 0L },
             )
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), OverviewState(Period.of(PeriodKind.MONTH, LocalDate.now(zone))))
+
+    // ------------------------------------------------------------ budgets
+    val budgetLimits: StateFlow<Map<Long, Long>> =
+        dao.budgets().map { l -> l.associate { it.categoryId to it.monthlyLimitMinor } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    /** Budgets always cover the current calendar month, whatever period is selected. */
+    val budgetStatus: StateFlow<List<BudgetStatus>> =
+        combine(budgetLimits, recentTxns, excludedCards) { limits, txns, excluded ->
+            val month = YearMonth.now(zone)
+            val inMonth = txns.map { it.toInsight() }.filter { YearMonth.from(it.date) == month }
+            Budgets.status(limits, Insights.byCategory(inMonth, excluded).toMap())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun saveBudgets(texts: Map<Long, String>) = viewModelScope.launch {
+        val parsed = texts.mapValues { (_, t) -> t.replace(",", "").trim().toBigDecimalOrNull()?.let { com.junaid.cardtracker.parser.Money.toMinor(it) } }
+        repo.setBudgets(parsed)
+        message.value = "Budgets saved"
+    }
+
+    // ------------------------------------------------------------ fixed payments
+    val fixedPayments: StateFlow<List<FixedPaymentEntity>> =
+        dao.fixedPayments().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun saveFixedPayment(f: FixedPaymentEntity) = viewModelScope.launch { repo.saveFixedPayment(f); message.value = "Saved ${f.name}" }
+    fun deleteFixedPayment(id: Long) = viewModelScope.launch { repo.deleteFixedPayment(id) }
+    fun markFixedPaid(f: FixedPaymentEntity) = viewModelScope.launch {
+        repo.markFixedPaid(f, YearMonth.now(zone).toString())
+        message.value = "${f.name} marked paid and added to transactions"
+        refreshWidget()
+    }
+    fun unmarkFixedPaid(f: FixedPaymentEntity) = viewModelScope.launch { repo.saveFixedPayment(f.copy(lastPaidYm = null)) }
+
+    // ------------------------------------------------------------ look
+    val themeId = MutableStateFlow(prefs.themeId)
+    fun setTheme(id: String) {
+        prefs.themeId = id
+        themeId.value = id
+        AppThemes.current = AppThemes.byId(id)
+    }
+    fun setCardOrder(keys: List<String>) = viewModelScope.launch { repo.setCardOrder(keys) }
+    fun setCardTheme(key: String, theme: String?) = viewModelScope.launch { repo.setCardTheme(key, theme) }
+
+    // ------------------------------------------------------------ alerts
+    val alertsOn = MutableStateFlow(prefs.alertsEnabled)
+    val bigSpendMinor = MutableStateFlow(prefs.bigSpendMinor)
+    val lowAccountMinor = MutableStateFlow(prefs.lowAccountBalanceMinor)
+    val lowCardMinor = MutableStateFlow(prefs.lowCardAvailableMinor)
+    val budgetAlertsOn = MutableStateFlow(prefs.budgetAlerts)
+
+    /** Caller must make sure notification permission is granted before passing true. */
+    fun setAlerts(on: Boolean) {
+        prefs.alertsEnabled = on
+        alertsOn.value = on
+        if (on) com.junaid.cardtracker.notify.Alerts.ensureChannel(getApplication())
+        message.value = if (on) "Spending alerts on" else "Spending alerts off"
+    }
+    fun setBudgetAlerts(on: Boolean) { prefs.budgetAlerts = on; budgetAlertsOn.value = on }
+
+    /** kind: "big", "account", "card". Empty or 0 turns that alert off. */
+    fun setAlertAmount(kind: String, text: String) {
+        val minor = text.replace(",", "").trim().ifEmpty { "0" }.toBigDecimalOrNull()?.let { com.junaid.cardtracker.parser.Money.toMinor(it) }
+        if (minor == null || minor < 0) { message.value = "Enter an amount like 1000"; return }
+        when (kind) {
+            "big" -> { prefs.bigSpendMinor = minor; bigSpendMinor.value = minor }
+            "account" -> { prefs.lowAccountBalanceMinor = minor; lowAccountMinor.value = minor }
+            "card" -> { prefs.lowCardAvailableMinor = minor; lowCardMinor.value = minor }
+        }
+        message.value = "Alert amount saved"
+    }
+
+    // ------------------------------------------------------------ report
+    /** Writes a PDF (or CSV for Excel) report of the selected period to [uri]. */
+    fun exportReport(uri: Uri, pdf: Boolean) = viewModelScope.launch {
+        try {
+            val p = period.value
+            val (from, to) = range(p)
+            val all = dao.txnsListBetween(from, to)
+            val cardList = dao.allCards()
+            val hidden = cardList.filterNot { it.countInSpending }.map { it.cardKey }.toSet()
+            val visible = all.filter { it.cardKey == null || it.cardKey !in hidden }
+            // Overview/budgets are only collected while Overview is showing: wait for figures of this period.
+            val ov = overview.first { it.period == p }
+            val bs = budgetStatus.first()
+            val data = ReportBuilder.build(
+                overview = ov,
+                txns = visible,
+                categories = categories.value.associate { it.id to it.name },
+                cardNames = cardList.associate { it.cardKey to CardArts.displayName(it) },
+                budgets = bs,
+                zone = zone,
+            )
+            withContext(Dispatchers.IO) {
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { out ->
+                    if (pdf) ReportBuilder.writePdf(data, out) else out.write(ReportBuilder.csv(data).toByteArray(Charsets.UTF_8))
+                } ?: error("Couldn't open the file")
+            }
+            message.value = if (pdf) "PDF report saved" else "CSV report saved (opens in Excel)"
+        } catch (e: Exception) {
+            message.value = "Report failed: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
 
     val goals: StateFlow<List<GoalEntity>> =
         dao.goals().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

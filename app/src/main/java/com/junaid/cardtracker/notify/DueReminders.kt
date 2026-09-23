@@ -18,6 +18,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.junaid.cardtracker.CardTrackerApp
 import com.junaid.cardtracker.R
+import com.junaid.cardtracker.core.FixedSchedule
 import com.junaid.cardtracker.core.Reminders
 import com.junaid.cardtracker.ui.MainActivity
 import com.junaid.cardtracker.ui.fmtMoney
@@ -89,7 +90,34 @@ class DueReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
                 return Result.success()
             }
         }
-        app.prefs.sentReminders = sent
+        // Fixed payments you added by hand (rent, school fees...): same 3 / 1 / 0 days rhythm until marked paid.
+        val today = java.time.LocalDate.now()
+        for (f in app.repo.dao.allFixedPayments()) {
+            if (!f.active || !f.remind) continue
+            val lastPaid = f.lastPaidYm?.let { runCatching { java.time.YearMonth.parse(it) }.getOrNull() }
+            val offset = FixedSchedule.reminderOffsetToday(f.dayOfMonth, today, lastPaid) ?: continue
+            val tag = "fp:${f.id}:${java.time.YearMonth.from(today)}:$offset"
+            if (tag in sent) continue
+            val whenText = when (offset) { 0L -> "today"; 1L -> "tomorrow"; else -> "in $offset days" }
+            val text = "${f.name} ${fmtMoney(f.amountMinor)} is due $whenText. Mark it paid in Card Tracker once done."
+            val n = NotificationCompat.Builder(applicationContext, DueReminders.CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_card)
+                .setContentTitle("Fixed payment due")
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setContentIntent(open)
+                .setAutoCancel(true)
+                .build()
+            try {
+                NotificationManagerCompat.from(applicationContext).notify(tag.hashCode(), n)
+                sent += tag
+            } catch (_: SecurityException) {
+                break
+            }
+        }
+        // Keep only this and last month's tags.
+        val keep = setOf(java.time.YearMonth.now().toString(), java.time.YearMonth.now().minusMonths(1).toString())
+        app.prefs.sentReminders = sent.filter { !it.startsWith("fp:") || keep.any { m -> it.contains(m) } }.toSet()
         return Result.success()
     }
 }

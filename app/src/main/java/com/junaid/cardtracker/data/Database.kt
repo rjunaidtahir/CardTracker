@@ -1,6 +1,7 @@
 package com.junaid.cardtracker.data
 
 import android.content.Context
+import androidx.room.ColumnInfo
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Entity
@@ -183,6 +184,35 @@ data class CardEntity(
     val remindersEnabled: Boolean = true,
     val archived: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
+    /** v5: card look (see ui/CardArt.kt); null = automatic from the last 4 digits / bank. */
+    val themeKey: String? = null,
+    /** v5: your order on the Cards tab (drag to change). New cards go to the end. */
+    @ColumnInfo(defaultValue = "1000") val sortOrder: Int = 1000,
+)
+
+/** v5: monthly limit per category. */
+@Entity(tableName = "budgets")
+data class BudgetEntity(
+    @PrimaryKey val categoryId: Long,
+    val monthlyLimitMinor: Long,
+)
+
+/** v5: a fixed monthly payment you add by hand (rent, school fees, a loan without SMS). */
+@Entity(tableName = "fixed_payments")
+data class FixedPaymentEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val amountMinor: Long,
+    /** 1-31; 31 means the last day in shorter months. */
+    val dayOfMonth: Int,
+    val categoryId: Long? = null,
+    /** Card/account it is paid from (optional). */
+    val cardKey: String? = null,
+    val remind: Boolean = true,
+    val active: Boolean = true,
+    /** "2026-09" once marked paid for that month. */
+    val lastPaidYm: String? = null,
+    val createdAt: Long = System.currentTimeMillis(),
 )
 
 fun cardKeyOf(bank: String, last4: String?) = "$bank ·${last4 ?: "????"}"
@@ -286,7 +316,7 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCard(c: CardEntity)
 
-    @Query("SELECT * FROM cards WHERE archived = 0 ORDER BY cardType, bank, last4")
+    @Query("SELECT * FROM cards WHERE archived = 0 ORDER BY sortOrder, cardType, bank, last4")
     fun cards(): Flow<List<CardEntity>>
 
     @Query("SELECT * FROM cards WHERE last4 = :last4")
@@ -306,6 +336,41 @@ interface AppDao {
 
     @Query("SELECT * FROM cards")
     suspend fun allCards(): List<CardEntity>
+
+    @Query("UPDATE cards SET sortOrder = :order WHERE cardKey = :key")
+    suspend fun setCardOrder(key: String, order: Int)
+
+    @Query("UPDATE cards SET themeKey = :theme WHERE cardKey = :key")
+    suspend fun setCardTheme(key: String, theme: String?)
+
+    // --- budgets
+    @Query("SELECT * FROM budgets")
+    fun budgets(): Flow<List<BudgetEntity>>
+
+    @Query("SELECT * FROM budgets")
+    suspend fun allBudgets(): List<BudgetEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertBudgets(b: List<BudgetEntity>)
+
+    @Query("DELETE FROM budgets WHERE categoryId = :categoryId")
+    suspend fun deleteBudget(categoryId: Long)
+
+    // --- fixed payments
+    @Query("SELECT * FROM fixed_payments ORDER BY dayOfMonth, name")
+    fun fixedPayments(): Flow<List<FixedPaymentEntity>>
+
+    @Query("SELECT * FROM fixed_payments")
+    suspend fun allFixedPayments(): List<FixedPaymentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertFixedPayment(f: FixedPaymentEntity): Long
+
+    @Query("DELETE FROM fixed_payments WHERE id = :id")
+    suspend fun deleteFixedPayment(id: Long)
+
+    @Query("SELECT * FROM transactions WHERE timestamp >= :from AND timestamp < :to ORDER BY timestamp DESC")
+    suspend fun txnsListBetween(from: Long, to: Long): List<TransactionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertCards(c: List<CardEntity>)
@@ -418,8 +483,9 @@ data class StatusCount(val status: String, val n: Int)
     entities = [
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
+        BudgetEntity::class, FixedPaymentEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

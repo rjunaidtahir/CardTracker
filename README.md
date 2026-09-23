@@ -58,13 +58,15 @@ Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any ot
 
 ## Screens
 
-The app uses a dark theme with neon green for money figures and a fixed colour per category, so a category looks the same in every chart.
+Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Black, Daylight (light) or Warm Paper (light). Each category keeps a fixed colour, so it looks the same in every chart.
 
 - **Period chips (Overview, Transactions, Cards):** Month (with arrows), 1W, 1M, 3M, 6M, 12M, All and **Custom** (pick any date range on a calendar). The arrows step back or forward by the period's own length. Tap the date line to open the calendar.
 - **Overview (home):**
   - **Total spent** for the period, compared with the same-length period before it, plus per-day average, number of spends and money in.
   - **Chart card** with two views: an **arc chart** of categories (tap a segment or chip to highlight it and open its transactions) and a **trend line** over time (days, weeks or months depending on the period; touch or drag to read a value).
   - **Category list** with amounts, shares and bars; tap one to see its transactions.
+  - **Budgets** for this month: progress bar per category (green, amber at 80%, red at 100%). Tap Set budgets / Edit to change the limits.
+  - **Fixed payments** (rent, school fees, loans without SMS): what's still to pay this month, with **Mark paid**.
   - **Card payments due**, **last 12 months** bars (tap a month to open it), **top merchants**, **by card**, **recurring payments**, **foreign currency** and **savings goals**.
 - **Transactions:**
   - Sync and **Add** (type "lunch 45 aed") at the top, then a **search** box (merchant, category, card, amount), period chips and card chips.
@@ -73,19 +75,24 @@ The app uses a dark theme with neon green for money figures and a fixed colour p
   - Tap a row for details, the raw SMS, **Change** category ("Apply to all" teaches the app that merchant) or Delete.
 - **Cards:**
   - **Available credit** across cards, with utilisation bars (green / amber / red).
-  - Each card is drawn as a **bank-coloured card tile**: spend or account net for the period, available limit or balance, the latest statement and its paid/due status, and the **Show & count** switch.
-  - Tap a card for its profile: a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
+  - Each card is drawn in **its own look** (modelled on your Samsung Wallet cards, with a small bank-name badge and Visa / Mastercard label), showing spend or account net for the period, available limit or balance, the latest statement and its paid/due status, and the **Show & count** switch.
+  - **Arrange:** tap Arrange and drag the handles to put your most-used cards on top. The order is used everywhere.
+  - Tap a card for its profile: a **card look picker** (Automatic, your cards' looks, bank colours and general looks), a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
+- **Fixed payments** (Overview → Manage, or Settings): add name, amount, day of month, category and the card it's paid from. Reminders 3 days before, the day before and on the day (with Due-date reminders on). **Mark paid** adds it to your transactions so it counts in spending and budgets.
+- **Export report** (share icon at the top of Overview and Transactions, or Settings): a **PDF** of the selected period with the summary, category chart, budgets, cards, top merchants and every transaction, or the same as a **CSV** for Excel.
 - **Review:** unparsed SMS, with **Share unparsed SMS**.
 - **Settings:**
-  - Live listening and **due-date reminders**.
+  - **Theme**, live listening and **due-date reminders**.
+  - **Spending alerts:** a notification for a single spend at or above your amount, an account balance or card available limit below your amount (once a day per card), and budgets at 80% / 100% (once a month). Checked when new SMS arrive or you Sync; only transactions from the last 24 hours alert, so a first Sync doesn't flood you.
   - **App lock:** PIN plus fingerprint/face, re-lock after immediately / 1 / 5 / 15 min.
   - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
 - **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
 
-## After installing v1.1
+## After installing v1.2
 
-1. Tap **Re-parse all SMS** (Review or Settings) so the new bank formats are picked up. Most of the Review list should clear.
-2. Check the Review tab and share anything left.
+1. Pick a theme in Settings.
+2. On the Cards tab, tap **Arrange** to order your cards; open a card to change its look.
+3. Set **budgets** on Overview, add your **fixed payments**, and switch on **spending alerts** in Settings (allow notifications).
 
 ## First steps (new install)
 

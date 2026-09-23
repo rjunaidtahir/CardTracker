@@ -42,6 +42,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,51 +64,134 @@ import com.junaid.cardtracker.data.TransactionEntity
 import com.junaid.cardtracker.parser.CategoryRules
 import com.junaid.cardtracker.parser.TxnType
 
-/** Design tokens: near-black canvas, neon green for money figures, violet as the second accent. */
-object Ink {
-    val bg = Color(0xFF07090C)
-    val bgTop = Color(0xFF0E1A14)      // faint green glow at the top of each screen
-    val bgBottom = Color(0xFF120D1F)   // faint violet at the bottom
-    val surface = Color(0xFF12151A)
-    val surfaceHigh = Color(0xFF1A1E25)
-    val surfaceHighest = Color(0xFF242A33)
-    val border = Color(0xFF262B34)
-    val text = Color(0xFFF2F4F7)
-    val muted = Color(0xFF9AA3AF)
-    val faint = Color(0xFF5E6672)
-    val green = Color(0xFF3BE37F)
-    val greenDim = Color(0xFF1C6B40)
-    val violet = Color(0xFFA78BFA)
-    val red = Color(0xFFFF6B6B)
-    val amber = Color(0xFFF5B942)
+/** One colour theme. [accent] is used for money figures and selection; [accent2] is the second accent. */
+data class Palette(
+    val id: String,
+    val name: String,
+    val isLight: Boolean,
+    val bg: Color,
+    val bgTop: Color,
+    val bgBottom: Color,
+    val surface: Color,
+    val surfaceHigh: Color,
+    val surfaceHighest: Color,
+    val border: Color,
+    val text: Color,
+    val muted: Color,
+    val faint: Color,
+    val accent: Color,
+    val accentDim: Color,
+    val onAccent: Color,
+    val accent2: Color,
+    val red: Color,
+    val amber: Color,
+)
+
+/**
+ * The themes offered in Settings. Text colours are chosen for at least 4.5:1 contrast on their surfaces
+ * (muted text) and 3:1 for the faintest labels.
+ */
+object AppThemes {
+    val all: List<Palette> = listOf(
+        Palette(
+            "neon", "Midnight Neon", false,
+            bg = Color(0xFF07090C), bgTop = Color(0xFF0E1A14), bgBottom = Color(0xFF120D1F),
+            surface = Color(0xFF12151A), surfaceHigh = Color(0xFF1B1F26), surfaceHighest = Color(0xFF262B34), border = Color(0xFF2C323C),
+            text = Color(0xFFF4F6F8), muted = Color(0xFFB3BBC6), faint = Color(0xFF8A93A0),
+            accent = Color(0xFF3BE37F), accentDim = Color(0xFF1C6B40), onAccent = Color(0xFF04210F),
+            accent2 = Color(0xFFB39DFF), red = Color(0xFFFF7A7A), amber = Color(0xFFF5B942),
+        ),
+        Palette(
+            "ocean", "Deep Ocean", false,
+            bg = Color(0xFF050B14), bgTop = Color(0xFF0A1B2E), bgBottom = Color(0xFF071523),
+            surface = Color(0xFF0E1826), surfaceHigh = Color(0xFF152234), surfaceHighest = Color(0xFF1E2E44), border = Color(0xFF243650),
+            text = Color(0xFFF1F6FC), muted = Color(0xFFB0C0D4), faint = Color(0xFF8699B0),
+            accent = Color(0xFF38D6F5), accentDim = Color(0xFF155E6E), onAccent = Color(0xFF02222A),
+            accent2 = Color(0xFF8FA8FF), red = Color(0xFFFF7A7A), amber = Color(0xFFF5C451),
+        ),
+        Palette(
+            "royal", "Royal Violet", false,
+            bg = Color(0xFF0A0712), bgTop = Color(0xFF1A1030), bgBottom = Color(0xFF1C0C1B),
+            surface = Color(0xFF161022), surfaceHigh = Color(0xFF20182F), surfaceHighest = Color(0xFF2B2140), border = Color(0xFF35294D),
+            text = Color(0xFFF6F2FF), muted = Color(0xFFC2B8D8), faint = Color(0xFF978BB0),
+            accent = Color(0xFFC6A6FF), accentDim = Color(0xFF4E3A80), onAccent = Color(0xFF1B0F3D),
+            accent2 = Color(0xFFFF9EC4), red = Color(0xFFFF8080), amber = Color(0xFFF5C451),
+        ),
+        Palette(
+            "amoled", "Pure Black", false,
+            bg = Color(0xFF000000), bgTop = Color(0xFF000000), bgBottom = Color(0xFF000000),
+            surface = Color(0xFF0D0D0F), surfaceHigh = Color(0xFF17171A), surfaceHighest = Color(0xFF222226), border = Color(0xFF2A2A2F),
+            text = Color(0xFFFFFFFF), muted = Color(0xFFBDBDC4), faint = Color(0xFF8E8E96),
+            accent = Color(0xFF3BE37F), accentDim = Color(0xFF1C6B40), onAccent = Color(0xFF04210F),
+            accent2 = Color(0xFFB39DFF), red = Color(0xFFFF7A7A), amber = Color(0xFFF5B942),
+        ),
+        Palette(
+            "light", "Daylight", true,
+            bg = Color(0xFFF3F5F8), bgTop = Color(0xFFE6F4EC), bgBottom = Color(0xFFEEEAF8),
+            surface = Color(0xFFFFFFFF), surfaceHigh = Color(0xFFF0F2F5), surfaceHighest = Color(0xFFE3E7EC), border = Color(0xFFD9DEE4),
+            text = Color(0xFF0F172A), muted = Color(0xFF475569), faint = Color(0xFF64748B),
+            accent = Color(0xFF0E8A4A), accentDim = Color(0xFFC9EBD7), onAccent = Color(0xFFFFFFFF),
+            accent2 = Color(0xFF6D4AE0), red = Color(0xFFC62828), amber = Color(0xFFA35F00),
+        ),
+        Palette(
+            "sand", "Warm Paper", true,
+            bg = Color(0xFFF7F3EC), bgTop = Color(0xFFF4E9D8), bgBottom = Color(0xFFEFE7DA),
+            surface = Color(0xFFFFFCF7), surfaceHigh = Color(0xFFF3EDE3), surfaceHighest = Color(0xFFE8E0D2), border = Color(0xFFDDD3C3),
+            text = Color(0xFF231C12), muted = Color(0xFF5A4E3E), faint = Color(0xFF786A57),
+            accent = Color(0xFFB4532A), accentDim = Color(0xFFF4D9CB), onAccent = Color(0xFFFFFFFF),
+            accent2 = Color(0xFF2F6F8F), red = Color(0xFFB3261E), amber = Color(0xFF8A5A00),
+        ),
+    )
+
+    fun byId(id: String?): Palette = all.firstOrNull { it.id == id } ?: all.first()
+
+    /** The live theme; changing it recomposes the whole app. */
+    var current by mutableStateOf(all.first())
 }
 
-private val scheme = darkColorScheme(
-    primary = Ink.green,
-    onPrimary = Color(0xFF04210F),
-    primaryContainer = Ink.greenDim,
-    onPrimaryContainer = Color(0xFFD7FFE6),
-    secondary = Ink.violet,
-    onSecondary = Color(0xFF1B0F3D),
-    secondaryContainer = Color(0xFF2E2458),
-    onSecondaryContainer = Color(0xFFE9E1FF),
-    tertiary = Ink.amber,
-    background = Ink.bg,
-    onBackground = Ink.text,
-    surface = Ink.surface,
-    onSurface = Ink.text,
-    surfaceVariant = Ink.surfaceHigh,
-    onSurfaceVariant = Ink.muted,
-    surfaceContainerLowest = Ink.bg,
-    surfaceContainerLow = Ink.surface,
-    surfaceContainer = Ink.surface,
-    surfaceContainerHigh = Ink.surfaceHigh,
-    surfaceContainerHighest = Ink.surfaceHighest,
-    outline = Ink.border,
-    outlineVariant = Ink.border,
-    error = Ink.red,
-    onError = Color(0xFF3A0707),
-)
+/** Design tokens, read from the selected theme. `green` is the accent, `violet` the second accent (names kept for older code). */
+object Ink {
+    private val p get() = AppThemes.current
+    val bg get() = p.bg
+    val bgTop get() = p.bgTop
+    val bgBottom get() = p.bgBottom
+    val surface get() = p.surface
+    val surfaceHigh get() = p.surfaceHigh
+    val surfaceHighest get() = p.surfaceHighest
+    val border get() = p.border
+    val text get() = p.text
+    val muted get() = p.muted
+    val faint get() = p.faint
+    val green get() = p.accent
+    val greenDim get() = p.accentDim
+    val onAccent get() = p.onAccent
+    val violet get() = p.accent2
+    val red get() = p.red
+    val amber get() = p.amber
+    val isLight get() = p.isLight
+}
+
+private fun schemeFor(p: Palette) = if (p.isLight) {
+    lightColorScheme(
+        primary = p.accent, onPrimary = p.onAccent, primaryContainer = p.accentDim, onPrimaryContainer = p.text,
+        secondary = p.accent2, onSecondary = Color.White, secondaryContainer = p.surfaceHighest, onSecondaryContainer = p.text,
+        tertiary = p.amber, background = p.bg, onBackground = p.text, surface = p.surface, onSurface = p.text,
+        surfaceVariant = p.surfaceHigh, onSurfaceVariant = p.muted,
+        surfaceContainerLowest = p.surface, surfaceContainerLow = p.surface, surfaceContainer = p.surface,
+        surfaceContainerHigh = p.surfaceHigh, surfaceContainerHighest = p.surfaceHighest,
+        outline = p.border, outlineVariant = p.border, error = p.red, onError = Color.White,
+    )
+} else {
+    darkColorScheme(
+        primary = p.accent, onPrimary = p.onAccent, primaryContainer = p.accentDim, onPrimaryContainer = p.text,
+        secondary = p.accent2, onSecondary = p.bg, secondaryContainer = p.surfaceHighest, onSecondaryContainer = p.text,
+        tertiary = p.amber, background = p.bg, onBackground = p.text, surface = p.surface, onSurface = p.text,
+        surfaceVariant = p.surfaceHigh, onSurfaceVariant = p.muted,
+        surfaceContainerLowest = p.bg, surfaceContainerLow = p.surface, surfaceContainer = p.surface,
+        surfaceContainerHigh = p.surfaceHigh, surfaceContainerHighest = p.surfaceHighest,
+        outline = p.border, outlineVariant = p.border, error = p.red, onError = p.bg,
+    )
+}
 
 private val typography = Typography().let { t ->
     t.copy(
@@ -115,14 +204,20 @@ private val typography = Typography().let { t ->
     )
 }
 
-/** Always the dark finance look (the references are dark). */
+/**
+ * The app theme. Also sets the default text colour: screens sit on a transparent Scaffold over a gradient,
+ * and without this any Text without an explicit colour would fall back to black.
+ */
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = scheme, typography = typography, content = content)
+    val p = AppThemes.current
+    MaterialTheme(colorScheme = schemeFor(p), typography = typography) {
+        CompositionLocalProvider(LocalContentColor provides p.text, content = content)
+    }
 }
 
-/** Screen background: black with a soft green glow at the top and violet at the bottom. */
-val screenBrush: Brush = Brush.verticalGradient(0f to Ink.bgTop, 0.35f to Ink.bg, 0.8f to Ink.bg, 1f to Ink.bgBottom)
+/** Screen background: a soft accent glow at the top and the second accent at the bottom. */
+val screenBrush: Brush get() = Brush.verticalGradient(0f to Ink.bgTop, 0.35f to Ink.bg, 0.8f to Ink.bg, 1f to Ink.bgBottom)
 
 /** Small caps label above a figure: "TOTAL SPENT". */
 @Composable
@@ -144,7 +239,9 @@ fun Panel(
     m = if (brush != null) m.background(brush) else m.background(Ink.surface)
     m = m.border(BorderStroke(1.dp, Ink.border), shape)
     if (onClick != null) m = m.clickable(onClick = onClick)
-    Column(m.padding(padding), content = content)
+    CompositionLocalProvider(LocalContentColor provides Ink.text) {
+        Column(m.padding(padding), content = content)
+    }
 }
 
 /** Section title with an optional trailing action. */
@@ -201,7 +298,7 @@ fun IconBadge(icon: ImageVector, color: Color, size: Dp = 40.dp) {
 
 /** Surface for dialogs and sheets so they match the dark theme. */
 @Composable
-fun DarkSurface(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+fun ThemedSurface(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     Surface(modifier, color = Ink.surface, contentColor = Ink.text, content = content)
 }
 

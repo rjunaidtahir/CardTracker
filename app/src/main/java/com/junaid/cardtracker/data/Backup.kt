@@ -37,10 +37,10 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                 },
             ),
             "cards.csv" to Csv.write(
-                listOf("cardKey", "bank", "last4", "cardType", "countInSpending", "nickname", "creditLimitMinor", "statementDay", "dueDay", "remindersEnabled", "archived", "createdAt"),
+                listOf("cardKey", "bank", "last4", "cardType", "countInSpending", "nickname", "creditLimitMinor", "statementDay", "dueDay", "remindersEnabled", "archived", "createdAt", "themeKey", "sortOrder"),
                 dao.allCards().map {
                     listOf(it.cardKey, it.bank, it.last4, it.cardType, it.countInSpending.toString(), it.nickname, it.creditLimitMinor?.toString(),
-                        it.statementDay?.toString(), it.dueDay?.toString(), it.remindersEnabled.toString(), it.archived.toString(), it.createdAt.toString())
+                        it.statementDay?.toString(), it.dueDay?.toString(), it.remindersEnabled.toString(), it.archived.toString(), it.createdAt.toString(), it.themeKey, it.sortOrder.toString())
                 },
             ),
             "categories.csv" to Csv.write(
@@ -52,6 +52,14 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
             "savings_goals.csv" to Csv.write(
                 listOf("name", "targetMinor", "savedMinor", "targetDateEpochDay", "createdAt"),
                 dao.allGoals().map { listOf(it.name, it.targetMinor.toString(), it.savedMinor.toString(), it.targetDateEpochDay?.toString(), it.createdAt.toString()) },
+            ),
+            "budgets.csv" to Csv.write(listOf("categoryId", "monthlyLimitMinor"), dao.allBudgets().map { listOf(it.categoryId.toString(), it.monthlyLimitMinor.toString()) }),
+            "fixed_payments.csv" to Csv.write(
+                listOf("name", "amountMinor", "dayOfMonth", "categoryId", "cardKey", "remind", "active", "lastPaidYm", "createdAt"),
+                dao.allFixedPayments().map {
+                    listOf(it.name, it.amountMinor.toString(), it.dayOfMonth.toString(), it.categoryId?.toString(), it.cardKey,
+                        it.remind.toString(), it.active.toString(), it.lastPaidYm, it.createdAt.toString())
+                },
             ),
             "fx_rates.csv" to Csv.write(listOf("currency", "rateToAed", "updatedAt"), dao.allRates().map { listOf(it.currency, it.rateToAed, it.updatedAt.toString()) }),
             "all_transactions.csv" to Csv.write(
@@ -110,6 +118,8 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                     remindersEnabled = r["remindersEnabled"]?.toBoolean() ?: true,
                     archived = r.b("archived"),
                     createdAt = r.l("createdAt") ?: System.currentTimeMillis(),
+                    themeKey = r.s("themeKey"),
+                    sortOrder = r.l("sortOrder")?.toInt() ?: 1000,
                 )
             }?.let { dao.upsertCards(it); cards = it.size }
             files["merchant_rules.csv"]?.mapNotNull { r ->
@@ -118,6 +128,22 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
             files["txn_overrides.csv"]?.mapNotNull { r ->
                 TxnOverrideEntity(r.s("dedupKey") ?: return@mapNotNull null, r.l("categoryId"))
             }?.let { dao.upsertOverrides(it) }
+            files["budgets.csv"]?.mapNotNull { r ->
+                BudgetEntity(r.l("categoryId") ?: return@mapNotNull null, r.l("monthlyLimitMinor") ?: return@mapNotNull null)
+            }?.let { dao.upsertBudgets(it) }
+            val existingFixed = dao.allFixedPayments().map { it.name to it.amountMinor }.toSet()
+            files["fixed_payments.csv"]?.forEach { r ->
+                val name = r.s("name") ?: return@forEach
+                val amount = r.l("amountMinor") ?: return@forEach
+                if (name to amount in existingFixed) return@forEach
+                dao.upsertFixedPayment(
+                    FixedPaymentEntity(
+                        name = name, amountMinor = amount, dayOfMonth = r.l("dayOfMonth")?.toInt() ?: 1, categoryId = r.l("categoryId"),
+                        cardKey = r.s("cardKey"), remind = r["remind"]?.toBoolean() ?: true, active = r["active"]?.toBoolean() ?: true,
+                        lastPaidYm = r.s("lastPaidYm"), createdAt = r.l("createdAt") ?: System.currentTimeMillis(),
+                    ),
+                )
+            }
             files["fx_rates.csv"]?.mapNotNull { r ->
                 FxRateEntity(r.s("currency") ?: return@mapNotNull null, r.s("rateToAed") ?: return@mapNotNull null, r.l("updatedAt") ?: 0L)
             }?.let { dao.upsertRates(it) }

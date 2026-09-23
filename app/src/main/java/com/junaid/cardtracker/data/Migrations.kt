@@ -45,5 +45,21 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_2_3, MIGRATION_3_4)
+    /** v4 -> v5: card look and order, category budgets, fixed payments. */
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE cards ADD COLUMN themeKey TEXT")
+            db.execSQL("ALTER TABLE cards ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 1000")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `budgets` (`categoryId` INTEGER NOT NULL, `monthlyLimitMinor` INTEGER NOT NULL, PRIMARY KEY(`categoryId`))",
+            )
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `fixed_payments` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, " +
+                    "`amountMinor` INTEGER NOT NULL, `dayOfMonth` INTEGER NOT NULL, `categoryId` INTEGER, `cardKey` TEXT, " +
+                    "`remind` INTEGER NOT NULL, `active` INTEGER NOT NULL, `lastPaidYm` TEXT, `createdAt` INTEGER NOT NULL)",
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
 }
