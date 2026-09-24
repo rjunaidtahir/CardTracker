@@ -27,7 +27,7 @@ sealed interface Route {
     /** Fixed monthly payments you add by hand. */
     data object FixedPayments : Route
     /** Compare a card's statement PDF with the app. */
-    data class StatementCheck(val cardKey: String) : Route
+    data class StatementCheck(val cardKey: String?) : Route
 }
 
 class Navigator {

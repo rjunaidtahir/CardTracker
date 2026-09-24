@@ -34,6 +34,9 @@ object CategoryRules {
     const val CASH = 12L
     const val INSURANCE = 13L
     const val OTHER = 14L
+    /** Added in v1.5 with high ids so they never clash with categories you created (15, 16, ...). */
+    const val INCOME = 101L
+    const val FAMILY = 102L
 
     val defaults: List<DefaultCategory> = listOf(
         DefaultCategory(GROCERIES, "Groceries"),
@@ -50,6 +53,8 @@ object CategoryRules {
         DefaultCategory(CASH, "Cash (ATM)"),
         DefaultCategory(INSURANCE, "Insurance"),
         DefaultCategory(OTHER, "Other"),
+        DefaultCategory(INCOME, "Salary & income"),
+        DefaultCategory(FAMILY, "Family (cards I pay for)"),
     )
 
     /** category id -> keywords (plain words or regex fragments), checked in this order. */
@@ -88,10 +93,11 @@ object CategoryRules {
      * account debits (your car EMI and your rent are both "Account debit", but with different amounts).
      */
     fun isAmountSpecific(merchant: String, type: TxnType): Boolean =
-        type == TxnType.TRANSFER_OUT || merchantKey(merchant).let { k -> genericPrefixes.any { k.startsWith(it) } }
+        type == TxnType.TRANSFER_OUT || (type == TxnType.TRANSFER_IN && merchantKey(merchant).let { k -> genericPrefixes.any { k.startsWith(it) } }) || merchantKey(merchant).let { k -> genericPrefixes.any { k.startsWith(it) } }
 
     /** Types that can carry a category. Transfers only get one when you choose it (never guessed). */
-    fun canHaveCategory(type: TxnType): Boolean = type == TxnType.PURCHASE || type == TxnType.REFUND || type == TxnType.TRANSFER_OUT
+    fun canHaveCategory(type: TxnType): Boolean =
+        type == TxnType.PURCHASE || type == TxnType.REFUND || type == TxnType.TRANSFER_OUT || type == TxnType.TRANSFER_IN
 
     /** The key a learned "merchant = category" rule is stored under. */
     fun learningKey(merchant: String, amountMinor: Long, type: TxnType): String =

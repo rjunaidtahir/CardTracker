@@ -53,9 +53,14 @@ import com.junaid.cardtracker.core.StatementLine
  * "Check against statement": pick the bank's statement PDF for this card, see what matches,
  * what's missing from the app (tick and add), and what's in the app but not on the statement.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-fun StatementCheckScreen(vm: MainViewModel, cardName: String) {
+fun StatementCheckScreen(vm: MainViewModel) {
     val st by vm.statementCheck.collectAsStateWithLifecycle()
+    val cards by vm.cards.collectAsStateWithLifecycle()
+    val summaries by vm.cardSummaries.collectAsStateWithLifecycle()
+    val card = cards.firstOrNull { it.cardKey == st?.cardKey }
+    val cardName = card?.let { CardArts.displayName(it) } ?: "Any bank statement"
     val ctx = LocalContext.current
     var password by rememberSaveable { mutableStateOf("") }
     var pickedUri by rememberSaveable { mutableStateOf<String?>(null) }
@@ -71,8 +76,9 @@ fun StatementCheckScreen(vm: MainViewModel, cardName: String) {
         item {
             Text(cardName, style = MaterialTheme.typography.titleLarge)
             Text(
-                "Pick the statement PDF your bank sent for this card or account. The app reads it on the phone (nothing is uploaded), " +
-                    "matches every line with your SMS transactions by date (±3 days) and amount, and lists what's missing so you can add it.",
+                "Pick a statement PDF from any bank, including a card you pay for someone else (e.g. your wife's). The app reads it on the phone " +
+                    "(nothing is uploaded), checks the statement date, due date, credit limit and amounts due, matches every line with your " +
+                    "transactions by date (±3 days) and amount, and lists what's missing so you can add it.",
                 style = MaterialTheme.typography.bodySmall, color = Ink.muted,
             )
             Spacer(Modifier.height(10.dp))
@@ -105,6 +111,69 @@ fun StatementCheckScreen(vm: MainViewModel, cardName: String) {
                             style = MaterialTheme.typography.bodySmall, color = Ink.muted,
                         )
                         TextButton(onClick = { shareText(ctx, st?.text ?: "") }) { Text("Share extracted text") }
+                    }
+                }
+            }
+        }
+        // ---- which card is this statement for?
+        if (st != null && st?.loading != true && (st?.lines?.isNotEmpty() == true || st?.summary?.isEmpty == false)) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text(if (card == null) "Which card is this statement for?" else "Card", style = MaterialTheme.typography.titleSmall)
+                    st?.summary?.let { sm ->
+                        if (sm.bank != null || sm.cardLast4 != null) {
+                            Text("The statement says: ${listOfNotNull(sm.bank, sm.cardLast4?.let { "card ending $it" }).joinToString(", ")}",
+                                style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        cards.filter { it.cardType != com.junaid.cardtracker.data.CardTypes.ACCOUNT || it.cardKey == st?.cardKey }.forEach { c ->
+                            Pill(CardArts.displayName(c), c.cardKey == st?.cardKey, onClick = { vm.chooseStatementCard(c.cardKey) }, tint = Ink.violet)
+                        }
+                        cards.filter { it.cardType == com.junaid.cardtracker.data.CardTypes.ACCOUNT && it.cardKey != st?.cardKey }.forEach { c ->
+                            Pill(CardArts.displayName(c), false, onClick = { vm.chooseStatementCard(c.cardKey) }, tint = Ink.violet)
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    NewStatementCard(st?.summary, onCreate = { b, l, f, n -> vm.createStatementCard(b, l, f, n) })
+                    if (card != null) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                            Column(Modifier.weight(1f)) {
+                                Text("Someone else's card I pay for", style = MaterialTheme.typography.bodyMedium)
+                                Text("Its spends go to the \"Family\" category, separate from your own.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                            }
+                            androidx.compose.material3.Switch(card.owner == com.junaid.cardtracker.data.CardOwner.FAMILY, { vm.setCardFamily(card.cardKey, it) })
+                        }
+                    }
+                }
+            }
+        }
+        // ---- key figures: statement vs app
+        val sm = st?.summary
+        if (sm != null && !sm.isEmpty && card != null) {
+            item {
+                val cs = summaries.firstOrNull { it.card.cardKey == card.cardKey }
+                val appSt = cs?.latestStatement
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("Statement figures", style = MaterialTheme.typography.titleSmall)
+                    Text("Compared with what the app has from SMS and the card profile.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                    Spacer(Modifier.height(6.dp))
+                    FigureRow("Statement date", sm.statementDate?.format(dateFmt), appSt?.statementDateEpochDay?.let { fmtEpochDay(it) })
+                    FigureRow("Payment due date", sm.dueDate?.format(dateFmt), appSt?.dueDateEpochDay?.let { fmtEpochDay(it) })
+                    FigureRow("Amount due (avoid finance charges)", sm.totalDueMinor?.let { fmtMoney(it) }, appSt?.balanceMinor?.let { fmtMoney(it, appSt.currency) })
+                    FigureRow("Minimum due", sm.minimumDueMinor?.let { fmtMoney(it) }, appSt?.minimumDueMinor?.let { fmtMoney(it, appSt.currency) })
+                    FigureRow("Total credit limit", sm.creditLimitMinor?.let { fmtMoney(it) }, card.creditLimitMinor?.let { fmtMoney(it) })
+                    FigureRow("Available limit", sm.availableLimitMinor?.let { fmtMoney(it) }, cs?.latestBalanceMinor?.let { fmtMoney(it) })
+                    Spacer(Modifier.height(8.dp))
+                    if (st?.summarySaved?.isNotEmpty() == true) {
+                        Text("Saved: " + st!!.summarySaved.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = Ink.green)
+                    } else {
+                        Button(onClick = { vm.applyStatementSummary() }, shape = RoundedCornerShape(50)) { Text("Save to card profile") }
+                        Text(
+                            "Sets the credit limit and statement / due day, and adds this statement to Payments due if no SMS statement has that due date.",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 4.dp),
+                        )
                     }
                 }
             }
@@ -199,4 +268,54 @@ private fun CountTile(label: String, n: Int, color: androidx.compose.ui.graphics
 private fun shareText(ctx: android.content.Context, text: String) {
     val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text.take(90_000))
     ctx.startActivity(Intent.createChooser(send, "Share statement text"))
+}
+
+/** One figure: statement value, app value, and whether they agree. */
+@Composable
+private fun FigureRow(label: String, statement: String?, app: String?) {
+    val same = statement != null && app != null && statement.filter { it.isDigit() } == app.filter { it.isDigit() }
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                when {
+                    statement == null -> "Not found on the statement"
+                    app == null -> "Not in the app yet"
+                    same -> "Matches the app"
+                    else -> "App has $app"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = when { statement == null -> Ink.faint; same -> Ink.green; app == null -> Ink.muted; else -> Ink.amber },
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(statement ?: "—", fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+    }
+}
+
+/** Form for a card the app doesn't know (other bank, or your wife's card). */
+@Composable
+private fun NewStatementCard(summary: com.junaid.cardtracker.core.StatementSummary?, onCreate: (String, String, Boolean, String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var bank by remember(summary) { mutableStateOf(summary?.bank ?: "") }
+    var last4 by remember(summary) { mutableStateOf(summary?.cardLast4 ?: "") }
+    var nick by remember { mutableStateOf("") }
+    var family by remember { mutableStateOf(true) }
+    if (!open) {
+        TextButton(onClick = { open = true }) { Text("+ A card not listed (other bank / family)") }
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OutlinedTextField(bank, { bank = it }, label = { Text("Bank (e.g. Emirates Islamic)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(last4, { last4 = it.filter(Char::isDigit).take(4) }, label = { Text("Last 4") }, singleLine = true,
+                modifier = Modifier.width(110.dp), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            OutlinedTextField(nick, { nick = it }, label = { Text("Name (e.g. Wife's card)") }, singleLine = true, modifier = Modifier.weight(1f))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(family, { family = it })
+            Text("Someone else's card I pay for (Family category)", style = MaterialTheme.typography.bodyMedium)
+        }
+        Button(onClick = { onCreate(bank, last4, family, nick); open = false }, shape = RoundedCornerShape(50)) { Text("Add card and compare") }
+    }
 }

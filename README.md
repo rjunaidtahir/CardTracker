@@ -1,4 +1,6 @@
-# Card Tracker
+# RJ's Financials Tracker
+
+(Formerly Card Tracker. The package name is unchanged, so updates install over the old app and keep your data.)
 
 A personal Android app that reads your UAE bank SMS and turns them into credit card transactions and statements. Everything stays on the phone in a local Room database.
 
@@ -84,7 +86,10 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - The profile's **statement day and due day** fill in automatically from a statement SMS received in the last 30 days (you can still change them; your own values are never overwritten).
   - Tap a card for its profile: a **card look picker** (Automatic, your cards' looks, bank colours and general looks), a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
 - **Fixed payments** (Overview → Manage, or Settings): add name, amount, day of month, category and the card it's paid from. Reminders 3 days before, the day before and on the day (with Due-date reminders on). **Mark paid** adds it to your transactions so it counts in spending and budgets. If a bank SMS this month shows the same amount (within 5%) from the chosen card or account, it is marked paid automatically and no reminder is sent.
-- **Check statement** (open a card → Check statement): pick the bank's statement PDF (password-protected ones work; enter the password when asked). The app reads it on the phone and shows **Matched**, **Missing in app** (tick and **Add** them as typed entries on that card) and **Only in app** (pending, duplicates or reversals to check). If a bank's layout isn't recognised, **Share extracted text** so a rule can be added.
+- **Check statement** (open a card → Check statement, or the PDF icon on the Cards tab for **any bank**): also reads the **statement date, payment due date, total credit limit, available limit, amount due to avoid finance charges and minimum due**, compares them with the app, and **Save to card profile** stores them (and adds the statement to Payments due if no SMS had it). A statement for a card the app doesn't know (another bank, or your wife's card) can be added as a new card; mark it "Someone else's card I pay for" and its spends go to the **Family** category.
+- **Since last statement** (Cards tab and each card): what you've spent on each credit card since its last statement, with **Show these transactions**.
+- **Money in** (salary, remittances) can be categorised too; salary is recognised automatically.
+- Old **Check statement** notes: pick the bank's statement PDF (password-protected ones work; enter the password when asked). The app reads it on the phone and shows **Matched**, **Missing in app** (tick and **Add** them as typed entries on that card) and **Only in app** (pending, duplicates or reversals to check). If a bank's layout isn't recognised, **Share extracted text** so a rule can be added.
 - **Export report** (share icon at the top of Overview and Transactions, or Settings): a **PDF** of the selected period with the summary, category chart, budgets, cards, top merchants and every transaction, or the same as a **CSV** for Excel.
 - **Review:** unparsed SMS, with **Share unparsed SMS**.
 - **Settings:**
@@ -93,6 +98,12 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - **App lock:** PIN plus fingerprint/face, re-lock after immediately / 1 / 5 / 15 min.
   - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
 - **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
+
+## After installing v1.5
+
+1. The app is now **RJ's Financials Tracker** with a new icon (the old icon may take a moment to refresh on the home screen).
+2. Tap **Re-parse all SMS** once: salary credits get the new **Salary & income** category.
+3. Cards tab → the PDF icon → pick your wife's statement → "+ A card not listed" → tick "Someone else's card I pay for". Its spends go to the **Family** category.
 
 ## After installing v1.4
 

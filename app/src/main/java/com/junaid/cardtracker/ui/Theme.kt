@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Security
@@ -324,6 +325,8 @@ object CategoryStyle {
         CategoryRules.CASH to Color(0xFF9CA83A),
         CategoryRules.INSURANCE to Color(0xFF5C7CFA),
         CategoryRules.OTHER to Color(0xFF8A8F98),
+        CategoryRules.INCOME to Color(0xFF22C55E),
+        CategoryRules.FAMILY to Color(0xFFEC4899),
     )
     private val extra = listOf(
         Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500),
@@ -349,6 +352,8 @@ object CategoryStyle {
         CategoryRules.EMI_LOANS -> Icons.Filled.AccountBalance
         CategoryRules.CASH -> Icons.Filled.LocalAtm
         CategoryRules.INSURANCE -> Icons.Filled.Security
+        CategoryRules.INCOME -> Icons.Filled.Payments
+        CategoryRules.FAMILY -> Icons.Filled.People
         else -> Icons.Filled.Category
     }
 }
@@ -356,7 +361,7 @@ object CategoryStyle {
 /** Icon + colour for a transaction row: its category for spending, a direction icon otherwise. */
 fun TransactionEntity.visual(): Pair<ImageVector, Color> = when (type) {
     TxnType.PAYMENT.name -> Icons.Filled.CreditCard to Ink.violet
-    TxnType.TRANSFER_IN.name -> Icons.Filled.SouthWest to Ink.green
+    TxnType.TRANSFER_IN.name -> if (categoryId != null) CategoryStyle.icon(categoryId) to CategoryStyle.color(categoryId) else Icons.Filled.SouthWest to Ink.green
     TxnType.TRANSFER_OUT.name -> when {
         categoryId != null -> CategoryStyle.icon(categoryId) to CategoryStyle.color(categoryId)
         counterpartyKey != null -> Icons.Filled.CreditCard to Ink.violet

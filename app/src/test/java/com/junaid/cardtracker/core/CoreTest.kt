@@ -83,7 +83,7 @@ class CoreTest {
             ReviewExport.Item("FAB", "Something new AED 12.00"),
         )
         val text = ReviewExport.summarize(items)
-        assertEquals(true, text.startsWith("Card Tracker: 3 unparsed SMS in 2 formats"))
+        assertEquals(true, text.startsWith("RJ's Financials Tracker: 3 unparsed SMS in 2 formats"))
         assertEquals(true, text.contains("#1 · Mashreq · 2×"), text)
         assertEquals(true, text.contains("#2 · FAB · 1×"), text)
     }

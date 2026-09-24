@@ -97,3 +97,13 @@ object CardDays {
         return Days((recent.first ?: recent.third).dayOfMonth, recent.second.dayOfMonth, recent.third)
     }
 }
+
+/** Card usage since the last statement: what will go on the next one. */
+object SinceStatement {
+    /** The day after the statement date (or the day the statement SMS arrived when no date was given). */
+    fun startDate(statementDate: LocalDate?, receivedDate: LocalDate): LocalDate = (statementDate ?: receivedDate).plusDays(1)
+
+    /** Net spend (purchases minus refunds, card payments excluded) from [start] to today. */
+    fun spend(txns: List<InsightTxn>, start: LocalDate): Long =
+        txns.filter { !it.date.isBefore(start) }.sumOf { Spending.contributionAedMinor(it.type, it.amountAedMinor, true) }
+}

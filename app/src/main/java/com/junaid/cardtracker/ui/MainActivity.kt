@@ -86,7 +86,7 @@ class MainActivity : FragmentActivity() {
             },
         )
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock Card Tracker")
+            .setTitle("Unlock RJ's Financials")
             .setNegativeButtonText("Use PIN")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
             .build()
@@ -124,7 +124,7 @@ private fun granted(ctx: Context, permission: String) =
     ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED
 
 private const val RESTRICTED_HINT =
-    "If Android says the permission is restricted: Settings → Apps → Card Tracker → ⋮ → Allow restricted settings, then try again."
+    "If Android says the permission is restricted: Settings → Apps → RJ's Financials Tracker → ⋮ → Allow restricted settings, then try again."
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -275,7 +275,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 title = {
                     Text(
                         when (route) {
-                            is Route.Home -> if (route.tab == Tab.OVERVIEW) "Card Tracker" else route.tab.label
+                            is Route.Home -> if (route.tab == Tab.OVERVIEW) "RJ's Financials" else route.tab.label
                             is Route.CardDetail -> "Card"
                             Route.Rates -> "Exchange rates"
                             Route.FixedPayments -> "Fixed payments"
@@ -337,6 +337,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onToggleCounted = { key, on -> vm.setCardCounted(key, on) },
                         onReorder = { vm.setCardOrder(it) },
+                        onImportStatement = { vm.startStatementCheck(null); nav.push(Route.StatementCheck(null)) },
                     )
                     Tab.REVIEW -> ReviewScreen(
                         failed, counts,
@@ -346,7 +347,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                             scope.launch {
                                 val text = vm.reviewExportText()
                                 val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                                    .putExtra(Intent.EXTRA_SUBJECT, "Card Tracker unparsed SMS")
+                                    .putExtra(Intent.EXTRA_SUBJECT, "RJ's Financials Tracker unparsed SMS")
                                     .putExtra(Intent.EXTRA_TEXT, text)
                                 ctx.startActivity(Intent.createChooser(send, "Share unparsed SMS"))
                             }
@@ -378,6 +379,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     onSaveProfile = { n, l, sd, dd, r -> vm.saveCardProfile(route.cardKey, n, l, sd, dd, r) },
                     onSetTheme = { vm.setCardTheme(route.cardKey, it) },
                     onCheckStatement = { vm.startStatementCheck(route.cardKey); nav.push(Route.StatementCheck(route.cardKey)) },
+                    onShowSinceStatement = { start -> vm.showSinceStatement(route.cardKey, start); nav.selectTab(Tab.TRANSACTIONS) },
+                    onSetFamily = { vm.setCardFamily(route.cardKey, it) },
                     onPickImage = {
                         pickingFor = route.cardKey
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -385,9 +388,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 )
                 Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
                 Route.FixedPayments -> FixedPaymentsScreen(vm)
-                is Route.StatementCheck -> StatementCheckScreen(
-                    vm, cardName = cards.firstOrNull { it.cardKey == route.cardKey }?.let { CardArts.displayName(it) } ?: route.cardKey,
-                )
+                is Route.StatementCheck -> StatementCheckScreen(vm)
             }
         }
     }
@@ -401,10 +402,10 @@ private fun SamsungTipDialog(onOpenSettings: () -> Unit, onDismiss: () -> Unit) 
         title = { Text("Keep live listening reliable") },
         text = {
             Text(
-                "One UI can put Card Tracker to sleep, and then new SMS are missed until you Sync.\n\n" +
+                "One UI can put the app to sleep, and then new SMS are missed until you Sync.\n\n" +
                     "Add it to Never sleeping apps:\nSettings → Battery (or Device care → Battery) → Background usage limits → " +
-                    "Never sleeping apps → + → Card Tracker.\n\n" +
-                    "Also set Settings → Apps → Card Tracker → Battery to Unrestricted.",
+                    "Never sleeping apps → + → RJ's Financials Tracker.\n\n" +
+                    "Also set Settings → Apps → RJ's Financials Tracker → Battery to Unrestricted.",
             )
         },
         confirmButton = { TextButton(onClick = onOpenSettings) { Text("Open app settings") } },

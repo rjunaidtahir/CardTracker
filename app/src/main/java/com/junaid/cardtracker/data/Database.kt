@@ -188,7 +188,13 @@ data class CardEntity(
     val themeKey: String? = null,
     /** v5: your order on the Cards tab (drag to change). New cards go to the end. */
     @ColumnInfo(defaultValue = "1000") val sortOrder: Int = 1000,
+    /** v6: null = yours; "FAMILY" = someone else's card you pay for (e.g. your wife's). Its spends go to the Family category. */
+    val owner: String? = null,
 )
+
+object CardOwner {
+    const val FAMILY = "FAMILY"
+}
 
 /** v5: monthly limit per category. */
 @Entity(tableName = "budgets")
@@ -289,8 +295,18 @@ interface AppDao {
     @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
     suspend fun deleteAllSmsTxns()
 
-    @Query("DELETE FROM statements")
+    /** SMS statements only: statements saved from a PDF (smsId = 0) survive Re-parse. */
+    @Query("DELETE FROM statements WHERE smsId > 0")
     suspend fun deleteAllStatements()
+
+    @Query("SELECT COUNT(*) FROM statements WHERE cardKey = :cardKey AND dueDateEpochDay = :dueDay")
+    suspend fun countStatements(cardKey: String, dueDay: Long): Int
+
+    @Query("UPDATE cards SET owner = :owner WHERE cardKey = :key")
+    suspend fun setCardOwner(key: String, owner: String?)
+
+    @Query("UPDATE cards SET creditLimitMinor = :limitMinor WHERE cardKey = :key")
+    suspend fun setCreditLimit(key: String, limitMinor: Long)
 
     @Query(
         "SELECT * FROM transactions WHERE timestamp >= :from AND timestamp < :to " +
@@ -496,7 +512,7 @@ data class StatusCount(val status: String, val n: Int)
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
         BudgetEntity::class, FixedPaymentEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

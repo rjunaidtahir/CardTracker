@@ -1,14 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon foreground: a card with a rising chart. Kept inside the 66dp safe zone. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- card body -->
-    <path android:fillColor="#FFFFFFFF"
-        android:pathData="M30,38 h48 a4,4 0 0 1 4,4 v26 a4,4 0 0 1 -4,4 h-48 a4,4 0 0 1 -4,-4 v-26 a4,4 0 0 1 4,-4 z" />
-    <!-- stripe -->
-    <path android:fillColor="#FF0E5E4E" android:pathData="M26,45 h56 v6 h-56 z" />
-    <!-- chip -->
-    <path android:fillColor="#FFE0B040" android:pathData="M33,56 h10 v8 h-10 z" />
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:pivotX="54" android:pivotY="54" android:scaleX="1.18" android:scaleY="1.18" android:translateY="-2">
+        <group android:pivotX="54" android:pivotY="49" android:rotation="-10">
+            <path android:fillColor="#59FFFFFF"
+                android:pathData="M36,32h36a5,5 0 0 1 5,5v24a5,5 0 0 1 -5,5h-36a5,5 0 0 1 -5,-5v-24a5,5 0 0 1 5,-5z" />
+        </group>
+        <path android:pathData="M34,40h40a5,5 0 0 1 5,5v26a5,5 0 0 1 -5,5h-40a5,5 0 0 1 -5,-5v-26a5,5 0 0 1 5,-5z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="30" android:startY="36" android:endX="80" android:endY="74">
+                    <item android:offset="0" android:color="#FFFFFFFF" />
+                    <item android:offset="1" android:color="#FFE9E3FF" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:fillColor="#FFF5B942" android:pathData="M36.5,46h6a1.5,1.5 0 0 1 1.5,1.5v4a1.5,1.5 0 0 1 -1.5,1.5h-6a1.5,1.5 0 0 1 -1.5,-1.5v-4a1.5,1.5 0 0 1 1.5,-1.5z" />
+        <path android:fillColor="#FFA78BFA" android:pathData="M50,62h4v8h-4z" />
+        <path android:fillColor="#FF8B5CF6" android:pathData="M57,58h4v12h-4z" />
+        <path android:fillColor="#FF7C3AED" android:pathData="M64,54h4v16h-4z" />
+        <path android:pathData="M36,66L46,60L55,63L71,48"
+            android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000">
+            <aapt:attr name="android:strokeColor">
+                <gradient android:type="linear" android:startX="34" android:startY="0" android:endX="76" android:endY="0">
+                    <item android:offset="0" android:color="#FF10B981" />
+                    <item android:offset="1" android:color="#FF22D3EE" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path android:pathData="M66,47.5L72.5,47L72,53.5" android:strokeColor="#FF22D3EE"
+            android:strokeWidth="3.2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+    </group>
 </vector>

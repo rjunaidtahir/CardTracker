@@ -37,9 +37,12 @@ class Repository(private val db: AppDatabase) {
 
     /** Seeds categories and exchange rates, and categorises older transactions once. Safe to call every start. */
     suspend fun ensureDefaults() {
-        if (dao.categoryCount() == 0) {
-            dao.upsertCategories(CategoryRules.defaults.mapIndexed { i, c -> CategoryEntity(c.id, c.name, i) })
-        }
+        // Seeds categories on first run, and adds default categories introduced by later versions.
+        val have = dao.allCategories()
+        val missingCats = CategoryRules.defaults.withIndex()
+            .filter { (_, c) -> have.none { it.id == c.id || it.name.equals(c.name, ignoreCase = true) } }
+            .map { (i, c) -> CategoryEntity(c.id, c.name, i) }
+        if (missingCats.isNotEmpty()) dao.upsertCategories(missingCats)
         val stored = dao.allRates()
         val missing = BankRules.fxToAed.filterKeys { k -> stored.none { it.currency == k } }
         if (missing.isNotEmpty()) {
@@ -68,6 +71,10 @@ class Repository(private val db: AppDatabase) {
         // Learned rule: same text and amount for generic debits and transfers, otherwise the merchant.
         dao.ruleFor(CategoryRules.learningKey(merchant, amountMinor, type))?.let { return it }
         if (type == TxnType.TRANSFER_OUT) return null // transfers are only categorised when you choose it
+        if (type == TxnType.TRANSFER_IN) {
+            // Money in: salary is recognised, anything else only when you choose it.
+            return if (Regex("SALARY", RegexOption.IGNORE_CASE).containsMatchIn(merchant)) CategoryRules.INCOME else null
+        }
         if (merchantKey.isNotEmpty()) dao.ruleFor(merchantKey)?.let { return it }
         return CategoryRules.guess(merchant, type)
     }
@@ -286,7 +293,8 @@ class Repository(private val db: AppDatabase) {
     }
 
     suspend fun addCategory(name: String): Long {
-        val id = dao.maxCategoryId() + 1
+        // Your own categories use ids below 100 (101+ are reserved for built-in ones added later).
+        val id = (dao.allCategories().map { it.id }.filter { it < 100 }.maxOrNull() ?: 0L) + 1
         dao.upsertCategories(listOf(CategoryEntity(id, name.trim(), id.toInt())))
         return id
     }
@@ -351,12 +359,61 @@ class Repository(private val db: AppDatabase) {
                     smsId = null, source = "MANUAL", timestamp = ts, bank = card.bank, cardLast4 = card.last4, cardKey = card.cardKey,
                     merchant = l.description, amountMinor = l.amountMinor, currency = BankRules.BASE_CURRENCY, amountAedMinor = l.amountMinor,
                     fxEstimated = false, type = type.name, merchantKey = key,
-                    categoryId = resolveCategory(null, key, l.description, type, l.amountMinor), note = "From statement PDF",
+                    categoryId = if (card.owner == CardOwner.FAMILY && type == TxnType.PURCHASE) CategoryRules.FAMILY
+                        else resolveCategory(null, key, l.description, type, l.amountMinor),
+                    categoryUserSet = card.owner == CardOwner.FAMILY && type == TxnType.PURCHASE,
+                    note = "From statement PDF",
                 ),
             )
             added++
         }
         added
+    }
+
+    /** Creates a card you add from a statement PDF (e.g. your wife's), or returns the existing one. */
+    suspend fun ensureStatementCard(bank: String, last4: String, family: Boolean, nickname: String?): String {
+        val key = cardKeyOf(bank.trim(), last4)
+        ensureCard(key, bank.trim(), last4, CardType.CREDIT)
+        if (family) dao.setCardOwner(key, CardOwner.FAMILY)
+        if (!nickname.isNullOrBlank()) {
+            val c = dao.allCards().first { it.cardKey == key }
+            dao.updateCardProfile(key, nickname.trim(), c.creditLimitMinor, c.statementDay, c.dueDay, c.remindersEnabled)
+        }
+        return key
+    }
+
+    suspend fun setCardOwner(key: String, family: Boolean) = db.withTransaction {
+        dao.setCardOwner(key, if (family) CardOwner.FAMILY else null)
+        Unit
+    }
+
+    /**
+     * Saves the key figures read from a statement PDF: credit limit, statement / due day, and (when no SMS statement
+     * with that due date exists) the statement itself so it shows in Payments due. Returns what was saved.
+     */
+    suspend fun applyStatementSummary(cardKey: String, s: com.junaid.cardtracker.core.StatementSummary, receivedAt: Long): List<String> = db.withTransaction {
+        val card = dao.allCards().firstOrNull { it.cardKey == cardKey } ?: return@withTransaction emptyList()
+        val done = mutableListOf<String>()
+        s.creditLimitMinor?.takeIf { it > 0 }?.let { dao.setCreditLimit(cardKey, it); done += "credit limit" }
+        val sd = s.statementDate?.dayOfMonth
+        val dd = s.dueDate?.dayOfMonth
+        if (sd != null || dd != null) {
+            dao.updateCardProfile(cardKey, card.nickname, s.creditLimitMinor ?: card.creditLimitMinor, sd ?: card.statementDay, dd ?: card.dueDay, card.remindersEnabled)
+            done += "statement / due day"
+        }
+        val due = s.dueDate
+        val total = s.totalDueMinor
+        if (due != null && total != null && dao.countStatements(cardKey, due.toEpochDay()) == 0) {
+            dao.insertStatement(
+                StatementEntity(
+                    smsId = 0, receivedAt = receivedAt, bank = card.bank, cardLast4 = card.last4, cardKey = cardKey,
+                    balanceMinor = total, minimumDueMinor = s.minimumDueMinor, currency = BankRules.BASE_CURRENCY,
+                    dueDateEpochDay = due.toEpochDay(), statementDateEpochDay = s.statementDate?.toEpochDay(),
+                ),
+            )
+            done += "statement for due date ${due}"
+        }
+        done
     }
 
     /** Pre-fills each card's statement day and due day from its statement SMS of the last 30 days (never overwrites yours). */

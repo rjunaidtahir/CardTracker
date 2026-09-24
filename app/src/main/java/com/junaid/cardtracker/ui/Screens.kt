@@ -395,7 +395,7 @@ private fun TransactionRow(
     }
     val spendType = t.type == TxnType.PURCHASE.name || t.type == TxnType.REFUND.name
     // Money leaving an account (transfers, EMIs by transfer) can be given a category too.
-    val canCategorise = spendType || t.type == TxnType.TRANSFER_OUT.name
+    val canCategorise = spendType || t.type == TxnType.TRANSFER_OUT.name || t.type == TxnType.TRANSFER_IN.name
     var raw by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(expanded) { if (expanded && raw == null && t.smsId != null) raw = vm.rawSms(t.smsId) }
     val (icon, color) = t.visual()
@@ -407,13 +407,13 @@ private fun TransactionRow(
             .clip(RoundedCornerShape(18.dp))
             .background(if (expanded) Ink.surfaceHigh else Ink.surface)
             .clickable { expanded = !expanded }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(icon, if (counted) color else Ink.faint)
-            Spacer(Modifier.width(12.dp))
+            IconBadge(icon, if (counted) color else Ink.faint, 34.dp)
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(t.merchant, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(t.merchant, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 val card = t.cardKey?.let { cardNames[it] ?: it } ?: if (t.cardLast4 != null) "${t.bank} ·${t.cardLast4}" else t.bank
                 val kind = when (t.type) {
                     TxnType.REFUND.name -> "Refund"
@@ -424,11 +424,11 @@ private fun TransactionRow(
                 }
                 val first = when {
                     t.type == TxnType.PURCHASE.name -> t.categoryId?.let { catNames[it] } ?: "Uncategorised"
-                    t.type == TxnType.TRANSFER_OUT.name && t.categoryId != null -> "${catNames[t.categoryId] ?: ""} · ${kind ?: ""}"
+                    (t.type == TxnType.TRANSFER_OUT.name || t.type == TxnType.TRANSFER_IN.name) && t.categoryId != null -> "${catNames[t.categoryId] ?: ""} · ${kind ?: ""}"
                     else -> kind ?: ""
                 }
                 val tags = listOfNotNull(first.ifBlank { null }, card, if (t.source == "MANUAL") "typed" else null, if (!counted) "not counted" else null)
-                Text(tags.joinToString(" • "), style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(tags.joinToString(" • "), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -440,11 +440,11 @@ private fun TransactionRow(
                 }
                 // AED amounts without the "AED" prefix (everything is AED unless shown), so the row stays on one line.
                 val amountText = if (t.currency == "AED") fmtAmount(t.amountMinor) else fmtMoney(t.amountMinor, t.currency)
-                Text((if (out) "−" else "+") + amountText, color = amtColor, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+                Text((if (out) "−" else "+") + amountText, color = amtColor, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 Text(
                     if (t.currency != "AED") (t.amountAedMinor?.let { "≈ " + fmtMoney(it) } ?: "no AED rate")
                     else Instant.ofEpochMilli(t.timestamp).atZone(ZoneId.systemDefault()).format(timeFmt),
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
                     color = Ink.faint,
                     maxLines = 1,
                     softWrap = false,
@@ -490,6 +490,7 @@ fun CardsScreen(
     onOpenCard: (String) -> Unit,
     onToggleCounted: (String, Boolean) -> Unit,
     onReorder: (List<String>) -> Unit,
+    onImportStatement: () -> Unit = {},
 ) {
     val periodLabel = period.label()
     var arranging by rememberSaveable { mutableStateOf(false) }
@@ -503,6 +504,8 @@ fun CardsScreen(
             item { Text("Cards appear here after your first Sync.", color = Ink.muted) }
         }
         if (!arranging) {
+            val unbilled = summaries.filter { it.sinceStatementStart != null && it.card.countInSpending }
+            if (unbilled.isNotEmpty()) item { SinceStatementPanel(unbilled, onOpenCard) }
             if (withLimit.isNotEmpty()) {
                 item { BalancesPanel(withLimit) }
             } else if (summaries.any { it.card.cardType == CardTypes.CREDIT }) {
@@ -522,6 +525,7 @@ fun CardsScreen(
                     if (arranging) {
                         Button(onClick = { arranging = false }, shape = RoundedCornerShape(50)) { Text("Done") }
                     } else {
+                        IconButton(onClick = onImportStatement) { Icon(Icons.Filled.PictureAsPdf, "Check a statement PDF from any bank", tint = Ink.text) }
                         OutlinedButton(onClick = { arranging = true }, shape = RoundedCornerShape(50)) {
                             Icon(Icons.Filled.DragHandle, null, Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
@@ -631,7 +635,7 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
         Row(verticalAlignment = Alignment.CenterVertically) {
             BankBadge(c.bank, onDarkCard = onPicture || art.lightText)
             Spacer(Modifier.width(8.dp))
-            Eyebrow(typeLabel(c.cardType), color = fgMuted, modifier = Modifier.weight(1f))
+            Eyebrow(typeLabel(c.cardType) + if (c.owner == com.junaid.cardtracker.data.CardOwner.FAMILY) " · family" else "", color = fgMuted, modifier = Modifier.weight(1f))
             if (onToggle != null) {
                 Switch(
                     checked = c.countInSpending, onCheckedChange = onToggle,
@@ -661,6 +665,10 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
                         "${s.monthTxnCount} txns" + (if (s.monthPaidInMinor > 0) " · paid in ${fmtMoney(s.monthPaidInMinor)}" else "") + if (c.countInSpending) "" else " · not in totals",
                         style = MaterialTheme.typography.bodySmall, color = fgMuted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
+                    s.sinceStatementStart?.let { d ->
+                        Text("Since statement (${d.format(dateFmt)}): ${fmtMoney(s.sinceStatementMinor)}", style = MaterialTheme.typography.bodySmall,
+                            color = fg, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -686,6 +694,27 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
             }
         }
     }
+    }
+}
+
+/** Spend on each credit card since its last statement: what goes on the next one. */
+@Composable
+private fun SinceStatementPanel(cards: List<CardSummary>, onOpenCard: (String) -> Unit) {
+    Panel(Modifier.fillMaxWidth()) {
+        Eyebrow("Since last statement")
+        Text(fmtMoney(cards.sumOf { it.sinceStatementMinor }), style = MaterialTheme.typography.headlineMedium, color = Ink.green, maxLines = 1)
+        Text("Spent on your credit cards since each card's last statement (goes on the next one).", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        cards.sortedByDescending { it.sinceStatementMinor }.forEach { s ->
+            Row(Modifier.fillMaxWidth().clickable { onOpenCard(s.card.cardKey) }.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                CardThumb(s.card, 44.dp, 28.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(CardArts.displayName(s.card), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("since ${s.sinceStatementStart?.format(dateFmt)} · ${s.sinceStatementCount} spends", style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1)
+                }
+                Text(fmtAmount(s.sinceStatementMinor), fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            }
+        }
     }
 }
 
@@ -791,6 +820,8 @@ fun CardDetailScreen(
     onSetTheme: (String?) -> Unit = {},
     onPickImage: () -> Unit = {},
     onCheckStatement: () -> Unit = {},
+    onShowSinceStatement: (LocalDate) -> Unit = {},
+    onSetFamily: (Boolean) -> Unit = {},
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -820,6 +851,21 @@ fun CardDetailScreen(
                 Button(onClick = onShowTransactions, shape = RoundedCornerShape(50)) { Text("Transactions", maxLines = 1) }
                 OutlinedButton(onClick = onCheckStatement, shape = RoundedCornerShape(50)) {
                     Icon(Icons.Filled.PictureAsPdf, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Check statement", maxLines = 1)
+                }
+            }
+        }
+        // --- usage since the last statement
+        summary.sinceStatementStart?.let { start ->
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Eyebrow("Since last statement · ${start.format(dateFmt)} to today")
+                    Text(fmtMoney(summary.sinceStatementMinor), style = MaterialTheme.typography.headlineSmall, color = Ink.green, maxLines = 1)
+                    Text(
+                        "${summary.sinceStatementCount} spends, will appear on the next statement" +
+                            (c.creditLimitMinor?.let { l -> " · ${if (l > 0) summary.sinceStatementMinor * 100 / l else 0}% of your limit" } ?: ""),
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted,
+                    )
+                    TextButton(onClick = { onShowSinceStatement(start) }) { Text("Show these transactions") }
                 }
             }
         }
@@ -941,6 +987,14 @@ fun CardDetailScreen(
                         )
                     }
                     Switch(checked = c.countInSpending, onCheckedChange = onToggleCounted)
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Someone else's card I pay for", style = MaterialTheme.typography.titleSmall)
+                        Text("e.g. your wife's card. Its spends from statement PDFs go to the \"Family\" category.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                    }
+                    Switch(checked = c.owner == com.junaid.cardtracker.data.CardOwner.FAMILY, onCheckedChange = onSetFamily)
                 }
             }
         }
@@ -1141,7 +1195,7 @@ fun SettingsScreen(
         item { HorizontalDivider() }
         item {
             Text(
-                "Card Tracker $versionName · all data stays on this phone",
+                "RJ's Financials Tracker $versionName · all data stays on this phone",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

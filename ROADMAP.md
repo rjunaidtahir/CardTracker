@@ -87,6 +87,13 @@ v1.1 includes every phase below plus the redesign. Keep adding to this file for 
 - Card statement / due day auto-filled from statement SMS of the last 30 days (`CardDays`).
 - Transactions tab: amounts without the AED prefix, single-line rows, summary as stat chips.
 
+## v1.5 (done)
+
+- Renamed to RJ's Financials Tracker (same package id); new adaptive icon with a themed (monochrome) layer.
+- Statement PDFs: key figures (`StatementImport.summary`), saving them to the card and as a statement (`smsId = 0`, kept by Re-parse); any-bank / family cards (`cards.owner`, DB v6); Family and Salary & income categories (ids 101/102).
+- Usage since the last statement (`SinceStatement`).
+- Money in can be categorised; smaller one-line transaction rows.
+
 ## Ideas for later
 
 - A manual recurring-payments list for EMIs that don't send an SMS.

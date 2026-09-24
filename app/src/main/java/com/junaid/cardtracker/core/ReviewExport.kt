@@ -13,7 +13,7 @@ object ReviewExport {
     fun summarize(items: List<Item>, maxGroups: Int = 200, maxChars: Int = 400): String {
         val groups = items.groupBy { it.bank to shape(it.body) }.values.sortedByDescending { it.size }
         val sb = StringBuilder()
-        sb.append("Card Tracker: ${items.size} unparsed SMS in ${groups.size} formats\n\n")
+        sb.append("RJ's Financials Tracker: ${items.size} unparsed SMS in ${groups.size} formats\n\n")
         groups.take(maxGroups).forEachIndexed { i, g ->
             val ex = g.first()
             sb.append("#${i + 1} · ${ex.bank} · ${g.size}×\n")

@@ -105,7 +105,7 @@ class DueReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
             val tag = "fp:${f.id}:${java.time.YearMonth.from(today)}:$offset"
             if (tag in sent) continue
             val whenText = when (offset) { 0L -> "today"; 1L -> "tomorrow"; else -> "in $offset days" }
-            val text = "${f.name} ${fmtMoney(f.amountMinor)} is due $whenText. Mark it paid in Card Tracker once done."
+            val text = "${f.name} ${fmtMoney(f.amountMinor)} is due $whenText. Mark it paid in the app once done."
             val n = NotificationCompat.Builder(applicationContext, DueReminders.CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_card)
                 .setContentTitle("Fixed payment due")

@@ -62,4 +62,41 @@ class StatementImportTest {
         assertEquals(listOf("ADNOC"), r.missing.map { it.description })
         assertEquals(listOf(3L), r.extra.map { it.id })
     }
+
+    @Test fun summary_figures() {
+        val text = """
+            Emirates Islamic Credit Card Statement
+            Card Number 4567 XXXX XXXX 6901
+            Statement Date: 09/09/2026        Payment Due Date: 04 Oct 2026
+            Total Credit Limit AED 25,000.00   Available Credit Limit AED 18,420.50
+            Total Amount Due AED 6,579.50
+            Minimum Amount Due AED 329.00
+        """.trimIndent()
+        val s = StatementImport.summary(text)
+        assertEquals(LocalDate.of(2026, 9, 9), s.statementDate)
+        assertEquals(LocalDate.of(2026, 10, 4), s.dueDate)
+        assertEquals(2_500_000L, s.creditLimitMinor)
+        assertEquals(1_842_050L, s.availableLimitMinor)
+        assertEquals(657_950L, s.totalDueMinor)
+        assertEquals(32_900L, s.minimumDueMinor)
+        assertEquals("6901", s.cardLast4)
+        assertEquals("Emirates Islamic", s.bank)
+
+        val fab = StatementImport.summary("Amount due to avoid financial charges: 3,734.00\nMinimum Due 186.70\nDue Date 06-12-2023")
+        assertEquals(373_400L, fab.totalDueMinor)
+        assertEquals(LocalDate.of(2023, 12, 6), fab.dueDate)
+        assertTrue(StatementImport.summary("hello").isEmpty)
+    }
+
+    @Test fun since_statement() {
+        val start = SinceStatement.startDate(LocalDate.of(2026, 9, 9), LocalDate.of(2026, 9, 10))
+        assertEquals(LocalDate.of(2026, 9, 10), start)
+        val txns = listOf(
+            InsightTxn(LocalDate.of(2026, 9, 9), com.junaid.cardtracker.parser.TxnType.PURCHASE, 5000, "C", null, "a", "a", "AED", 5000),
+            InsightTxn(LocalDate.of(2026, 9, 12), com.junaid.cardtracker.parser.TxnType.PURCHASE, 7000, "C", null, "b", "b", "AED", 7000),
+            InsightTxn(LocalDate.of(2026, 9, 13), com.junaid.cardtracker.parser.TxnType.REFUND, 1000, "C", null, "c", "c", "AED", 1000),
+            InsightTxn(LocalDate.of(2026, 9, 14), com.junaid.cardtracker.parser.TxnType.PAYMENT, 9000, "C", null, "d", "d", "AED", 9000),
+        )
+        assertEquals(6000L, SinceStatement.spend(txns, start))
+    }
 }

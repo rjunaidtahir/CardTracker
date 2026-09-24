@@ -37,10 +37,10 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                 },
             ),
             "cards.csv" to Csv.write(
-                listOf("cardKey", "bank", "last4", "cardType", "countInSpending", "nickname", "creditLimitMinor", "statementDay", "dueDay", "remindersEnabled", "archived", "createdAt", "themeKey", "sortOrder"),
+                listOf("cardKey", "bank", "last4", "cardType", "countInSpending", "nickname", "creditLimitMinor", "statementDay", "dueDay", "remindersEnabled", "archived", "createdAt", "themeKey", "sortOrder", "owner"),
                 dao.allCards().map {
                     listOf(it.cardKey, it.bank, it.last4, it.cardType, it.countInSpending.toString(), it.nickname, it.creditLimitMinor?.toString(),
-                        it.statementDay?.toString(), it.dueDay?.toString(), it.remindersEnabled.toString(), it.archived.toString(), it.createdAt.toString(), it.themeKey, it.sortOrder.toString())
+                        it.statementDay?.toString(), it.dueDay?.toString(), it.remindersEnabled.toString(), it.archived.toString(), it.createdAt.toString(), it.themeKey, it.sortOrder.toString(), it.owner)
                 },
             ),
             "categories.csv" to Csv.write(
@@ -91,7 +91,7 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                 e = zip.nextEntry
             }
         }
-        require(files.containsKey("sms.csv")) { "Not a Card Tracker backup (sms.csv missing)" }
+        require(files.containsKey("sms.csv")) { "Not a backup from this app (sms.csv missing)" }
         fun Map<String, String?>.s(k: String) = this[k]
         fun Map<String, String?>.l(k: String) = this[k]?.toLongOrNull()
         fun Map<String, String?>.b(k: String) = this[k]?.toBoolean() ?: false
@@ -120,6 +120,7 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                     createdAt = r.l("createdAt") ?: System.currentTimeMillis(),
                     themeKey = r.s("themeKey"),
                     sortOrder = r.l("sortOrder")?.toInt() ?: 1000,
+                    owner = r.s("owner"),
                 )
             }?.let { dao.upsertCards(it); cards = it.size }
             files["merchant_rules.csv"]?.mapNotNull { r ->

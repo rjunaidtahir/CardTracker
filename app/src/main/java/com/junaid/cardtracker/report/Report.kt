@@ -56,7 +56,7 @@ object ReportBuilder {
     ): ReportData {
         val spent = overview.spentMinor
         return ReportData(
-            title = "Card Tracker report",
+            title = "RJ's Financials report",
             periodLabel = overview.period.label(),
             generated = LocalDateTime.now(zone).format(dateTime),
             spentMinor = spent,

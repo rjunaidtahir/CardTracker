@@ -704,7 +704,7 @@ fun AppLockGate(vm: MainViewModel, onBiometric: (() -> Unit)?, content: @Composa
         ) {
             Icon(Icons.Filled.Lock, contentDescription = null)
             Spacer(Modifier.height(12.dp))
-            Text("Card Tracker is locked", style = MaterialTheme.typography.titleLarge)
+            Text("RJ's Financials is locked", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(20.dp))
             OutlinedTextField(
                 pin, { pin = it.filter(Char::isDigit).take(8); error = null }, label = { Text("PIN") }, singleLine = true,

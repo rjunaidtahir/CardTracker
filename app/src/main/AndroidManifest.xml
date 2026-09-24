@@ -41,7 +41,7 @@
         <receiver
             android:name=".widget.SummaryWidget"
             android:exported="true"
-            android:label="Card Tracker">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
