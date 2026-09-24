@@ -337,6 +337,10 @@ interface AppDao {
     @Query("SELECT * FROM cards")
     suspend fun allCards(): List<CardEntity>
 
+    /** Fills statement / due day only where you haven't set them. */
+    @Query("UPDATE cards SET statementDay = COALESCE(statementDay, :statementDay), dueDay = COALESCE(dueDay, :dueDay) WHERE cardKey = :key")
+    suspend fun fillCardDays(key: String, statementDay: Int?, dueDay: Int)
+
     @Query("UPDATE cards SET sortOrder = :order WHERE cardKey = :key")
     suspend fun setCardOrder(key: String, order: Int)
 

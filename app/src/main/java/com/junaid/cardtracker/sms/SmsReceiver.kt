@@ -51,6 +51,7 @@ class ProcessSmsWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         val app = applicationContext as CardTrackerApp
         app.repo.ingestSms(sender, body, receivedAt, sentAt, SmsSource.LIVE)
         runCatching { Alerts.onNewTransactions(applicationContext, app.repo.drainFresh()) }
+        runCatching { app.repo.autoFillCardDays() }
         return Result.success()
     }
 }

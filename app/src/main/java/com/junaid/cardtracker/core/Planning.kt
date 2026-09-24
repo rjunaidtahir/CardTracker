@@ -78,3 +78,22 @@ object AlertRules {
     /** Only alert for recent transactions, so the first Sync of an old inbox doesn't flood you. */
     fun isFresh(timestamp: Long, now: Long): Boolean = timestamp in (now - DAY_MS)..(now + 60 * 60 * 1000L)
 }
+
+/** Statement day and due day of a card, read from its latest statement SMS. */
+object CardDays {
+    data class Days(val statementDay: Int?, val dueDay: Int, val fromDate: LocalDate)
+
+    /**
+     * Days from the newest statement received in the last [withinDays] days, or null if none.
+     * The statement day is the statement date when the SMS gives one; otherwise the day the SMS arrived
+     * (banks send the statement SMS on the statement date).
+     */
+    fun fromStatements(
+        statements: List<Triple<LocalDate?, LocalDate, LocalDate>>, // statementDate, dueDate, receivedDate
+        today: LocalDate,
+        withinDays: Long = 30,
+    ): Days? {
+        val recent = statements.filter { ChronoUnit.DAYS.between(it.third, today) in 0..withinDays }.maxByOrNull { it.third } ?: return null
+        return Days((recent.first ?: recent.third).dayOfMonth, recent.second.dayOfMonth, recent.third)
+    }
+}

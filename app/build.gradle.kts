@@ -13,8 +13,8 @@ android {
         applicationId = "com.junaid.cardtracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.3"
+        versionCode = 11
+        versionName = "1.4"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.
@@ -72,6 +72,9 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
+
+    // Reads the text of bank statement PDFs (incl. password-protected ones) for "Check against statement".
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 
     // App lock (fingerprint / face). BiometricPrompt needs a FragmentActivity.
     implementation("androidx.biometric:biometric:1.1.0")

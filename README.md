@@ -81,8 +81,10 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - Each card is drawn in **its own look** (modelled on your Samsung Wallet cards, with a small bank-name badge and Visa / Mastercard label), showing spend or account net for the period, available limit or balance, the latest statement and its paid/due status, and the **Show & count** switch.
   - **Arrange:** tap Arrange and drag the handles to put your most-used cards on top. The order is used everywhere.
   - **Your own card picture:** open a card → **Use my picture** and pick an image (for example a screenshot of the card from Samsung Wallet or the bank's website, cropped to the card). The figures sit on a soft shade so they stay readable. Pictures stay on the phone and aren't part of backups.
+  - The profile's **statement day and due day** fill in automatically from a statement SMS received in the last 30 days (you can still change them; your own values are never overwritten).
   - Tap a card for its profile: a **card look picker** (Automatic, your cards' looks, bank colours and general looks), a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
 - **Fixed payments** (Overview → Manage, or Settings): add name, amount, day of month, category and the card it's paid from. Reminders 3 days before, the day before and on the day (with Due-date reminders on). **Mark paid** adds it to your transactions so it counts in spending and budgets. If a bank SMS this month shows the same amount (within 5%) from the chosen card or account, it is marked paid automatically and no reminder is sent.
+- **Check statement** (open a card → Check statement): pick the bank's statement PDF (password-protected ones work; enter the password when asked). The app reads it on the phone and shows **Matched**, **Missing in app** (tick and **Add** them as typed entries on that card) and **Only in app** (pending, duplicates or reversals to check). If a bank's layout isn't recognised, **Share extracted text** so a rule can be added.
 - **Export report** (share icon at the top of Overview and Transactions, or Settings): a **PDF** of the selected period with the summary, category chart, budgets, cards, top merchants and every transaction, or the same as a **CSV** for Excel.
 - **Review:** unparsed SMS, with **Share unparsed SMS**.
 - **Settings:**
@@ -91,6 +93,11 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - **App lock:** PIN plus fingerprint/face, re-lock after immediately / 1 / 5 / 15 min.
   - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
 - **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
+
+## After installing v1.4
+
+1. Open a card → **Check statement** → choose last month's statement PDF.
+2. Statement and due days on each card fill in by themselves after the next Sync.
 
 ## After installing v1.3
 

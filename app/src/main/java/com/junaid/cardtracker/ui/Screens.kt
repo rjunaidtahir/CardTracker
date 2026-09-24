@@ -1,9 +1,12 @@
 package com.junaid.cardtracker.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -106,6 +109,9 @@ import java.util.Locale
 private val moneyFmt = ThreadLocal.withInitial { DecimalFormat("#,##0.00", DecimalFormatSymbols(Locale.ENGLISH)) }
 fun fmtMoney(minor: Long, currency: String = "AED") = "$currency ${moneyFmt.get()!!.format(Money.fromMinor(minor))}"
 
+/** 1,234.56 without a currency. */
+fun fmtAmount(minor: Long): String = moneyFmt.get()!!.format(Money.fromMinor(minor))
+
 private val dateTimeFmt = DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.ENGLISH)
 val dateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
 val monthFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
@@ -158,19 +164,19 @@ fun TransactionsScreen(
                     if (syncing) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Ink.onAccent)
                     else Icon(Icons.Filled.Refresh, contentDescription = null, Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(if (syncing) "Syncing…" else "Sync")
+                    Text(if (syncing) "Syncing…" else "Sync", maxLines = 1, softWrap = false)
                 }
                 OutlinedButton(onClick = { adding = true }, shape = RoundedCornerShape(50)) {
                     Icon(Icons.Filled.Add, contentDescription = null, Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Add")
+                    Text("Add", maxLines = 1, softWrap = false)
                 }
                 Column(Modifier.weight(1f)) {
                     Text(
                         if (lastSyncAt == null) "Never synced" else "Synced ${fmtDateTime(lastSyncAt)}",
-                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1,
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    Text(if (liveOn) "Live listening on" else "Live listening off", style = MaterialTheme.typography.bodySmall, color = Ink.faint, maxLines = 1)
+                    Text(if (liveOn) "Live on" else "Live off", style = MaterialTheme.typography.bodySmall, color = Ink.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -244,9 +250,9 @@ fun TransactionsScreen(
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         when (day) { today -> "Today"; today.minusDays(1) -> "Yesterday"; else -> day.format(dayHeaderFmt) },
-                        style = MaterialTheme.typography.labelLarge, color = Ink.muted, modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelLarge, color = Ink.muted, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    if (daySpend != 0L) Text(fmtMoney(daySpend), style = MaterialTheme.typography.labelLarge, color = Ink.faint)
+                    if (daySpend != 0L) Text(fmtMoney(daySpend), style = MaterialTheme.typography.labelLarge, color = Ink.faint, maxLines = 1, softWrap = false)
                 }
             }
             items(list, key = { it.id }) { t ->
@@ -278,8 +284,8 @@ private fun AccountSummary(account: CardEntity, txns: List<TransactionEntity>) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            "${txns.size} transactions · " + if (account.countInSpending) "counted as spending: ${fmtMoney(spend)} (EMIs, bills, ATM)"
-            else "not counted in spending (switch on in Cards to include EMIs, bills and ATM)",
+            "${txns.size} transactions · " + if (account.countInSpending) "counted as spending: ${fmtMoney(spend)}"
+            else "not counted in spending",
             style = MaterialTheme.typography.bodySmall,
             color = Ink.muted,
         )
@@ -297,10 +303,15 @@ private fun FlowTile(label: String, minor: Long, icon: androidx.compose.ui.graph
             Eyebrow(label, color = color)
         }
         Spacer(Modifier.height(4.dp))
-        Text(fmtMoney(minor), style = MaterialTheme.typography.titleMedium, color = Ink.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        val text = fmtMoney(minor)
+        Text(
+            text, style = if (text.length <= 13) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
+            color = Ink.text, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun SpendSummary(txns: List<TransactionEntity>, excluded: Set<String>) {
     val spend = spendingTotal(txns, excluded)
@@ -312,11 +323,27 @@ private fun SpendSummary(txns: List<TransactionEntity>, excluded: Set<String>) {
     Panel(Modifier.fillMaxWidth()) {
         Eyebrow("Spent")
         Text(fmtMoney(spend), style = MaterialTheme.typography.headlineMedium, color = Ink.green, maxLines = 1)
-        val extra = mutableListOf("${txns.size} transactions")
-        if (payments > 0) extra += "card payments ${fmtMoney(payments)}"
-        if (moneyIn > 0 || moneyOut > 0) extra += "account in ${fmtMoney(moneyIn)} / out ${fmtMoney(moneyOut)}"
-        if (notCounted > 0) extra += "some cards switched off (not in total)"
-        Text(extra.joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        Spacer(Modifier.height(8.dp))
+        // Small stat chips instead of one long sentence, so nothing is squeezed onto a half-empty second line.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            StatChip("Transactions", txns.size.toString())
+            if (payments > 0) StatChip("Card payments", fmtMoney(payments))
+            if (moneyIn > 0) StatChip("Account in", fmtMoney(moneyIn))
+            if (moneyOut > 0) StatChip("Account out", fmtMoney(moneyOut))
+            if (notCounted > 0) StatChip("Not in total", "$notCounted txns")
+        }
+    }
+}
+
+@Composable
+private fun StatChip(label: String, value: String) {
+    Row(
+        Modifier.clip(RoundedCornerShape(10.dp)).background(Ink.surfaceHigh).padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Ink.muted, maxLines = 1, softWrap = false)
+        Spacer(Modifier.width(6.dp))
+        Text(value, style = MaterialTheme.typography.labelLarge, color = Ink.text, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 
@@ -411,12 +438,16 @@ private fun TransactionRow(
                     out -> Ink.text
                     else -> Ink.green
                 }
-                Text((if (out) "−" else "+") + fmtMoney(t.amountMinor, t.currency), color = amtColor, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                // AED amounts without the "AED" prefix (everything is AED unless shown), so the row stays on one line.
+                val amountText = if (t.currency == "AED") fmtAmount(t.amountMinor) else fmtMoney(t.amountMinor, t.currency)
+                Text((if (out) "−" else "+") + amountText, color = amtColor, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 Text(
                     if (t.currency != "AED") (t.amountAedMinor?.let { "≈ " + fmtMoney(it) } ?: "no AED rate")
                     else Instant.ofEpochMilli(t.timestamp).atZone(ZoneId.systemDefault()).format(timeFmt),
                     style = MaterialTheme.typography.bodySmall,
                     color = Ink.faint,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             }
         }
@@ -759,6 +790,7 @@ fun CardDetailScreen(
     onSaveProfile: (nickname: String, limit: String, statementDay: String, dueDay: String, reminders: Boolean) -> Unit,
     onSetTheme: (String?) -> Unit = {},
     onPickImage: () -> Unit = {},
+    onCheckStatement: () -> Unit = {},
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -767,15 +799,28 @@ fun CardDetailScreen(
     val c = summary.card
     var nickname by rememberSaveable(c.cardKey) { mutableStateOf(c.nickname ?: "") }
     var limit by rememberSaveable(c.cardKey) { mutableStateOf(c.creditLimitMinor?.let { Money.fromMinor(it).toPlainString() } ?: "") }
-    var statementDay by rememberSaveable(c.cardKey) { mutableStateOf(c.statementDay?.toString() ?: "") }
-    var dueDay by rememberSaveable(c.cardKey) { mutableStateOf(c.dueDay?.toString() ?: "") }
+    // Pre-filled from the statement SMS of the last 30 days when you haven't set them; you can still change them.
+    val fromSms = remember(summary.latestStatement?.id) {
+        summary.latestStatement?.let { st ->
+            val received = Instant.ofEpochMilli(st.receivedAt).atZone(ZoneId.systemDefault()).toLocalDate()
+            com.junaid.cardtracker.core.CardDays.fromStatements(
+                listOf(Triple(st.statementDateEpochDay?.let { LocalDate.ofEpochDay(it) }, LocalDate.ofEpochDay(st.dueDateEpochDay), received)),
+                LocalDate.now(),
+            )
+        }
+    }
+    var statementDay by rememberSaveable(c.cardKey, c.statementDay) { mutableStateOf((c.statementDay ?: fromSms?.statementDay)?.toString() ?: "") }
+    var dueDay by rememberSaveable(c.cardKey, c.dueDay) { mutableStateOf((c.dueDay ?: fromSms?.dueDay)?.toString() ?: "") }
     var reminders by rememberSaveable(c.cardKey) { mutableStateOf(c.remindersEnabled) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { CardTile(summary, periodLabel, onClick = null, onToggle = null) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onShowTransactions, shape = RoundedCornerShape(50)) { Text("Show transactions") }
+                Button(onClick = onShowTransactions, shape = RoundedCornerShape(50)) { Text("Transactions", maxLines = 1) }
+                OutlinedButton(onClick = onCheckStatement, shape = RoundedCornerShape(50)) {
+                    Icon(Icons.Filled.PictureAsPdf, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Check statement", maxLines = 1)
+                }
             }
         }
         // --- balance history
@@ -916,6 +961,14 @@ fun CardDetailScreen(
                         OutlinedTextField(
                             dueDay, { dueDay = it }, label = { Text("Due day") }, singleLine = true, modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        )
+                    }
+                    fromSms?.let { d ->
+                        val same = statementDay == d.statementDay?.toString() && dueDay == d.dueDay.toString()
+                        Text(
+                            if (same) "Filled from the statement SMS of ${d.fromDate.format(dateFmt)}. Change them if needed."
+                            else "Statement SMS of ${d.fromDate.format(dateFmt)} says: statement day ${d.statementDay ?: "?"}, due day ${d.dueDay}.",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {

@@ -81,6 +81,12 @@ v1.1 includes every phase below plus the redesign. Keep adding to this file for 
 - Categories on money-out transactions; amount-specific learning for generic texts (`CategoryRules.learningKey`).
 - Recurring detection includes account debits and categorised transfers; "Track as fixed payment"; fixed payments auto-marked paid from SMS (`FixedSchedule.autoPaid`).
 
+## v1.4 (done)
+
+- Statement PDF check: text via PdfBox-Android (`report/PdfText.kt`), parsing and matching in `core/StatementImport.kt` (tests), screen `ui/StatementCheckScreen.kt`.
+- Card statement / due day auto-filled from statement SMS of the last 30 days (`CardDays`).
+- Transactions tab: amounts without the AED prefix, single-line rows, summary as stat chips.
+
 ## Ideas for later
 
 - A manual recurring-payments list for EMIs that don't send an SMS.

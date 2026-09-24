@@ -77,4 +77,17 @@ class PlanningTest {
         assertEquals(LocalDate.of(2026, 10, 1), r[0].nextExpected)
         assertTrue(Insights.recurring(dates.map { t(it, TxnType.TRANSFER_OUT, null) }, today).isEmpty())
     }
+
+    @Test fun card_days_from_statement() {
+        val st = listOf(
+            Triple(LocalDate.of(2026, 9, 9), LocalDate.of(2026, 10, 3), LocalDate.of(2026, 9, 10)),
+            Triple(null, LocalDate.of(2026, 8, 14), LocalDate.of(2026, 7, 20)), // too old
+        )
+        val d = CardDays.fromStatements(st, today)!!
+        assertEquals(9, d.statementDay)
+        assertEquals(3, d.dueDay)
+        val noDate = CardDays.fromStatements(listOf(Triple(null, LocalDate.of(2026, 10, 14), LocalDate.of(2026, 9, 20))), today)!!
+        assertEquals(20, noDate.statementDay)
+        assertNull(CardDays.fromStatements(listOf(st[1]), today))
+    }
 }

@@ -31,6 +31,7 @@ class SmsSync(private val context: Context, private val repo: Repository, privat
             }
             prefs.lastSyncAt = startedAt // only reached if everything above succeeded
             runCatching { Alerts.onNewTransactions(context, repo.drainFresh()) }
+            runCatching { repo.autoFillCardDays() }
             SyncResult.of(outcomes)
         }
     }

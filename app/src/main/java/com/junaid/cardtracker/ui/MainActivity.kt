@@ -279,6 +279,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                             is Route.CardDetail -> "Card"
                             Route.Rates -> "Exchange rates"
                             Route.FixedPayments -> "Fixed payments"
+                            is Route.StatementCheck -> "Check statement"
                         },
                         fontWeight = FontWeight.Bold,
                     )
@@ -376,6 +377,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     onShowTransactions = { vm.selectCategory(null); vm.selectCard(route.cardKey); nav.selectTab(Tab.TRANSACTIONS) },
                     onSaveProfile = { n, l, sd, dd, r -> vm.saveCardProfile(route.cardKey, n, l, sd, dd, r) },
                     onSetTheme = { vm.setCardTheme(route.cardKey, it) },
+                    onCheckStatement = { vm.startStatementCheck(route.cardKey); nav.push(Route.StatementCheck(route.cardKey)) },
                     onPickImage = {
                         pickingFor = route.cardKey
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -383,6 +385,9 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 )
                 Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
                 Route.FixedPayments -> FixedPaymentsScreen(vm)
+                is Route.StatementCheck -> StatementCheckScreen(
+                    vm, cardName = cards.firstOrNull { it.cardKey == route.cardKey }?.let { CardArts.displayName(it) } ?: route.cardKey,
+                )
             }
         }
     }

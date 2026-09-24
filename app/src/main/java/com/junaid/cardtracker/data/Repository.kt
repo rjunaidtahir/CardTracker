@@ -46,6 +46,7 @@ class Repository(private val db: AppDatabase) {
             dao.upsertRates(missing.map { (c, r) -> FxRateEntity(c, r.toPlainString(), System.currentTimeMillis()) })
         }
         loadRates()
+        runCatching { autoFillCardDays() }
         // Transactions created before categories existed (v0.4 and earlier).
         for (t in dao.txnsWithoutMerchantKey()) {
             val key = CategoryRules.merchantKey(t.merchant)
@@ -325,6 +326,55 @@ class Repository(private val db: AppDatabase) {
     /** Saves the Cards-tab order: [keys] top to bottom. */
     suspend fun setCardOrder(keys: List<String>) = db.withTransaction {
         keys.forEachIndexed { i, k -> dao.setCardOrder(k, i) }
+    }
+
+    /**
+     * Adds statement lines that were missing from the app as typed entries on [cardKey] (kept in backups,
+     * untouched by Re-parse). Spends become purchases; credits become card payments / refunds (cards) or money in (accounts).
+     */
+    suspend fun addStatementLines(cardKey: String, lines: List<com.junaid.cardtracker.core.StatementLine>): Int = db.withTransaction {
+        val card = dao.allCards().firstOrNull { it.cardKey == cardKey } ?: return@withTransaction 0
+        val zone = java.time.ZoneId.systemDefault()
+        var added = 0
+        for (l in lines) {
+            val type = when {
+                !l.isCredit -> TxnType.PURCHASE
+                card.cardType == CardTypes.ACCOUNT -> TxnType.TRANSFER_IN
+                Regex("PAYMENT|THANK YOU", RegexOption.IGNORE_CASE).containsMatchIn(l.description) -> TxnType.PAYMENT
+                else -> TxnType.REFUND
+            }
+            val ts = l.date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+            if (dao.countManual(ts, l.amountMinor, l.description) > 0) continue
+            val key = CategoryRules.merchantKey(l.description)
+            dao.insertTxn(
+                TransactionEntity(
+                    smsId = null, source = "MANUAL", timestamp = ts, bank = card.bank, cardLast4 = card.last4, cardKey = card.cardKey,
+                    merchant = l.description, amountMinor = l.amountMinor, currency = BankRules.BASE_CURRENCY, amountAedMinor = l.amountMinor,
+                    fxEstimated = false, type = type.name, merchantKey = key,
+                    categoryId = resolveCategory(null, key, l.description, type, l.amountMinor), note = "From statement PDF",
+                ),
+            )
+            added++
+        }
+        added
+    }
+
+    /** Pre-fills each card's statement day and due day from its statement SMS of the last 30 days (never overwrites yours). */
+    suspend fun autoFillCardDays(today: java.time.LocalDate = java.time.LocalDate.now()) {
+        val zone = java.time.ZoneId.systemDefault()
+        val byCard = dao.allStatements().groupBy { it.cardKey }
+        for (c in dao.allCards()) {
+            if (c.statementDay != null && c.dueDay != null) continue
+            val list = byCard[c.cardKey].orEmpty().map {
+                Triple(
+                    it.statementDateEpochDay?.let { d -> java.time.LocalDate.ofEpochDay(d) },
+                    java.time.LocalDate.ofEpochDay(it.dueDateEpochDay),
+                    java.time.Instant.ofEpochMilli(it.receivedAt).atZone(zone).toLocalDate(),
+                )
+            }
+            val days = com.junaid.cardtracker.core.CardDays.fromStatements(list, today) ?: continue
+            dao.fillCardDays(c.cardKey, days.statementDay, days.dueDay)
+        }
     }
 
     suspend fun setCardTheme(key: String, theme: String?) = dao.setCardTheme(key, theme)
