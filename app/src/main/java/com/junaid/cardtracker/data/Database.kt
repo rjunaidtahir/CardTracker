@@ -422,6 +422,13 @@ interface AppDao {
     )
     suspend fun applyRule(key: String, categoryId: Long)
 
+    /** Amount-specific rule: same text, same amount, same type (generic account debits and transfers). */
+    @Query(
+        "UPDATE transactions SET categoryId = :categoryId WHERE merchant = :merchant AND amountMinor = :amountMinor " +
+            "AND type = :type AND categoryUserSet = 0",
+    )
+    suspend fun applyRuleExact(merchant: String, amountMinor: Long, type: String, categoryId: Long)
+
     @Query("SELECT * FROM transactions WHERE merchantKey IS NULL")
     suspend fun txnsWithoutMerchantKey(): List<TransactionEntity>
 

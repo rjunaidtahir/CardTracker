@@ -20,6 +20,7 @@ import com.junaid.cardtracker.core.Bucket
 import com.junaid.cardtracker.core.BudgetStatus
 import com.junaid.cardtracker.core.Budgets
 import com.junaid.cardtracker.data.FixedPaymentEntity
+import com.junaid.cardtracker.data.CardTypes
 import com.junaid.cardtracker.report.ReportBuilder
 import com.junaid.cardtracker.core.RecurringPayment
 import com.junaid.cardtracker.core.ReviewExport
@@ -297,7 +298,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
 
     val overview: StateFlow<OverviewState> =
-        combine(period, periodAndPreviousTxns, recentTxns, excludedCards) { p, windowTxns, recent, excluded ->
+        combine(period, periodAndPreviousTxns, recentTxns, excludedCards, dao.cards()) { p, windowTxns, recent, excluded, cardList ->
+            // EMIs and other fixed payments usually leave a bank account, which is often switched off: still look there for recurring.
+            val accountKeys = cardList.filter { it.cardType == CardTypes.ACCOUNT }.map { it.cardKey }.toSet()
             val today = LocalDate.now(zone)
             val window = windowTxns.map { it.toInsight() }
             val inPeriod = window.filter { p.contains(it.date) }
@@ -323,7 +326,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 bucket = bucket,
                 history = Insights.byMonth(recentAll, excluded, YearMonth.now(zone), 12),
                 byCurrency = Insights.byCurrency(inPeriod, excluded),
-                recurring = Insights.recurring(recentAll.filter { it.cardKey == null || it.cardKey !in excluded || it.merchantKey.startsWith("ACCOUNT DEBIT") }, today),
+                recurring = Insights.recurring(recentAll.filter { it.cardKey == null || it.cardKey !in excluded || it.cardKey in accountKeys }, today),
                 txnCount = counted.count { it.type == TxnType.PURCHASE || it.type == TxnType.REFUND },
                 avgPerDayMinor = if (days > 0) spent / days else 0L,
                 topMerchants = counted
@@ -367,6 +370,39 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         message.value = "${f.name} marked paid and added to transactions"
         refreshWidget()
     }
+    /** Fixed payments that an SMS transaction this month already covers (same card, amount within 5%). */
+    val fixedAutoPaid: StateFlow<Set<Long>> =
+        combine(dao.fixedPayments(), recentTxns) { fixed, txns ->
+            val month = YearMonth.now(zone)
+            val monthTxns = txns.filter { it.source == "SMS" && YearMonth.from(Instant.ofEpochMilli(it.timestamp).atZone(zone)) == month }
+                .map { com.junaid.cardtracker.core.FixedSchedule.MonthTxn(it.cardKey, it.amountMinor, it.categoryId, it.txnType()) }
+            fixed.filter { com.junaid.cardtracker.core.FixedSchedule.autoPaid(it.amountMinor, it.cardKey, it.categoryId, monthTxns) }.map { it.id }.toSet()
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
+
+    /** Turns a detected recurring payment into a fixed payment: it then shows in due payments and gets reminders. */
+    fun trackRecurring(r: RecurringPayment) = viewModelScope.launch {
+        val name = r.categoryId?.let { id -> categories.value.firstOrNull { it.id == id }?.name }
+            ?.takeIf { com.junaid.cardtracker.parser.CategoryRules.isAmountSpecific(r.merchant, TxnType.PURCHASE) || r.merchantKey.startsWith("TRANSFER") || r.merchantKey.startsWith("PAYMENT") }
+            ?: r.merchant
+        val existing = fixedPayments.value.any { it.cardKey == r.cardKey && kotlin.math.abs(it.amountMinor - r.averageMinor) * 20 <= r.averageMinor }
+        if (existing) { message.value = "Already in fixed payments"; return@launch }
+        repo.saveFixedPayment(
+            FixedPaymentEntity(name = name, amountMinor = r.averageMinor, dayOfMonth = r.lastDate.dayOfMonth, categoryId = r.categoryId, cardKey = r.cardKey),
+        )
+        message.value = "$name added to fixed payments (due on day ${r.lastDate.dayOfMonth})"
+    }
+
+    /** Copies a picture you picked into the app and uses it for this card. */
+    fun setCardImage(key: String, uri: Uri) = viewModelScope.launch {
+        try {
+            val name = withContext(Dispatchers.IO) { CardImages.save(getApplication(), key, uri) }
+            repo.setCardTheme(key, CardImages.PREFIX + name)
+            message.value = "Card picture saved"
+        } catch (e: Exception) {
+            message.value = "Couldn't use that picture: ${e.message ?: e.javaClass.simpleName}"
+        }
+    }
+
     fun unmarkFixedPaid(f: FixedPaymentEntity) = viewModelScope.launch { repo.saveFixedPayment(f.copy(lastPaidYm = null)) }
 
     // ------------------------------------------------------------ look
@@ -377,7 +413,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         AppThemes.current = AppThemes.byId(id)
     }
     fun setCardOrder(keys: List<String>) = viewModelScope.launch { repo.setCardOrder(keys) }
-    fun setCardTheme(key: String, theme: String?) = viewModelScope.launch { repo.setCardTheme(key, theme) }
+    fun setCardTheme(key: String, theme: String?) = viewModelScope.launch {
+        // Picking a drawn look (or Automatic) removes your own picture file.
+        if (theme == null || !theme.startsWith(CardImages.PREFIX)) withContext(Dispatchers.IO) { CardImages.delete(getApplication(), key) }
+        repo.setCardTheme(key, theme)
+    }
 
     // ------------------------------------------------------------ alerts
     val alertsOn = MutableStateFlow(prefs.alertsEnabled)

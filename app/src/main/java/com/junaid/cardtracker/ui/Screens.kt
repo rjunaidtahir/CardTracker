@@ -3,6 +3,7 @@ package com.junaid.cardtracker.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -356,6 +357,8 @@ private fun TransactionRow(
     if (picking) {
         CategoryPickerDialog(
             merchant = t.merchant,
+            applyLabel = if (com.junaid.cardtracker.parser.CategoryRules.isAmountSpecific(t.merchant, t.txnType()))
+                "Apply to every \"${t.merchant.take(24)}\" of ${fmtMoney(t.amountMinor, t.currency)} (past and future)" else null,
             current = t.categoryId,
             categories = categories,
             onPick = { id, all -> vm.setCategory(t, id, all); picking = false },
@@ -364,6 +367,8 @@ private fun TransactionRow(
         )
     }
     val spendType = t.type == TxnType.PURCHASE.name || t.type == TxnType.REFUND.name
+    // Money leaving an account (transfers, EMIs by transfer) can be given a category too.
+    val canCategorise = spendType || t.type == TxnType.TRANSFER_OUT.name
     var raw by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(expanded) { if (expanded && raw == null && t.smsId != null) raw = vm.rawSms(t.smsId) }
     val (icon, color) = t.visual()
@@ -390,7 +395,11 @@ private fun TransactionRow(
                     TxnType.TRANSFER_OUT.name -> if (t.counterpartyKey != null) "Card payment" else "Money out"
                     else -> null
                 }
-                val first = if (spendType && t.type == TxnType.PURCHASE.name) (t.categoryId?.let { catNames[it] } ?: "Uncategorised") else (kind ?: "")
+                val first = when {
+                    t.type == TxnType.PURCHASE.name -> t.categoryId?.let { catNames[it] } ?: "Uncategorised"
+                    t.type == TxnType.TRANSFER_OUT.name && t.categoryId != null -> "${catNames[t.categoryId] ?: ""} · ${kind ?: ""}"
+                    else -> kind ?: ""
+                }
                 val tags = listOfNotNull(first.ifBlank { null }, card, if (t.source == "MANUAL") "typed" else null, if (!counted) "not counted" else null)
                 Text(tags.joinToString(" • "), style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -417,7 +426,7 @@ private fun TransactionRow(
             Spacer(Modifier.height(6.dp))
             Text(fmtDateTime(t.timestamp) + " · " + t.bank, style = MaterialTheme.typography.bodySmall, color = Ink.muted)
             t.availableLimitMinor?.let { Text("Available limit/balance after: ${fmtMoney(it)}", style = MaterialTheme.typography.bodySmall, color = Ink.muted) }
-            if (spendType) {
+            if (canCategorise) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "Category: ${t.categoryId?.let { catNames[it] } ?: "none"}" + if (t.categoryUserSet) " (set by you)" else "",
@@ -536,7 +545,7 @@ private fun ArrangeCards(cards: List<CardEntity>, onReorder: (List<String>) -> U
                         .padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    CardSwatch(art, 56.dp, 36.dp)
+                    CardThumb(c, 56.dp, 36.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(CardArts.displayName(c), style = MaterialTheme.typography.bodyLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -578,14 +587,18 @@ private fun ArrangeCards(cards: List<CardEntity>, onReorder: (List<String>) -> U
 fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onToggle: ((Boolean) -> Unit)?) {
     val c = s.card
     val art = CardArts.forCard(c)
-    val fg = art.content
-    val fgMuted = art.contentMuted
+    val image = rememberCardImage(c)
+    val onPicture = image != null
+    val fg = if (onPicture) Color.White else art.content
+    val fgMuted = if (onPicture) Color.White.copy(alpha = 0.85f) else art.contentMuted
     val shape = RoundedCornerShape(24.dp)
-    var m = Modifier.fillMaxWidth().alpha(if (c.countInSpending) 1f else 0.6f).clip(shape).cardArt(art)
+    var m = Modifier.fillMaxWidth().alpha(if (c.countInSpending) 1f else 0.6f).clip(shape)
     if (onClick != null) m = m.clickable(onClick = onClick)
-    Column(m.padding(18.dp)) {
+    Box(m) {
+    CardBackground(c, art, image)
+    Column(Modifier.fillMaxWidth().padding(18.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            BankBadge(c.bank, onDarkCard = art.lightText)
+            BankBadge(c.bank, onDarkCard = onPicture || art.lightText)
             Spacer(Modifier.width(8.dp))
             Eyebrow(typeLabel(c.cardType), color = fgMuted, modifier = Modifier.weight(1f))
             if (onToggle != null) {
@@ -641,6 +654,7 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
                 }
             }
         }
+    }
     }
 }
 
@@ -744,6 +758,7 @@ fun CardDetailScreen(
     onShowTransactions: () -> Unit,
     onSaveProfile: (nickname: String, limit: String, statementDay: String, dueDay: String, reminders: Boolean) -> Unit,
     onSetTheme: (String?) -> Unit = {},
+    onPickImage: () -> Unit = {},
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -818,7 +833,21 @@ fun CardDetailScreen(
         item {
             Panel(Modifier.fillMaxWidth()) {
                 Text("Card look", style = MaterialTheme.typography.titleSmall)
-                Text("Automatic picks the look for this card's last 4 digits, or the bank's colours.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                Text(
+                    "Best: use your own picture of the card, e.g. a screenshot of it from Samsung Wallet or the bank's website, cropped to the card. " +
+                        "Or pick a drawn look below (Automatic uses this card's last 4 digits or the bank's colours).",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.muted,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = onPickImage, shape = RoundedCornerShape(50)) {
+                        Icon(Icons.Filled.Image, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
+                        Text(if (c.themeKey?.startsWith(CardImages.PREFIX) == true) "Change picture" else "Use my picture")
+                    }
+                    if (c.themeKey?.startsWith(CardImages.PREFIX) == true) {
+                        OutlinedButton(onClick = { onSetTheme(null) }, shape = RoundedCornerShape(50)) { Text("Remove") }
+                    }
+                }
                 Spacer(Modifier.height(10.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     item {

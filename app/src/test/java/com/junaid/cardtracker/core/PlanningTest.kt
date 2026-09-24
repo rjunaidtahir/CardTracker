@@ -46,4 +46,35 @@ class PlanningTest {
         assertTrue(AlertRules.isFresh(now - 3_600_000, now))
         assertFalse(AlertRules.isFresh(now - 2 * 86_400_000L, now))
     }
+
+    @Test fun fixed_payment_auto_paid() {
+        val txns = listOf(
+            FixedSchedule.MonthTxn("FAB ·8001", 245_000, 20L, TxnType.TRANSFER_OUT),
+            FixedSchedule.MonthTxn("FAB ·8001", 10_000, null, TxnType.PURCHASE),
+        )
+        assertTrue(FixedSchedule.autoPaid(250_000, "FAB ·8001", 20L, txns)) // within 5%
+        assertFalse(FixedSchedule.autoPaid(250_000, "ENBD ·9940", 20L, txns)) // other card
+        assertFalse(FixedSchedule.autoPaid(250_000, "FAB ·8001", 11L, txns)) // other category
+        assertFalse(FixedSchedule.autoPaid(300_000, "FAB ·8001", null, txns)) // amount too far
+        assertTrue(FixedSchedule.autoPaid(10_000, null, null, txns))
+    }
+
+    @Test fun amount_specific_learning() {
+        val emi = "Account debit (EMI / direct debit)"
+        assertTrue(com.junaid.cardtracker.parser.CategoryRules.isAmountSpecific(emi, TxnType.PURCHASE))
+        assertTrue(com.junaid.cardtracker.parser.CategoryRules.isAmountSpecific("Transfer to ·2001", TxnType.TRANSFER_OUT))
+        assertFalse(com.junaid.cardtracker.parser.CategoryRules.isAmountSpecific("talabat.com", TxnType.PURCHASE))
+        assertEquals("=ACCOUNT DEBIT (EMI / DIRECT DEBIT)#250000", com.junaid.cardtracker.parser.CategoryRules.learningKey(emi, 250_000, TxnType.PURCHASE))
+        assertEquals("TALABAT COM", com.junaid.cardtracker.parser.CategoryRules.learningKey("talabat.com", 5_000, TxnType.PURCHASE))
+    }
+
+    @Test fun recurring_includes_categorised_transfers() {
+        fun t(d: LocalDate, type: TxnType, cat: Long?) = InsightTxn(d, type, 250_000, "FAB ·8001", cat, "Transfer to ·2001", "TRANSFER TO", "AED", 250_000)
+        val dates = listOf(LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 1), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1))
+        val r = Insights.recurring(dates.map { t(it, TxnType.TRANSFER_OUT, 20L) }, today)
+        assertEquals(1, r.size)
+        assertEquals(20L, r[0].categoryId)
+        assertEquals(LocalDate.of(2026, 10, 1), r[0].nextExpected)
+        assertTrue(Insights.recurring(dates.map { t(it, TxnType.TRANSFER_OUT, null) }, today).isEmpty())
+    }
 }

@@ -70,7 +70,7 @@ class DueReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         for (d in dues) {
-            if (!d.card.remindersEnabled) continue
+            if (!d.card.remindersEnabled || !d.card.countInSpending) continue
             val offset = Reminders.offsetToday(d.status) ?: continue
             val tag = "${d.statement.id}:$offset"
             if (tag in sent) continue
@@ -92,8 +92,14 @@ class DueReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
         }
         // Fixed payments you added by hand (rent, school fees...): same 3 / 1 / 0 days rhythm until marked paid.
         val today = java.time.LocalDate.now()
+        val monthStart = java.time.YearMonth.from(today).atDay(1).atStartOfDay(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val monthTxns = app.repo.dao.txnsSince(monthStart).filter { it.source == "SMS" }.map {
+            FixedSchedule.MonthTxn(it.cardKey, it.amountMinor, it.categoryId, runCatching { com.junaid.cardtracker.parser.TxnType.valueOf(it.type) }.getOrDefault(com.junaid.cardtracker.parser.TxnType.PURCHASE))
+        }
         for (f in app.repo.dao.allFixedPayments()) {
             if (!f.active || !f.remind) continue
+            // Already paid this month according to your bank SMS: no reminder.
+            if (FixedSchedule.autoPaid(f.amountMinor, f.cardKey, f.categoryId, monthTxns)) continue
             val lastPaid = f.lastPaidYm?.let { runCatching { java.time.YearMonth.parse(it) }.getOrNull() }
             val offset = FixedSchedule.reminderOffsetToday(f.dayOfMonth, today, lastPaid) ?: continue
             val tag = "fp:${f.id}:${java.time.YearMonth.from(today)}:$offset"

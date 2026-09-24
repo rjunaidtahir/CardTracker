@@ -16,6 +16,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -49,6 +50,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -173,6 +175,14 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
             Build.VERSION.SDK_INT < 33 || granted(ctx, Manifest.permission.POST_NOTIFICATIONS) -> vm.setAlerts(true)
             else -> alertsNotifyLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
+    }
+
+    // Card pictures: the system photo picker (no storage permission needed).
+    var pickingFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        val key = pickingFor
+        if (uri != null && key != null) vm.setCardImage(key, uri)
+        pickingFor = null
     }
 
     // Reports: PDF or CSV for the selected period.
@@ -366,6 +376,10 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     onShowTransactions = { vm.selectCategory(null); vm.selectCard(route.cardKey); nav.selectTab(Tab.TRANSACTIONS) },
                     onSaveProfile = { n, l, sd, dd, r -> vm.saveCardProfile(route.cardKey, n, l, sd, dd, r) },
                     onSetTheme = { vm.setCardTheme(route.cardKey, it) },
+                    onPickImage = {
+                        pickingFor = route.cardKey
+                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    },
                 )
                 Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
                 Route.FixedPayments -> FixedPaymentsScreen(vm)

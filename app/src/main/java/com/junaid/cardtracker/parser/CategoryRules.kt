@@ -80,6 +80,23 @@ object CategoryRules {
         return compiled.firstOrNull { it.second.containsMatchIn(merchant) }?.first ?: OTHER
     }
 
+    /** Generic SMS texts that say nothing about who was paid ("Account debit (EMI / direct debit)", "Outward remittance"). */
+    private val genericPrefixes = listOf("ACCOUNT DEBIT", "ACCOUNT CREDIT", "OUTWARD REMITTANCE", "INWARD REMITTANCE", "TRANSFER ADCB", "CASH DEPOSIT")
+
+    /**
+     * True when "apply to all" should only cover the same text AND the same amount: transfers, and generic
+     * account debits (your car EMI and your rent are both "Account debit", but with different amounts).
+     */
+    fun isAmountSpecific(merchant: String, type: TxnType): Boolean =
+        type == TxnType.TRANSFER_OUT || merchantKey(merchant).let { k -> genericPrefixes.any { k.startsWith(it) } }
+
+    /** Types that can carry a category. Transfers only get one when you choose it (never guessed). */
+    fun canHaveCategory(type: TxnType): Boolean = type == TxnType.PURCHASE || type == TxnType.REFUND || type == TxnType.TRANSFER_OUT
+
+    /** The key a learned "merchant = category" rule is stored under. */
+    fun learningKey(merchant: String, amountMinor: Long, type: TxnType): String =
+        if (isAmountSpecific(merchant, type)) "=" + merchant.uppercase().trim() + "#" + amountMinor else merchantKey(merchant)
+
     /**
      * Key used to learn from your corrections: letters only, first 3 words.
      * "AGODA.COM AL HAMRA R" -> "AGODA COM AL", "ADNOC ROVE HOTEL 532" -> "ADNOC ROVE HOTEL".

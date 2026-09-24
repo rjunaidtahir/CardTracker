@@ -42,6 +42,21 @@ object FixedSchedule {
     /** Days until [due] (negative = overdue). */
     fun daysLeft(due: LocalDate, today: LocalDate): Long = ChronoUnit.DAYS.between(today, due)
 
+    /** A transaction this month, reduced to what's needed to recognise a fixed payment. */
+    data class MonthTxn(val cardKey: String?, val amountMinor: Long, val categoryId: Long?, val type: TxnType)
+
+    /**
+     * True when an SMS transaction this month looks like this fixed payment: same card/account (if one is set),
+     * amount within 5%, a spend or money-out, and the same category (or none).
+     */
+    fun autoPaid(amountMinor: Long, cardKey: String?, categoryId: Long?, monthTxns: List<MonthTxn>): Boolean =
+        monthTxns.any { t ->
+            (t.type == TxnType.PURCHASE || t.type == TxnType.TRANSFER_OUT) &&
+                (cardKey == null || t.cardKey == cardKey) &&
+                kotlin.math.abs(t.amountMinor - amountMinor) * 20 <= amountMinor &&
+                (categoryId == null || t.categoryId == null || t.categoryId == categoryId)
+        }
+
     /** Reminder offset that fires today (3, 1 or 0 days before), or null. Nothing once paid. */
     fun reminderOffsetToday(dayOfMonth: Int, today: LocalDate, lastPaid: YearMonth?): Long? {
         if (paidThisMonth(lastPaid, today)) return null

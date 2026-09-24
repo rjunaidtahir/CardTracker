@@ -50,7 +50,7 @@ class Repository(private val db: AppDatabase) {
         for (t in dao.txnsWithoutMerchantKey()) {
             val key = CategoryRules.merchantKey(t.merchant)
             val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
-            val cat = if (t.categoryUserSet) t.categoryId else resolveCategory(null, key, t.merchant, type)
+            val cat = if (t.categoryUserSet) t.categoryId else resolveCategory(null, key, t.merchant, type, t.amountMinor)
             dao.setMerchantKeyAndCategory(t.id, key, cat)
         }
     }
@@ -61,9 +61,12 @@ class Repository(private val db: AppDatabase) {
     }
 
     /** Your choice for this SMS > learned merchant rule > keyword guess. */
-    private suspend fun resolveCategory(dedupKey: String?, merchantKey: String, merchant: String, type: TxnType): Long? {
-        if (type != TxnType.PURCHASE && type != TxnType.REFUND) return null
+    private suspend fun resolveCategory(dedupKey: String?, merchantKey: String, merchant: String, type: TxnType, amountMinor: Long): Long? {
+        if (!CategoryRules.canHaveCategory(type)) return null
         dedupKey?.let { dao.overrideFor(it) }?.let { return it.categoryId }
+        // Learned rule: same text and amount for generic debits and transfers, otherwise the merchant.
+        dao.ruleFor(CategoryRules.learningKey(merchant, amountMinor, type))?.let { return it }
+        if (type == TxnType.TRANSFER_OUT) return null // transfers are only categorised when you choose it
         if (merchantKey.isNotEmpty()) dao.ruleFor(merchantKey)?.let { return it }
         return CategoryRules.guess(merchant, type)
     }
@@ -185,7 +188,7 @@ class Repository(private val db: AppDatabase) {
                 type = t.type.name, availableLimitMinor = availMinor,
                 ruleId = r.ruleId, counterpartyKey = counterpartyKey,
                 merchantKey = merchantKey,
-                categoryId = resolveCategory(dedupKey, merchantKey, t.merchant, t.type),
+                categoryId = resolveCategory(dedupKey, merchantKey, t.merchant, t.type, amountMinor),
                 categoryUserSet = dao.overrideFor(dedupKey) != null,
             )
         dao.insertTxn(entity)
@@ -250,7 +253,7 @@ class Repository(private val db: AppDatabase) {
                 amountMinor = Money.toMinor(entry.amount), currency = entry.currency,
                 amountAedMinor = aed?.first, fxEstimated = aed?.second ?: false, type = entry.type.name,
                 merchantKey = merchantKey,
-                categoryId = resolveCategory(null, merchantKey, entry.description, entry.type),
+                categoryId = resolveCategory(null, merchantKey, entry.description, entry.type, Money.toMinor(entry.amount)),
             ),
         )
     }
@@ -264,10 +267,19 @@ class Repository(private val db: AppDatabase) {
     suspend fun setCategory(t: TransactionEntity, categoryId: Long, applyToMerchant: Boolean) = db.withTransaction {
         dao.setTxnCategory(t.id, categoryId)
         t.smsId?.let { dao.dedupKeyOf(it) }?.let { dao.upsertOverrides(listOf(TxnOverrideEntity(it, categoryId))) }
-        val key = t.merchantKey ?: CategoryRules.merchantKey(t.merchant)
-        if (applyToMerchant && key.isNotEmpty()) {
-            dao.upsertRules(listOf(MerchantRuleEntity(key, categoryId)))
-            dao.applyRule(key, categoryId)
+        val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
+        if (applyToMerchant) {
+            if (CategoryRules.isAmountSpecific(t.merchant, type)) {
+                // e.g. "Account debit" of AED 2,450: only debits with the same text and amount (your car EMI, not your rent).
+                dao.upsertRules(listOf(MerchantRuleEntity(CategoryRules.learningKey(t.merchant, t.amountMinor, type), categoryId)))
+                dao.applyRuleExact(t.merchant, t.amountMinor, t.type, categoryId)
+            } else {
+                val key = t.merchantKey ?: CategoryRules.merchantKey(t.merchant)
+                if (key.isNotEmpty()) {
+                    dao.upsertRules(listOf(MerchantRuleEntity(key, categoryId)))
+                    dao.applyRule(key, categoryId)
+                }
+            }
         }
         Unit
     }

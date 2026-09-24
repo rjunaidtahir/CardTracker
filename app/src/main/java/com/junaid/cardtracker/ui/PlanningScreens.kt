@@ -143,14 +143,14 @@ fun BudgetDialog(categories: List<CategoryEntity>, limits: Map<Long, Long>, onSa
 
 /** Overview panel: fixed payments this month (unpaid first). */
 @Composable
-fun FixedPaymentsPanel(items: List<FixedPaymentEntity>, onManage: () -> Unit, onPaid: (FixedPaymentEntity) -> Unit, modifier: Modifier = Modifier) {
+fun FixedPaymentsPanel(items: List<FixedPaymentEntity>, autoPaid: Set<Long>, onManage: () -> Unit, onPaid: (FixedPaymentEntity) -> Unit, modifier: Modifier = Modifier) {
     val today = LocalDate.now()
     val active = items.filter { it.active }
     Panel(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Fixed payments", style = MaterialTheme.typography.titleMedium)
-                val unpaid = active.filterNot { FixedSchedule.paidThisMonth(it.lastPaidYm.toYm(), today) }
+                val unpaid = active.filterNot { FixedSchedule.paidThisMonth(it.lastPaidYm.toYm(), today) || it.id in autoPaid }
                 Text(
                     if (active.isEmpty()) "Rent, school fees, loans without SMS"
                     else "${fmtMoney(unpaid.sumOf { it.amountMinor })} still to pay this month",
@@ -159,19 +159,20 @@ fun FixedPaymentsPanel(items: List<FixedPaymentEntity>, onManage: () -> Unit, on
             }
             TextButton(onClick = onManage) { Text(if (active.isEmpty()) "Add" else "Manage") }
         }
-        active.sortedWith(compareBy({ FixedSchedule.paidThisMonth(it.lastPaidYm.toYm(), today) }, { FixedSchedule.nextDue(it.dayOfMonth, today, it.lastPaidYm.toYm()) }))
-            .take(5).forEach { f -> FixedRow(f, today, onPaid = { onPaid(f) }) }
+        active.sortedWith(compareBy({ FixedSchedule.paidThisMonth(it.lastPaidYm.toYm(), today) || it.id in autoPaid }, { FixedSchedule.nextDue(it.dayOfMonth, today, it.lastPaidYm.toYm()) }))
+            .take(6).forEach { f -> FixedRow(f, today, bySms = f.id in autoPaid, onPaid = { onPaid(f) }) }
     }
 }
 
 fun String?.toYm(): YearMonth? = this?.let { runCatching { YearMonth.parse(it) }.getOrNull() }
 
 @Composable
-private fun FixedRow(f: FixedPaymentEntity, today: LocalDate, onPaid: (() -> Unit)?, onClick: (() -> Unit)? = null) {
-    val paid = FixedSchedule.paidThisMonth(f.lastPaidYm.toYm(), today)
-    val due = FixedSchedule.nextDue(f.dayOfMonth, today, f.lastPaidYm.toYm())
+fun FixedRow(f: FixedPaymentEntity, today: LocalDate, bySms: Boolean = false, onPaid: (() -> Unit)?, onClick: (() -> Unit)? = null) {
+    val paid = bySms || FixedSchedule.paidThisMonth(f.lastPaidYm.toYm(), today)
+    val due = FixedSchedule.nextDue(f.dayOfMonth, today, if (bySms) YearMonth.from(today) else f.lastPaidYm.toYm())
     val left = FixedSchedule.daysLeft(due, today)
     val status = when {
+        bySms -> "Paid (seen in your bank SMS) · next ${due.format(dateFmt)}"
         paid -> "Paid for ${YearMonth.from(today).format(monthFmt)} · next ${due.format(dateFmt)}"
         left < 0 -> "Overdue by ${-left} days (${due.format(dateFmt)})"
         left == 0L -> "Due today"
@@ -203,6 +204,7 @@ private fun FixedRow(f: FixedPaymentEntity, today: LocalDate, onPaid: (() -> Uni
 @Composable
 fun FixedPaymentsScreen(vm: MainViewModel) {
     val items by vm.fixedPayments.collectAsStateWithLifecycle()
+    val autoPaid by vm.fixedAutoPaid.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
     val cards by vm.cards.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf<FixedPaymentEntity?>(null) }
@@ -219,8 +221,9 @@ fun FixedPaymentsScreen(vm: MainViewModel) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text(
-                "Payments that don't send an SMS: rent, school fees, a loan, a maid's salary. You get reminders 3 days before, the day before and on the day " +
-                    "(with Due-date reminders on in Settings). \"Mark paid\" adds it to your transactions so it counts in spending and budgets.",
+                "Monthly payments with a due date: rent, school fees, a car EMI. You get reminders 3 days before, the day before and on the day " +
+                    "(with Due-date reminders on in Settings). If a bank SMS this month shows the same amount (within 5%) from the chosen card or account, " +
+                    "it is marked paid automatically. For payments without an SMS, \"Mark paid\" adds it to your transactions so it counts in spending and budgets.",
                 style = MaterialTheme.typography.bodySmall, color = Ink.muted,
             )
         }
@@ -240,7 +243,7 @@ fun FixedPaymentsScreen(vm: MainViewModel) {
                         Box(Modifier.fillMaxWidth()) {
                             Column {
                                 FixedRow(
-                                    f, today,
+                                    f, today, bySms = f.id in autoPaid,
                                     onPaid = if (f.active) ({ vm.markFixedPaid(f); Unit }) else null,
                                     onClick = { editing = f },
                                 )

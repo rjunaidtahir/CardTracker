@@ -242,3 +242,17 @@ fun CardSwatch(art: CardArt, width: Dp = 64.dp, height: Dp = 40.dp, selected: Bo
         }
     }
 }
+
+/** Small preview of a card: your picture if you set one, otherwise its drawn look. */
+@Composable
+fun CardThumb(card: CardEntity, width: Dp = 64.dp, height: Dp = 40.dp) {
+    val img = rememberCardImage(card, thumbnail = true)
+    if (img == null) {
+        CardSwatch(CardArts.forCard(card), width, height)
+    } else {
+        androidx.compose.foundation.Image(
+            img, null, contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+            modifier = Modifier.size(width, height).clip(RoundedCornerShape(8.dp)),
+        )
+    }
+}

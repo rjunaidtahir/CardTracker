@@ -74,6 +74,13 @@ v1.1 includes every phase below plus the redesign. Keep adding to this file for 
 - **Alerts:** `notify/Alerts.kt`, run after Sync and live SMS.
 - **Reports:** `report/Report.kt` (PDF with Android's PdfDocument, and CSV).
 
+## v1.3 (done)
+
+- Own card pictures (`ui/CardImages.kt`, photo picker, stored in app files).
+- Switched-off cards no longer show in Payments due, the widget or reminders.
+- Categories on money-out transactions; amount-specific learning for generic texts (`CategoryRules.learningKey`).
+- Recurring detection includes account debits and categorised transfers; "Track as fixed payment"; fixed payments auto-marked paid from SMS (`FixedSchedule.autoPaid`).
+
 ## Ideas for later
 
 - A manual recurring-payments list for EMIs that don't send an SMS.

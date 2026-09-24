@@ -67,18 +67,22 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - **Category list** with amounts, shares and bars; tap one to see its transactions.
   - **Budgets** for this month: progress bar per category (green, amber at 80%, red at 100%). Tap Set budgets / Edit to change the limits.
   - **Fixed payments** (rent, school fees, loans without SMS): what's still to pay this month, with **Mark paid**.
-  - **Card payments due**, **last 12 months** bars (tap a month to open it), **top merchants**, **by card**, **recurring payments**, **foreign currency** and **savings goals**.
+  - **Payments due:** card statements (only cards switched on) plus fixed payments due in the next 10 days.
+  - **Recurring payments** now include account debits and categorised transfers, shown by their category name. **Track as fixed payment** adds one to your fixed payments so it gets a due date and reminders.
+  - **Last 12 months** bars (tap a month to open it), **top merchants**, **by card**, **recurring payments**, **foreign currency** and **savings goals**.
 - **Transactions:**
   - Sync and **Add** (type "lunch 45 aed") at the top, then a **search** box (merchant, category, card, amount), period chips and card chips.
   - A bank account (for example FAB ·8001) shows **Net** on top and **Money in / Money out** as two tiles below it.
   - Transactions are grouped by day with a daily total. Each row has a coloured category icon, "Category • Card", the amount and the time.
+  - Money leaving a bank account (transfers, EMIs) can have a category too. For generic texts like "Account debit (EMI / direct debit)" or a transfer, "Apply to all" only covers the same text **and amount**, so your car EMI and your rent stay separate.
   - Tap a row for details, the raw SMS, **Change** category ("Apply to all" teaches the app that merchant) or Delete.
 - **Cards:**
   - **Available credit** across cards, with utilisation bars (green / amber / red).
   - Each card is drawn in **its own look** (modelled on your Samsung Wallet cards, with a small bank-name badge and Visa / Mastercard label), showing spend or account net for the period, available limit or balance, the latest statement and its paid/due status, and the **Show & count** switch.
   - **Arrange:** tap Arrange and drag the handles to put your most-used cards on top. The order is used everywhere.
+  - **Your own card picture:** open a card → **Use my picture** and pick an image (for example a screenshot of the card from Samsung Wallet or the bank's website, cropped to the card). The figures sit on a soft shade so they stay readable. Pictures stay on the phone and aren't part of backups.
   - Tap a card for its profile: a **card look picker** (Automatic, your cards' looks, bank colours and general looks), a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
-- **Fixed payments** (Overview → Manage, or Settings): add name, amount, day of month, category and the card it's paid from. Reminders 3 days before, the day before and on the day (with Due-date reminders on). **Mark paid** adds it to your transactions so it counts in spending and budgets.
+- **Fixed payments** (Overview → Manage, or Settings): add name, amount, day of month, category and the card it's paid from. Reminders 3 days before, the day before and on the day (with Due-date reminders on). **Mark paid** adds it to your transactions so it counts in spending and budgets. If a bank SMS this month shows the same amount (within 5%) from the chosen card or account, it is marked paid automatically and no reminder is sent.
 - **Export report** (share icon at the top of Overview and Transactions, or Settings): a **PDF** of the selected period with the summary, category chart, budgets, cards, top merchants and every transaction, or the same as a **CSV** for Excel.
 - **Review:** unparsed SMS, with **Share unparsed SMS**.
 - **Settings:**
@@ -87,6 +91,12 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - **App lock:** PIN plus fingerprint/face, re-lock after immediately / 1 / 5 / 15 min.
   - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
 - **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
+
+## After installing v1.3
+
+1. For your car EMI: on Transactions, pick FAB ·8001, tap the EMI debit → **Change** → create "Car EMI" → keep "Apply to every … of AED …" ticked.
+2. On Overview → Recurring payments, tap **Track as fixed payment** on it.
+3. Open each card and tap **Use my picture** if you'd like its real look.
 
 ## After installing v1.2
 

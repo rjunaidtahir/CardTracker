@@ -357,7 +357,11 @@ object CategoryStyle {
 fun TransactionEntity.visual(): Pair<ImageVector, Color> = when (type) {
     TxnType.PAYMENT.name -> Icons.Filled.CreditCard to Ink.violet
     TxnType.TRANSFER_IN.name -> Icons.Filled.SouthWest to Ink.green
-    TxnType.TRANSFER_OUT.name -> (if (counterpartyKey != null) Icons.Filled.CreditCard else Icons.Filled.NorthEast) to Ink.violet
+    TxnType.TRANSFER_OUT.name -> when {
+        categoryId != null -> CategoryStyle.icon(categoryId) to CategoryStyle.color(categoryId)
+        counterpartyKey != null -> Icons.Filled.CreditCard to Ink.violet
+        else -> Icons.Filled.NorthEast to Ink.violet
+    }
     TxnType.REFUND.name -> (if (categoryId == null) Icons.Filled.Undo else CategoryStyle.icon(categoryId)) to Ink.green
     else -> CategoryStyle.icon(categoryId) to CategoryStyle.color(categoryId)
 }

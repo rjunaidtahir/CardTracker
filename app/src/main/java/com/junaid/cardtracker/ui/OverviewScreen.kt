@@ -97,6 +97,7 @@ fun OverviewScreen(
     val budgetStatus by vm.budgetStatus.collectAsStateWithLifecycle()
     val budgetLimits by vm.budgetLimits.collectAsStateWithLifecycle()
     val fixed by vm.fixedPayments.collectAsStateWithLifecycle()
+    val autoPaid by vm.fixedAutoPaid.collectAsStateWithLifecycle()
     var editingBudgets by remember { mutableStateOf(false) }
     val o by vm.overview.collectAsStateWithLifecycle()
     val dues by vm.dues.collectAsStateWithLifecycle()
@@ -238,13 +239,26 @@ fun OverviewScreen(
 
         // ---- budgets and fixed payments
         item { BudgetsPanel(budgetStatus, names, onEdit = { editingBudgets = true }, modifier = Modifier.padding(horizontal = 16.dp)) }
-        item { FixedPaymentsPanel(fixed, onManage = onOpenFixed, onPaid = { vm.markFixedPaid(it) }, modifier = Modifier.padding(horizontal = 16.dp)) }
+        item { FixedPaymentsPanel(fixed, autoPaid, onManage = onOpenFixed, onPaid = { vm.markFixedPaid(it) }, modifier = Modifier.padding(horizontal = 16.dp)) }
 
         // ---- upcoming dues
-        val open = dues.filter { it.status.state == DueState.UNPAID || it.status.state == DueState.OVERDUE || it.status.state == DueState.MIN_PAID }
-        item { SectionHeader("Card payments due", Modifier.padding(horizontal = 20.dp)) }
-        if (open.isEmpty()) {
-            item { Muted(if (dues.isEmpty()) "No statement SMS yet." else "All statements paid.", Modifier.padding(horizontal = 20.dp)) }
+        val open = dues.filter { it.card.countInSpending }.filter { it.status.state == DueState.UNPAID || it.status.state == DueState.OVERDUE || it.status.state == DueState.MIN_PAID }
+        item { SectionHeader("Payments due", Modifier.padding(horizontal = 20.dp)) }
+        // Fixed payments (e.g. car EMI) not yet paid and due within 10 days.
+        val today = LocalDate.now()
+        val soonFixed = fixed.filter { f ->
+            f.active && f.id !in autoPaid && !com.junaid.cardtracker.core.FixedSchedule.paidThisMonth(f.lastPaidYm.toYm(), today) &&
+                com.junaid.cardtracker.core.FixedSchedule.daysLeft(com.junaid.cardtracker.core.FixedSchedule.nextDue(f.dayOfMonth, today, f.lastPaidYm.toYm()), today) <= 10
+        }
+        if (soonFixed.isNotEmpty()) {
+            item {
+                Panel(Modifier.padding(horizontal = 16.dp).fillMaxWidth(), padding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 14.dp)) {
+                    soonFixed.forEach { f -> FixedRow(f, today, onPaid = { vm.markFixedPaid(f) }, onClick = onOpenFixed) }
+                }
+            }
+        }
+        if (open.isEmpty() && soonFixed.isEmpty()) {
+            item { Muted(if (dues.none { it.card.countInSpending }) "No statement SMS yet." else "All statements paid.", Modifier.padding(horizontal = 20.dp)) }
         }
         items(open, key = { "due-" + it.card.cardKey }) { d -> DueRow(d, Modifier.padding(horizontal = 16.dp)) { onOpenCard(d.card.cardKey) } }
 
@@ -313,19 +327,40 @@ fun OverviewScreen(
                 Text("Recurring payments", style = MaterialTheme.typography.titleMedium)
                 if (o.recurring.isEmpty()) Muted("None detected yet (needs 3+ roughly monthly charges).", Modifier.padding(top = 6.dp))
                 o.recurring.forEach { r ->
+                    val catName = r.categoryId?.let { names[it] }
+                    val tracked = fixed.any { it.cardKey == r.cardKey && kotlin.math.abs(it.amountMinor - r.averageMinor) * 20 <= r.averageMinor }
                     Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconBadge(Icons.Filled.Repeat, Ink.violet, 34.dp)
+                        if (r.categoryId != null) IconBadge(CategoryStyle.icon(r.categoryId), CategoryStyle.color(r.categoryId), 34.dp)
+                        else IconBadge(Icons.Filled.Repeat, Ink.violet, 34.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(r.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // Generic texts ("Account debit", "Transfer to ·2001") read better with the category you gave them.
+                            val generic = r.merchantKey.startsWith("ACCOUNT DEBIT") || r.merchantKey.startsWith("TRANSFER") || r.merchantKey.startsWith("PAYMENT TO")
+                            Text(if (generic && catName != null) catName else r.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(
-                                "${r.occurrences}× · next about ${r.nextExpected.format(dateFmt)}" + (r.cardKey?.let { " · " + (cardNames[it] ?: it) } ?: ""),
+                                (if (generic && catName != null) r.merchant + " · " else "") +
+                                    "${r.occurrences}× · next about ${r.nextExpected.format(dateFmt)}" + (r.cardKey?.let { " · " + (cardNames[it] ?: it) } ?: ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = Ink.muted,
+                                maxLines = 2,
                             )
+                            if (!tracked) {
+                                Text(
+                                    "+ Track as fixed payment", color = Ink.green, style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.padding(top = 2.dp).clip(RoundedCornerShape(50)).clickable { vm.trackRecurring(r) }.padding(vertical = 4.dp),
+                                )
+                            } else {
+                                Text("In fixed payments: due reminders on", style = MaterialTheme.typography.labelMedium, color = Ink.faint, modifier = Modifier.padding(top = 2.dp))
+                            }
                         }
                         Text(fmtMoney(r.averageMinor), fontWeight = FontWeight.SemiBold)
                     }
+                }
+                if (o.recurring.isNotEmpty()) {
+                    Text(
+                        "Tip: give a bank-account debit a category (Transactions → tap it → Change, e.g. \"Car EMI\") and it is recognised here by its amount.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 10.dp),
+                    )
                 }
             }
         }
@@ -533,6 +568,7 @@ fun CategoryPickerDialog(
     onPick: (Long, Boolean) -> Unit,
     onCreate: (String, Boolean) -> Unit,
     onDismiss: () -> Unit,
+    applyLabel: String? = null,
 ) {
     var selected by remember { mutableStateOf(current) }
     var applyAll by remember { mutableStateOf(true) }
@@ -554,7 +590,7 @@ fun CategoryPickerDialog(
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = applyAll, onCheckedChange = { applyAll = it })
-                        Text("Apply to all \"${merchant.take(28)}\" (past and future)", style = MaterialTheme.typography.bodyMedium)
+                        Text(applyLabel ?: "Apply to all \"${merchant.take(28)}\" (past and future)", style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }

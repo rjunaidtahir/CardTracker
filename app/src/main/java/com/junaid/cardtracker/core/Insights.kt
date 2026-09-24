@@ -31,6 +31,7 @@ data class RecurringPayment(
     val lastDate: LocalDate,
     val nextExpected: LocalDate,
     val cardKey: String?,
+    val categoryId: Long? = null,
 )
 
 object Insights {
@@ -74,10 +75,14 @@ object Insights {
      * roughly monthly (25-35 days apart), amounts within 15% of their median.
      */
     fun recurring(txns: List<InsightTxn>, today: LocalDate): List<RecurringPayment> {
-        val purchases = txns.filter { it.type == TxnType.PURCHASE && (it.amountAedMinor ?: 0) > 0 }
-        // Generic account debits (EMIs) have no merchant name, so group those by amount too.
+        // Purchases, plus transfers you have given a category (e.g. a car EMI paid by transfer).
+        val purchases = txns.filter {
+            (it.type == TxnType.PURCHASE || (it.type == TxnType.TRANSFER_OUT && it.categoryId != null)) && (it.amountAedMinor ?: 0) > 0
+        }
+        // Generic account debits (EMIs) and transfers have no real merchant name, so group those by amount too.
         val groups = purchases.groupBy { t ->
-            if (t.merchantKey.startsWith("ACCOUNT DEBIT")) "${t.merchantKey}|${t.amountMinor}" else "${t.merchantKey}|${t.cardKey}"
+            if (t.type == TxnType.TRANSFER_OUT || t.merchantKey.startsWith("ACCOUNT DEBIT")) "${t.type}|${t.merchantKey}|${t.cardKey}|${t.amountMinor}"
+            else "${t.merchantKey}|${t.cardKey}"
         }
         return groups.values.mapNotNull { g ->
             if (g.size < 3) return@mapNotNull null
@@ -96,7 +101,7 @@ object Insights {
             while (next.isBefore(today)) next = next.plusMonths(1)
             // Stale if nothing for ~2.5 months.
             if (ChronoUnit.DAYS.between(last.date, today) > 75) return@mapNotNull null
-            RecurringPayment(last.merchant, last.merchantKey, amounts.average().toLong(), byDay.size, last.date, next, last.cardKey)
+            RecurringPayment(last.merchant, last.merchantKey, amounts.average().toLong(), byDay.size, last.date, next, last.cardKey, byDay.lastOrNull { it.categoryId != null }?.categoryId)
         }.sortedByDescending { it.averageMinor }
     }
 }

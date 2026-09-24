@@ -53,7 +53,7 @@ class SummaryWidget : AppWidgetProvider() {
             val cards = dao.allCards()
             val excluded = cards.filterNot { it.countInSpending }.map { it.cardKey }.toSet()
             val spend = spendingTotal(dao.txnsSince(from).filter { it.timestamp < to }, excluded)
-            val next = app.cardDues.currentDues()
+            val next = app.cardDues.currentDues().filter { it.card.countInSpending }
                 .filter { (it.status.state == DueState.UNPAID || it.status.state == DueState.MIN_PAID) && it.status.daysLeft >= 0 }
                 .minByOrNull { it.status.daysLeft }
             val dueText = next?.let {
