@@ -156,17 +156,44 @@ fun StatementCheckScreen(vm: MainViewModel) {
                 val cs = summaries.firstOrNull { it.card.cardKey == card.cardKey }
                 val appSt = cs?.latestStatement
                 Panel(Modifier.fillMaxWidth()) {
-                    Text("Statement figures", style = MaterialTheme.typography.titleSmall)
-                    Text("Compared with what the app has from SMS and the card profile.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                    Text(if (sm.isAccount) "Account statement" else "Statement figures", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (sm.isAccount) "Read from the statement." else "Compared with what the app has from SMS and the card profile.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted,
+                    )
                     Spacer(Modifier.height(6.dp))
+                    if (sm.isAccount) {
+                        FigureRow("Period", listOfNotNull(sm.periodFrom?.format(dateFmt), sm.periodTo?.format(dateFmt)).joinToString(" – ").ifEmpty { null }, null, showApp = false)
+                        FigureRow("Opening balance", sm.previousBalanceMinor?.let { fmtMoney(it) }, null, showApp = false)
+                        FigureRow("Closing balance", sm.closingBalanceMinor?.let { fmtMoney(it) }, cs?.latestBalanceMinor?.let { fmtMoney(it) })
+                    } else {
                     FigureRow("Statement date", sm.statementDate?.format(dateFmt), appSt?.statementDateEpochDay?.let { fmtEpochDay(it) })
                     FigureRow("Payment due date", sm.dueDate?.format(dateFmt), appSt?.dueDateEpochDay?.let { fmtEpochDay(it) })
                     FigureRow("Amount due (avoid finance charges)", sm.totalDueMinor?.let { fmtMoney(it) }, appSt?.balanceMinor?.let { fmtMoney(it, appSt.currency) })
                     FigureRow("Minimum due", sm.minimumDueMinor?.let { fmtMoney(it) }, appSt?.minimumDueMinor?.let { fmtMoney(it, appSt.currency) })
                     FigureRow("Total credit limit", sm.creditLimitMinor?.let { fmtMoney(it) }, card.creditLimitMinor?.let { fmtMoney(it) })
                     FigureRow("Available limit", sm.availableLimitMinor?.let { fmtMoney(it) }, cs?.latestBalanceMinor?.let { fmtMoney(it) })
+                    FigureRow("Previous balance", sm.previousBalanceMinor?.let { fmtMoney(it) }, null, showApp = false)
+                    }
+                    // Does the transaction list add up to the statement's own totals?
+                    st?.totalsCheck?.let { msg ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            (if (st?.totalsAgree == true) "✓ " else "! ") + msg,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (st?.totalsAgree == true) Ink.green else Ink.amber,
+                        )
+                    }
+                    if (st?.otherCards?.isNotEmpty() == true) {
+                        Text(
+                            "Also includes card " + st!!.otherCards.keys.joinToString(", ") { "·$it" } + " (supplementary): its lines are compared with that card.",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
-                    if (st?.summarySaved?.isNotEmpty() == true) {
+                    if (sm.isAccount) {
+                        // nothing to save for an account
+                    } else if (st?.summarySaved?.isNotEmpty() == true) {
                         Text("Saved: " + st!!.summarySaved.joinToString(", "), style = MaterialTheme.typography.bodySmall, color = Ink.green)
                     } else {
                         Button(onClick = { vm.applyStatementSummary() }, shape = RoundedCornerShape(50)) { Text("Save to card profile") }
@@ -272,20 +299,21 @@ private fun shareText(ctx: android.content.Context, text: String) {
 
 /** One figure: statement value, app value, and whether they agree. */
 @Composable
-private fun FigureRow(label: String, statement: String?, app: String?) {
+private fun FigureRow(label: String, statement: String?, app: String?, showApp: Boolean = true) {
     val same = statement != null && app != null && statement.filter { it.isDigit() } == app.filter { it.isDigit() }
     Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 when {
+                    !showApp -> if (statement == null) "Not found on the statement" else "From the statement"
                     statement == null -> "Not found on the statement"
                     app == null -> "Not in the app yet"
                     same -> "Matches the app"
                     else -> "App has $app"
                 },
                 style = MaterialTheme.typography.bodySmall,
-                color = when { statement == null -> Ink.faint; same -> Ink.green; app == null -> Ink.muted; else -> Ink.amber },
+                color = when { statement == null -> Ink.faint; !showApp -> Ink.muted; same -> Ink.green; app == null -> Ink.muted; else -> Ink.amber },
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
         }

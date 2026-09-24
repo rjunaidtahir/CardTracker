@@ -394,6 +394,7 @@ class Repository(private val db: AppDatabase) {
     suspend fun applyStatementSummary(cardKey: String, s: com.junaid.cardtracker.core.StatementSummary, receivedAt: Long): List<String> = db.withTransaction {
         val card = dao.allCards().firstOrNull { it.cardKey == cardKey } ?: return@withTransaction emptyList()
         val done = mutableListOf<String>()
+        if (s.isAccount) return@withTransaction done // account statements have no limit / due date to save
         s.creditLimitMinor?.takeIf { it > 0 }?.let { dao.setCreditLimit(cardKey, it); done += "credit limit" }
         val sd = s.statementDate?.dayOfMonth
         val dd = s.dueDate?.dayOfMonth

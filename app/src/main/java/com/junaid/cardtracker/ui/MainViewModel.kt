@@ -436,6 +436,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val lines: List<com.junaid.cardtracker.core.StatementLine> = emptyList(),
         val summary: com.junaid.cardtracker.core.StatementSummary? = null,
         val summarySaved: List<String> = emptyList(),
+        /** "Read 23 transactions ... They add up to the statement's balance." */
+        val totalsCheck: String? = null,
+        val totalsAgree: Boolean? = null,
+        /** Supplementary cards found in the statement (last 4 → card key in the app, if known). */
+        val otherCards: Map<String, String?> = emptyMap(),
     )
     val statementCheck = MutableStateFlow<StatementCheck?>(null)
 
@@ -446,16 +451,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         statementCheck.value = cur.copy(uri = uri.toString(), loading = true, error = null, needsPassword = false, result = null, summarySaved = emptyList())
         viewModelScope.launch {
             try {
-                val text = withContext(Dispatchers.IO) { com.junaid.cardtracker.report.PdfText.read(getApplication(), uri, password) }
-                // Year for dates printed without one: the most frequent 20xx year in the text.
-                val year = Regex("""\b(20\d{2})\b""").findAll(text).map { it.value.toInt() }.groupingBy { it }.eachCount()
-                    .maxByOrNull { it.value }?.key ?: LocalDate.now(zone).year
-                val lines = com.junaid.cardtracker.core.StatementImport.parse(text, year)
-                val summary = com.junaid.cardtracker.core.StatementImport.summary(text)
+                val printed = withContext(Dispatchers.IO) { com.junaid.cardtracker.report.PdfText.readLines(getApplication(), uri, password) }
+                val text = com.junaid.cardtracker.report.PdfText.asText(printed)
+                val analysis = withContext(Dispatchers.Default) { com.junaid.cardtracker.core.StatementReader.analyze(printed, LocalDate.now(zone).year) }
+                val lines = analysis.lines
+                val summary = analysis.summary
                 // Recognise the card from the last 4 digits printed on the statement.
                 val key = cur.cardKey ?: summary.cardLast4?.let { l4 -> dao.allCards().filter { it.last4 == l4 }.singleOrNull()?.cardKey }
                 statementCheck.value = statementCheck.value?.copy(
                     cardKey = key, loading = false, lineCount = lines.size, text = text, lines = lines, summary = summary,
+                    totalsCheck = analysis.totalsCheck, totalsAgree = analysis.totalsAgree,
                     error = if (lines.isEmpty() && summary.isEmpty) "No transaction lines or statement figures found in this PDF." else null,
                 )
                 if (key != null) reconcileStatement()
@@ -473,20 +478,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val key = cur.cardKey ?: return
         val lines = cur.lines
         if (lines.isEmpty()) { statementCheck.value = cur.copy(result = null); return }
+        val allCards = dao.allCards()
+        val main = allCards.firstOrNull { it.cardKey == key }
+        // Lines of a supplementary card ("Supplementary Card ... 3944") belong to that card in the app.
+        val others = lines.mapNotNull { it.cardLast4 }.filter { it != main?.last4 }.toSet()
+            .associateWith { l4 -> (allCards.filter { it.last4 == l4 && it.bank == main?.bank } + allCards.filter { it.last4 == l4 }).firstOrNull()?.cardKey }
+        val keys = setOf(key) + others.values.filterNotNull()
         val from = lines.minOf { it.date }.minusDays(5)
         val to = lines.maxOf { it.date }.plusDays(6)
         val appTxns = dao.txnsListBetween(from.startMs(), to.startMs())
-            .filter { it.cardKey == key || it.counterpartyKey == key }
+            .filter { it.cardKey in keys || it.counterpartyKey in keys }
             .map { t ->
                 val type = t.txnType()
                 // A transfer to this card is a payment (credit) from the card's point of view.
-                val credit = t.counterpartyKey == key || type == TxnType.REFUND || type == TxnType.PAYMENT || type == TxnType.TRANSFER_IN
+                val credit = t.counterpartyKey in keys || type == TxnType.REFUND || type == TxnType.PAYMENT || type == TxnType.TRANSFER_IN
                 com.junaid.cardtracker.core.AppTxnRef(
                     t.id, Instant.ofEpochMilli(t.timestamp).atZone(zone).toLocalDate(),
                     t.amountAedMinor ?: t.amountMinor, credit, t.fxEstimated, t.merchant,
                 )
             }
-        statementCheck.value = statementCheck.value?.copy(result = com.junaid.cardtracker.core.StatementImport.reconcile(lines, appTxns))
+        statementCheck.value = statementCheck.value?.copy(
+            result = com.junaid.cardtracker.core.StatementImport.reconcile(lines, appTxns),
+            otherCards = others,
+        )
     }
 
     /** You picked which existing card the statement belongs to. */
@@ -522,7 +536,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val cur = statementCheck.value ?: return
         val key = cur.cardKey ?: return
         viewModelScope.launch {
-            val n = repo.addStatementLines(key, lines)
+            var n = 0
+            for ((l4, group) in lines.groupBy { it.cardLast4?.takeIf { l -> cur.otherCards.containsKey(l) } }) {
+                val target = if (l4 == null) key else cur.otherCards[l4] ?: repo.ensureStatementCard(
+                    dao.allCards().firstOrNull { it.cardKey == key }?.bank ?: "Card", l4, family = false, nickname = null,
+                )
+                n += repo.addStatementLines(target, group)
+            }
             message.value = "Added $n transactions from the statement"
             refreshWidget()
             val added = lines.toSet()

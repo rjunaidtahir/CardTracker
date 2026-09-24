@@ -99,6 +99,14 @@ Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Blac
   - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
 - **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
 
+## After installing v1.6
+
+Statement reading is rebuilt (`core/StatementReader.kt`). It reads the position of every word on the page, so it copes with different layouts and wordings:
+- **Figures** (statement date, due date, credit limit, available limit, amount due, minimum due, previous balance) are found by their many names and read to the right of the label or in the column under it. When a bank prints its labels as pictures (e.g. ADCB), they are worked out: the dates at the top in order, credit limit = available + balance, minimum due ≈ 5% or AED 100.
+- **Transactions**: the Debit / Credit / Balance / Amount columns are found from the table header, "CR" or a trailing minus mark credits, multi-line entries (foreign spends with fees) and wrapped descriptions are joined, and supplementary-card sections are compared with that card.
+- **Self-check**: previous balance + spends − credits is compared with the statement's balance, and the screen tells you whether they add up.
+- Tested on FAB (card and account), Emirates NBD, ADCB, Al Hilal, Mashreq and HSBC statements: all seven add up to the cent.
+
 ## After installing v1.5
 
 1. The app is now **RJ's Financials Tracker** with a new icon (the old icon may take a moment to refresh on the home screen).

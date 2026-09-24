@@ -21,7 +21,7 @@ class StatementImportTest {
         val l = StatementImport.parse(text, 2026)
         assertEquals(5, l.size)
         assertEquals(LocalDate.of(2026, 8, 12), l[0].date)
-        assertEquals("TALABAT.COM DUBAI AE", l[0].description)
+        assertEquals("TALABAT.COM DUBAI", l[0].description)
         assertEquals(9090L, l[0].amountMinor)
         assertFalse(l[0].isCredit)
         assertEquals(15000L, l[1].amountMinor)

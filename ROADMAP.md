@@ -94,6 +94,10 @@ v1.1 includes every phase below plus the redesign. Keep adding to this file for 
 - Usage since the last statement (`SinceStatement`).
 - Money in can be categorised; smaller one-line transaction rows.
 
+## v1.6 (done)
+
+- Layout-aware statement reader (`core/StatementReader.kt`, tests in `StatementReaderTest.kt`): glyph positions from PdfBox (`report/PdfText.kt`), label→value by position, column-aware transactions, inference when labels are images, supplementary cards, totals self-check.
+
 ## Ideas for later
 
 - A manual recurring-payments list for EMIs that don't send an SMS.
