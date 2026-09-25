@@ -19,18 +19,20 @@ The app is not on the Play Store. You install the APK file directly.
 
 Updates install over the old version and keep your data. Every build is signed with the same key, `app/debug.keystore`.
 
-### iPhone
+### iPhone: Fils – Card & Spend Tracker
 
-The iPhone app (`ios/`) is built and tested on every change. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
+On the iPhone the app is called **Fils** (full name "Fils – Card & Spend Tracker"). The code is in `ios/`. It does everything the Android app does. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
 
 iPhone apps can't read SMS, so bank messages come in these ways:
 
-- **Automatic (Shortcuts).** A one-minute "Message" automation in Apple's Shortcuts app passes each bank SMS to the app's **Add Bank Message** action, which runs in the background. The app shows the steps in **More → Automatic import**.
-- **Paste.** Copy one or more messages in Messages and paste them in **More → Paste messages**, with an empty line between messages.
-- **Files.** An Android "SMS Backup & Restore" XML file, opened with the app or picked in **More → Import a messages file**.
-- **Statement PDFs.** From Mail or Files, Share → UAE Financial Tracker, or **More → Check a statement PDF**. The same statement reader as Android, including password-protected PDFs.
+- **Automatic (Shortcuts).** A one-minute "Message" automation in Apple's Shortcuts app passes each bank SMS to Fils's **Add Bank Message** action, which runs in the background. The setup steps are in **More → Automatic import (Shortcuts)**.
+- **Screenshots.** Screenshots of the Messages app are read with text recognition, including times like "Yesterday 21:05". Messages with no visible date are flagged.
+- **Share → Fils** from Mail, WhatsApp, Files or Photos: message text, screenshots, statement PDFs and backups.
+- **Paste** one or more messages.
+- **Files.** An Android "SMS Backup & Restore" XML file, or a backup from the Android app. Backups move either way between the two apps.
+- **Statement PDFs**, including password-protected ones. The same statement reader as Android.
 
-Messages from people are ignored, OTPs are never stored, and a message added twice (for example by the automation and again by a paste) is only kept once.
+Like Android, Fils has budgets, fixed payments, savings goals and recurring-payment detection. It has statements with paid and due status, due-date reminders and spending alerts. It has an app lock (PIN with Face ID), backup and restore, PDF and Excel reports, and themes, card looks and your own card pictures. There is also a home-screen widget. Data isn't synced to iCloud. OTPs and messages from people are never stored, and a message added twice is kept once.
 
 ## First run
 
