@@ -108,6 +108,9 @@ jobs:
             xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Debug \
               -sdk iphoneos -arch arm64 -derivedDataPath ../dd162 CODE_SIGNING_ALLOWED=NO > ../xcode162.log 2>&1
           }
+          # Xcode 16.2 needs its own iOS 18.2 platform (the runner only has newer ones); asset catalogs need it too.
+          xcodebuild -downloadPlatform iOS -buildVersion 18.2 > ../download162.log 2>&1 || true
+          echo "::notice title=Xcode 16.2 platform::$(tail -2 ../download162.log | tr '\n' ' ')"
           build162
           rc=$?
           if [ $rc -ne 0 ] && grep -q "Unable to find a destination\|is not installed" ../xcode162.log; then
