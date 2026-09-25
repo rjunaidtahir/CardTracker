@@ -104,9 +104,18 @@ jobs:
           rm -rf shared/build/xcode-frameworks shared/build/bin
           cd ios
           set +e
-          xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Debug \
-            -destination 'generic/platform=iOS' -derivedDataPath ../dd162 CODE_SIGNING_ALLOWED=NO > ../xcode162.log 2>&1
+          build162() {
+            xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Debug \
+              -sdk iphoneos -arch arm64 -derivedDataPath ../dd162 CODE_SIGNING_ALLOWED=NO > ../xcode162.log 2>&1
+          }
+          build162
           rc=$?
+          if [ $rc -ne 0 ] && grep -q "Unable to find a destination\|is not installed" ../xcode162.log; then
+            echo "Downloading the iOS platform for Xcode 16.2"
+            xcodebuild -downloadPlatform iOS > /dev/null 2>&1
+            build162
+            rc=$?
+          fi
           grep -E "error:|\*\* BUILD" ../xcode162.log | sed 's/^/[Xcode 16.2] /'
           exit $rc
 
