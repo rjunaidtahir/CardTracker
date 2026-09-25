@@ -69,6 +69,8 @@ jobs:
           ")
           echo "Simulator: $DEST"
           echo "$DEST" > sim.txt
+          # Build like a Mac that has only Xcode (no Android SDK).
+          unset ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
           cd ios
           set +e
           xcodebuild test -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker \
@@ -82,6 +84,7 @@ jobs:
         if: steps.xcode.outcome == 'success'
         continue-on-error: true
         run: |
+          unset ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
           cd ios
           set +e
           xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Release \

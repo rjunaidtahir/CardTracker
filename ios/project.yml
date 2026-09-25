@@ -72,6 +72,8 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           cd "$SRCROOT/.."
+          # Xcode doesn't pass your shell's Java: use Java 17 when it's installed.
+          if [ -z "$JAVA_HOME" ] && /usr/libexec/java_home -v 17 >/dev/null 2>&1; then export JAVA_HOME="$(/usr/libexec/java_home -v 17)"; fi
           bash ./gradlew :shared:embedAndSignAppleFrameworkForXcode --no-daemon
   FilsWidget:
     type: app-extension
