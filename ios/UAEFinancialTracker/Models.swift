@@ -19,10 +19,12 @@ enum TxnKind: String, CaseIterable, Identifiable {
         case .purchase: return "Spend"
         case .refund: return "Refund or cashback"
         case .payment: return "Card payment"
-        case .transferOut: return "MoneyText sent"
-        case .transferIn: return "MoneyText received"
+        case .transferOut: return "Money out"
+        case .transferIn: return "Money in"
         }
     }
+    /// Money coming in (shown with +).
+    var isIncoming: Bool { self == .refund || self == .payment || self == .transferIn }
 }
 
 enum CardKind: String, CaseIterable, Identifiable {
@@ -44,13 +46,15 @@ enum CardKind: String, CaseIterable, Identifiable {
     var body: String
     var bodyHash: String
     var receivedAt: Date
-    /// False when the time is only the moment it was imported (pasted text, files without dates).
+    /// False when the time is only the moment it was imported (pasted text, screenshots without a visible time).
     var timeKnown: Bool
     var source: String
     var bank: String?
     var status: String
     var note: String?
     var ruleId: String?
+    /// The same key as the Android app (sender | time | text), so backups move between the two.
+    var dedupKey: String = ""
 
     init(sender: String, body: String, bodyHash: String, receivedAt: Date, timeKnown: Bool, source: String, bank: String?) {
         id = UUID()
@@ -68,7 +72,9 @@ enum CardKind: String, CaseIterable, Identifiable {
 @Model final class Txn {
     @Attribute(.unique) var id: UUID
     var smsId: UUID?
-    /// "SMS", "Typed" or "Statement".
+    /// The second SMS of a transfer the bank reported twice (merged into this one).
+    var pairedSmsId: UUID?
+    /// "SMS", "Typed", "Statement" or "Fixed".
     var source: String
     var timestamp: Date
     var bank: String
@@ -88,6 +94,7 @@ enum CardKind: String, CaseIterable, Identifiable {
     var merchantKey: String
     var categoryId: Int64?
     var categoryUserSet: Bool
+    var note: String?
 
     init(source: String, timestamp: Date, bank: String, merchant: String, amountMinor: Int64, currency: String, aedMinor: Int64, type: String) {
         id = UUID()
@@ -105,6 +112,7 @@ enum CardKind: String, CaseIterable, Identifiable {
     }
 
     var txnType: TxnKind { TxnKind(rawValue: type) ?? .purchase }
+    var isTyped: Bool { smsId == nil }
 }
 
 @Model final class Card {
@@ -119,6 +127,12 @@ enum CardKind: String, CaseIterable, Identifiable {
     var family: Bool
     var creditLimitMinor: Int64?
     var order: Int
+    var statementDay: Int?
+    var dueDay: Int?
+    var remindersEnabled: Bool = true
+    /// A card look ("graphite", "sunset"…), "img:<file>" for your own picture, or nil for the bank's colours.
+    var themeKey: String?
+    var createdAt: Date = Date()
 
     init(key: String, bank: String, last4: String?, cardType: String, counted: Bool) {
         self.key = key
@@ -127,21 +141,27 @@ enum CardKind: String, CaseIterable, Identifiable {
         self.cardType = cardType
         self.counted = counted
         family = false
-        order = 0
+        order = 1000
     }
 
     var kind: CardKind { CardKind(rawValue: cardType) ?? .credit }
 
-    /// "ENBD credit card ·9940", or your nickname for it.
+    /// Your nickname, or "ENBD ·9940".
     var label: String {
         if let n = nickname, !n.trimmingCharacters(in: .whitespaces).isEmpty { return n }
-        let what: String
-        switch kind {
-        case .account: what = "account"
-        case .debit: what = "debit card"
-        case .credit: what = "credit card"
+        return "\(CardLabels.shortBank(bank)) ·\(last4 ?? "····")"
+    }
+}
+
+enum CardLabels {
+    static func shortBank(_ bank: String) -> String {
+        if bank.range(of: "NBD", options: .caseInsensitive) != nil { return "ENBD" }
+        switch bank.lowercased() {
+        case "dubai islamic bank": return "DIB"
+        case "sharjah islamic bank": return "SIB"
+        case "standard chartered": return "StanChart"
+        default: return bank
         }
-        return "\(bank) \(what) ·\(last4 ?? "????")"
     }
 }
 
@@ -177,6 +197,7 @@ enum CardKind: String, CaseIterable, Identifiable {
 @Model final class BankSender {
     @Attribute(.unique) var sender: String
     var bank: String
+    var addedAt: Date = Date()
     init(sender: String, bank: String) {
         self.sender = sender
         self.bank = bank
@@ -228,8 +249,75 @@ enum CardKind: String, CaseIterable, Identifiable {
     static let ignore = "IGNORE"
 }
 
+/// A category you added (ids below 100; the built-in ones are 1–14, 101 and 102).
+@Model final class CustomCategory {
+    @Attribute(.unique) var id: Int64
+    var name: String
+    var archived: Bool = false
+    init(id: Int64, name: String) {
+        self.id = id
+        self.name = name
+    }
+}
+
+/// A monthly limit for one category.
+@Model final class Budget {
+    @Attribute(.unique) var categoryId: Int64
+    var limitMinor: Int64
+    init(categoryId: Int64, limitMinor: Int64) {
+        self.categoryId = categoryId
+        self.limitMinor = limitMinor
+    }
+}
+
+/// A monthly payment you add by hand (rent, school fees, a loan without SMS).
+@Model final class FixedPayment {
+    @Attribute(.unique) var id: UUID
+    var name: String
+    var amountMinor: Int64
+    var dayOfMonth: Int
+    var categoryId: Int64?
+    /// The card or account it's paid from, if you chose one.
+    var cardKey: String?
+    var remind: Bool
+    var active: Bool
+    /// "2026-09": the last month you marked it paid.
+    var lastPaidYm: String?
+    var createdAt: Date
+
+    init(name: String, amountMinor: Int64, dayOfMonth: Int) {
+        id = UUID()
+        self.name = name
+        self.amountMinor = amountMinor
+        self.dayOfMonth = dayOfMonth
+        remind = true
+        active = true
+        createdAt = Date()
+    }
+}
+
+/// A savings goal.
+@Model final class Goal {
+    @Attribute(.unique) var id: UUID
+    var name: String
+    var targetMinor: Int64
+    var savedMinor: Int64
+    var targetEpochDay: Int64?
+    var createdAt: Date
+
+    init(name: String, targetMinor: Int64, savedMinor: Int64, targetEpochDay: Int64?) {
+        id = UUID()
+        self.name = name
+        self.targetMinor = targetMinor
+        self.savedMinor = savedMinor
+        self.targetEpochDay = targetEpochDay
+        createdAt = Date()
+    }
+}
+
 enum AppModels {
     static let all: [any PersistentModel.Type] = [
         SmsRecord.self, Txn.self, Card.self, StatementRecord.self, BankSender.self, MerchantRule.self, CategoryOverride.self, SmsFix.self,
+        CustomCategory.self, Budget.self, FixedPayment.self, Goal.self,
     ]
 }

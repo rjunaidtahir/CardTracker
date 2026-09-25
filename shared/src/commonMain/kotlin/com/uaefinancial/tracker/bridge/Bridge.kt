@@ -75,7 +75,16 @@ data class StatementReading(
 )
 
 /** A transaction already in the app, for checking a statement against it. */
-data class AppTxn(val epochDay: Long, val amountMinor: Long, val isCredit: Boolean, val estimated: Boolean)
+data class AppTxn(val ref: String, val epochDay: Long, val amountMinor: Long, val isCredit: Boolean, val estimated: Boolean)
+
+/** A statement checked against the app: rows matched, rows missing from the app, and app transactions not on it. */
+data class ReconcileResult(
+    val matchedRows: List<StatementRow>,
+    val matchedRefs: List<String>,
+    val missing: List<StatementRow>,
+    /** Refs of app transactions within the statement's dates that aren't on the statement. */
+    val onlyInAppRefs: List<String>,
+)
 
 data class CategoryInfo(val id: Long, val name: String)
 
@@ -199,13 +208,22 @@ object Bridge {
     }
 
     /** The statement rows that aren't in the app yet (same amount within 3 days; foreign spends within 3%). */
-    fun missingRows(rows: List<StatementRow>, app: List<AppTxn>): List<StatementRow> {
+    fun missingRows(rows: List<StatementRow>, app: List<AppTxn>): List<StatementRow> = reconcile(rows, app).missing
+
+    /** Checks a statement's rows against the app (same amount within 3 days; foreign spends within 3%). */
+    fun reconcile(rows: List<StatementRow>, app: List<AppTxn>): ReconcileResult {
         val lines = rows.map {
             com.uaefinancial.tracker.core.StatementLine(CalendarDate.ofEpochDay(it.epochDay), it.details, it.amountMinor, it.isCredit, it.details, it.cardLast4)
         }
-        val refs = app.mapIndexed { i, a -> com.uaefinancial.tracker.core.AppTxnRef(i.toLong(), CalendarDate.ofEpochDay(a.epochDay), a.amountMinor, a.isCredit, a.estimated, "") }
-        val missing = StatementImport.reconcile(lines, refs).missing.toSet()
-        return rows.filterIndexed { i, _ -> lines[i] in missing }
+        val refs = app.mapIndexed { i, a -> com.uaefinancial.tracker.core.AppTxnRef(i.toLong(), CalendarDate.ofEpochDay(a.epochDay), a.amountMinor, a.isCredit, a.estimated, a.ref) }
+        val r = StatementImport.reconcile(lines, refs)
+        fun rowOf(l: com.uaefinancial.tracker.core.StatementLine) = rows[lines.indexOf(l)]
+        return ReconcileResult(
+            matchedRows = r.matched.map { rowOf(it.first) },
+            matchedRefs = r.matched.map { app[it.second.id.toInt()].ref },
+            missing = r.missing.map { rowOf(it) },
+            onlyInAppRefs = r.extra.map { app[it.id.toInt()].ref },
+        )
     }
 
     /** "lunch 45", "usd 20 netflix #1234", "refund amazon 50". Null when there's no amount. */
@@ -230,6 +248,21 @@ object Bridge {
     fun countsByDefault(cardType: String): Boolean = Spending.defaultCountInSpending(cardTypeOf(cardType))
 
     fun transferLabel(last4: String): String = SmsParser.transferLabel(last4)
+
+    /** Pairing of two SMS about one transfer (e.g. FAB "Outward Remittance" + "funds transfer processed"). */
+    fun pairGroup(ruleId: String?): String? = BankRules.ruleById(ruleId)?.pairGroup
+
+    /** The rules whose SMS can be the other half of a transfer read by [ruleId] (same group, the other side). */
+    fun pairPartnerRules(ruleId: String?): List<String> {
+        val rule = BankRules.ruleById(ruleId) ?: return emptyList()
+        val group = rule.pairGroup ?: return emptyList()
+        return BankRules.banks.flatMap { it.rules }.filter { it.pairGroup == group && it.namesDestination != rule.namesDestination }.map { it.id }
+    }
+
+    fun namesDestination(ruleId: String?): Boolean = BankRules.ruleById(ruleId)?.namesDestination ?: false
+
+    /** Generic texts (account debits, transfers): a learned category then applies only to the same text and amount. */
+    fun isAmountSpecific(merchant: String, type: String): Boolean = CategoryRules.isAmountSpecific(merchant, txnType(type))
 
     /** Key of a card or account: "Bank ·1234", or "Bank ·????" when the number isn't known (same as Android). */
     fun cardKey(bank: String, last4: String?): String = "$bank ·${last4 ?: "????"}"

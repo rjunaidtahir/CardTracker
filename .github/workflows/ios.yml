@@ -103,16 +103,21 @@ jobs:
             sleep 7
             xcrun simctl io "$DEST" screenshot "shots/$name.png" > /dev/null
           }
-          shot 1-home -tab home
-          shot 2-activity -tab activity
-          shot 3-cards -tab cards
-          shot 4-more -tab more
-          shot 5-review -tab home -screen review
-          shot 6-automation -tab more -screen automation
-          shot 7-welcome -onboarding YES
+          shot 01-home -tab home
+          shot 02-activity -tab activity
+          shot 03-cards -tab cards
+          shot 04-more -tab more
+          shot 05-card-detail -tab cards -screen card
+          shot 06-fixed -tab home -screen fixed
+          shot 07-review -tab home -screen review
+          shot 08-automation -tab more -screen automation
+          shot 09-statement -tab more -screen statement
+          shot 10-notifications -tab more -screen notifications
+          shot 11-welcome -onboarding YES
+          shot 12-locked -locked YES
           xcrun simctl ui "$DEST" appearance dark
-          shot 8-home-dark -tab home
-          shot 9-cards-dark -tab cards
+          shot 13-home-dark -tab home
+          shot 14-cards-dark -tab cards
           ls -la shots
 
       - name: Publish screenshots (branch ios-screenshots)

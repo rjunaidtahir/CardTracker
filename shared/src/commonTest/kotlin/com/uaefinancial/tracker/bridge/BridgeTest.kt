@@ -119,7 +119,19 @@ class BridgeTest {
             StatementRow(d + 2, "NOON", 5_000, false, null),
             StatementRow(d + 5, "PAYMENT THANK YOU", 50_000, true, null),
         )
-        val app = listOf(AppTxn(d + 1, 12_000, false, false), AppTxn(d + 5, 50_000, true, false))
+        val app = listOf(AppTxn("a", d + 1, 12_000, false, false), AppTxn("b", d + 5, 50_000, true, false), AppTxn("c", d + 3, 999, false, false))
         assertEquals(listOf("NOON"), Bridge.missingRows(rows, app).map { it.details })
+        val r = Bridge.reconcile(rows, app)
+        assertEquals(listOf("a", "b"), r.matchedRefs.sorted())
+        assertEquals(listOf("c"), r.onlyInAppRefs)
+    }
+
+    @Test fun transfer_pairing_rules() {
+        val fab = Bridge.readSms("FAB", "Outward Remittance\nDebit\nAccount XXXX8001\nAED 1000.00\nDate 17/09/2026\nBalance AED 2386.00", 1_758_100_000_000, emptyMap())
+        assertEquals("transaction", fab.kind)
+        assertNotNull(Bridge.pairGroup(fab.ruleId))
+        assertTrue(Bridge.pairPartnerRules(fab.ruleId).isNotEmpty())
+        assertTrue(Bridge.isAmountSpecific("ACCOUNT DEBIT", "PURCHASE"))
+        assertFalse(Bridge.isAmountSpecific("CARREFOUR", "PURCHASE"))
     }
 }
