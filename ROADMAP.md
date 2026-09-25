@@ -1,8 +1,46 @@
 # Roadmap
 
-UAE Financial Tracker: a sideloaded Android app (Kotlin, Jetpack Compose, Room, WorkManager) that turns UAE bank SMS into spending, statements and due dates. Base currency AED. No internet permission.
+UAE Financial Tracker turns UAE bank SMS into spending, statements and due dates, with AED as the base currency. It comes in two apps:
 
-## v2.1: statements from any bank (current)
+- a sideloaded Android app (Kotlin, Jetpack Compose, Room, WorkManager), with no internet permission
+- an iPhone app (SwiftUI, SwiftData)
+
+Both apps use one shared engine written in Kotlin Multiplatform.
+
+## iPhone app 1.0 (in progress)
+
+- **Shared engine** (`shared/`). Message reading, the statement reader, the spending rules and the duplicate key moved out of the Android app into a Kotlin Multiplatform module that uses only the Kotlin standard library. It has its own date, decimal and SHA-256 code, each checked against Java on thousands of cases. Its 103 tests pass on the JVM and on the iPhone simulator. `bridge/Bridge.kt` gives Swift a flat API.
+- **Getting messages in on an iPhone.** iOS doesn't let apps read SMS, so the app offers:
+  - The Shortcuts action "Add Bank Message", fed by a Message automation, with the setup steps in the app. It runs in the background.
+  - Paste, one message or many.
+  - Android "SMS Backup & Restore" XML files.
+  - Statement PDFs opened from other apps, including password-protected ones.
+
+  When the sender isn't known (pasted text), the app tries each bank's own formats first, then a bank named in the text, then the smart reader.
+- **Screens:**
+  - Home: spent this period with a comparison, payments due, spending by category, top merchants
+  - Activity: search, detail with the original SMS, category learning, typed spends
+  - Cards: card tiles with limits and statements, and card settings
+  - More: import options, Needs review with Fix, bank senders, exchange rates, re-read, help and first-run setup
+- **Privacy.** Data is not synced to iCloud and there is no network code. There's a privacy manifest, and OTPs are never stored.
+- **CI.** Every change to `ios/` or `shared/` runs on a Mac runner:
+  1. the shared tests on the simulator
+  2. the app's tests, including a PDF drawn, then read back through PDFKit
+  3. a build for a real iPhone
+  4. screenshots with sample data
+
+  `ios-release.yml` uploads to TestFlight once the Apple account secrets are added.
+
+**Next for iPhone:**
+
+- Screenshots of the Messages app, read with text recognition (Vision). This includes times like "Yesterday 21:05" and flags messages with no visible date.
+- A Share extension, so a message's text can be shared from any app.
+- Importing the Android app's backup.
+- Budgets, fixed payments, due-date reminders, reports and app lock.
+- Merging two-SMS transfers, as Android does.
+- App Store assets.
+
+## Android v2.1: statements from any bank
 
 - **Open a statement from anywhere.** "Open with" from a Gmail attachment or My Files, or Share, goes straight into the statement check. It asks for the password if needed, then matches the card by its last 4 digits or lets you pick one.
 - **Statement reader for unseen layouts** (`core/StatementReader.kt`):
@@ -60,6 +98,7 @@ UAE Financial Tracker: a sideloaded Android app (Kotlin, Jetpack Compose, Room, 
 
 ## Design rules to keep
 
+- Message and statement reading lives only in `shared/`, so both apps read the same way. Its tests run on both platforms.
 - All spending totals and charts go through `core/Spending.kt`: excluded cards and credit card payments never count.
 - Every schema change is a Room migration in `data/Migrations.kt`, never destructive.
 - Bank formats live in `parser/BankRules.kt`. When there's no matching rule, the smart reader takes over, and anything still unread goes to Needs review. Never guess silently.

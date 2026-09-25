@@ -1,12 +1,14 @@
 # UAE Financial Tracker
 
-An Android app that turns the SMS your UAE banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
+An Android and iPhone app that turns the SMS your UAE banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
 - **Works with any UAE bank.** The main banks have built-in formats, and a smart reader handles any other bank.
 - **Private.** No internet permission, no account, no ads. Everything stays on the phone. One-time passwords (OTPs) are never stored.
 - **Free to share.** Anyone can install it. It is not tied to one person's banks or cards.
 
 ## Install
+
+### Android
 
 The app is not on the Play Store. You install the APK file directly.
 
@@ -16,6 +18,19 @@ The app is not on the Play Store. You install the APK file directly.
 4. **Android 13 and later:** Android blocks SMS access for apps installed from a file. If the SMS permission is refused or greyed out, go to **Settings → Apps → UAE Financial Tracker → ⋮ (top right) → Allow restricted settings**, then allow SMS in the app. The setup shows the same steps and a button that opens the right screen.
 
 Updates install over the old version and keep your data. Every build is signed with the same key, `app/debug.keystore`.
+
+### iPhone
+
+The iPhone app (`ios/`) is built and tested on every change. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
+
+iPhone apps can't read SMS, so bank messages come in these ways:
+
+- **Automatic (Shortcuts).** A one-minute "Message" automation in Apple's Shortcuts app passes each bank SMS to the app's **Add Bank Message** action, which runs in the background. The app shows the steps in **More → Automatic import**.
+- **Paste.** Copy one or more messages in Messages and paste them in **More → Paste messages**, with an empty line between messages.
+- **Files.** An Android "SMS Backup & Restore" XML file, opened with the app or picked in **More → Import a messages file**.
+- **Statement PDFs.** From Mail or Files, Share → UAE Financial Tracker, or **More → Check a statement PDF**. The same statement reader as Android, including password-protected PDFs.
+
+Messages from people are ignored, OTPs are never stored, and a message added twice (for example by the automation and again by a paste) is only kept once.
 
 ## First run
 
@@ -62,9 +77,9 @@ Each card has a **Show & count** switch. Debit cards and bank accounts start swi
 
 1. **Sender check.** Only SMS from bank senders are looked at. That covers the built-in list plus any senders you add in **More → Bank senders**.
 2. **OTPs dropped.** OTP and verification messages are dropped without being stored.
-3. **Bank rules.** Banks with verified formats are read by their rules in [`parser/BankRules.kt`](app/src/main/java/com/uaefinancial/tracker/parser/BankRules.kt). These are FAB, Emirates NBD, ADCB, Al Hilal, HSBC and Mashreq.
+3. **Bank rules.** Banks with verified formats are read by their rules in [`parser/BankRules.kt`](shared/src/commonMain/kotlin/com/uaefinancial/tracker/parser/BankRules.kt). These are FAB, Emirates NBD, ADCB, Al Hilal, HSBC and Mashreq.
 4. **Ignored messages.** Adverts, declines, limit changes, scheduled transfers and similar notices are recognised and ignored.
-5. **Smart reader.** Anything else goes to the smart reader, [`parser/SmartParser.kt`](app/src/main/java/com/uaefinancial/tracker/parser/SmartParser.kt). It reads the message by its wording:
+5. **Smart reader.** Anything else goes to the smart reader, [`parser/SmartParser.kt`](shared/src/commonMain/kotlin/com/uaefinancial/tracker/parser/SmartParser.kt). It reads the message by its wording:
    - amounts and what they are (the spend, the available limit, the total due, the minimum due)
    - the card or account number
    - whether money went out or came in
@@ -81,22 +96,37 @@ GitHub Actions builds everything, so nothing needs to be installed on a PC.
 
 - **Every push** runs the unit tests, builds the APK and runs Android lint. Results show on the run page as annotations.
 - **Pushes to `main`** also publish the APK as a new release, which you then install from the phone.
+- **Changes to `ios/` or `shared/`** run the iPhone workflow on a Mac runner:
+  1. the shared engine's tests on the iPhone simulator
+  2. the app's tests, including a real PDF read through PDFKit
+  3. a build for a real iPhone
+  4. screenshots with sample data, pushed to the `ios-screenshots` branch
 
-To build locally, open the folder in Android Studio and use **Build → Build APK(s)**, or run `./gradlew assembleDebug`.
+To build Android locally, open the folder in Android Studio and use **Build → Build APK(s)**, or run `./gradlew assembleDebug`. For the iPhone app on a Mac: `brew install xcodegen`, `cd ios && xcodegen generate`, open `UAEFinancialTracker.xcodeproj` and run. Xcode builds the shared engine with Gradle, so Java 17 must be installed.
+
+### iPhone release
+
+1. Join the Apple Developer Program. In App Store Connect, create the app with bundle ID `com.uaefinancial.tracker`.
+2. Create an App Store Connect API key with the Admin role (Users and Access → Integrations → Keys).
+3. Add these repository secrets: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` (the contents of the .p8 file).
+4. Run **Actions → iPhone app to TestFlight**. It signs automatically and uploads the build. Install it on the iPhone with the TestFlight app, then submit it for review from App Store Connect.
 
 ## Adding or fixing a bank format
 
 1. Copy the SMS from **Needs review**, or use **Share these messages**.
-2. Add it as a test in `app/src/test/.../parser/ParserTest.kt`, or in `SmartParserTest.kt` for the smart reader.
+2. Add it as a test in `shared/src/commonTest/.../parser/ParserTest.kt`, or in `SmartParserTest.kt` for the smart reader.
 3. Add a `Rule` for that bank in `BankRules.kt`, or add its sender ID to the bank's `senderIds`. The comment at the top of the file explains the placeholder tokens.
-4. Push. Once the release is installed, tap **More → Re-read stored** to apply the new rules to messages already on the phone.
+4. Push. Once the new version is installed, tap **More → Re-read stored** (Android) or **More → Re-read stored messages** (iPhone) to apply the new rules to messages already on the phone.
 
 ## Project layout
 
 | Path | Contents |
 |---|---|
-| `parser/` | `BankRules.kt` (bank formats and sender IDs), `SmartParser.kt` (reader for any bank), `SmsParser.kt` (the engine), `CategoryRules.kt` (categories and keywords), `ManualEntryParser.kt` (typed entries) |
-| `core/` | Pure logic with unit tests: spending rules (`Spending.kt`), periods, insights, budgets, due status, the statement PDF reader (`StatementReader.kt`) |
+| `shared/` | The engine both apps use (Kotlin Multiplatform, plain Kotlin only): message reading, the statement reader, spending rules, and `bridge/Bridge.kt`, a simple API for Swift. Its tests run on Android and on the iPhone simulator. |
+| `ios/` | The iPhone app: SwiftUI and SwiftData, the Shortcuts action (`Intents.swift`), PDF reading with PDFKit (`PdfStatement.swift`), and the project definition for XcodeGen (`project.yml`) |
+| `app/` | The Android app. Its folders are listed below. |
+| `parser/` (shared) | `BankRules.kt` (bank formats and sender IDs), `SmartParser.kt` (reader for any bank), `SmsParser.kt` (the engine), `CategoryRules.kt` (categories and keywords), `ManualEntryParser.kt` (typed entries) |
+| `core/` (shared and app) | Pure logic with unit tests: spending rules (`Spending.kt`), the statement PDF reader (`StatementReader.kt`), periods, insights, budgets and due status |
 | `data/` | Room database (`Database.kt`, schema v1), `Repository.kt` (SMS to transactions, fixes, senders), `Backup.kt`, `Prefs.kt` |
 | `sms/` | Inbox reading and sender scan, sync, and the optional live SMS receiver |
 | `ui/` | Jetpack Compose screens: Home, Activity, Cards, More, setup, review, senders, help |
