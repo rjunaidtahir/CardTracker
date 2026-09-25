@@ -22,12 +22,12 @@ struct MoreView: View {
                         Label("Paste messages", systemImage: "doc.on.clipboard")
                     }
                     Button { pickTypes = [.xml, .plainText, .text, .commaSeparatedText]; picking = true } label: {
-                        Label("Import a messages file", systemImage: "square.and.arrow.down")
+                        RowLabel("Import a messages file", "square.and.arrow.down")
                     }
                 }
                 Section("Statements") {
                     Button { pickTypes = [.pdf]; picking = true } label: {
-                        Label("Check a statement PDF", systemImage: "doc.text.magnifyingglass")
+                        RowLabel("Check a statement PDF", "doc.text.magnifyingglass")
                     }
                 }
                 Section("Messages") {
@@ -46,13 +46,13 @@ struct MoreView: View {
                         rereading = false
                         model.toast = "Read again: " + tally.summary
                     } label: {
-                        Label("Re-read stored messages", systemImage: "arrow.clockwise")
+                        RowLabel("Re-read stored messages", "arrow.clockwise")
                     }
                     .disabled(rereading)
                 }
                 Section("App") {
                     NavigationLink { HelpView() } label: { Label("Help", systemImage: "questionmark.circle") }
-                    Button { model.showOnboarding = true } label: { Label("Run the setup again", systemImage: "sparkles") }
+                    Button { model.showOnboarding = true } label: { RowLabel("Run the setup again", "sparkles") }
                 }
                 Section {
                     Text("Your data stays on this iPhone. The app has no account, no ads and no tracking, and it is not backed up to iCloud. One-time passwords (OTPs) are never stored.")
@@ -389,5 +389,18 @@ private struct HelpRow: View {
             Text(text).font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// A list row for a button, styled like the navigation rows (plain text, tinted icon).
+struct RowLabel: View {
+    let title: String
+    let symbol: String
+    init(_ title: String, _ symbol: String) {
+        self.title = title
+        self.symbol = symbol
+    }
+    var body: some View {
+        Label { Text(title).foregroundStyle(Color.primary) } icon: { Image(systemName: symbol) }
     }
 }

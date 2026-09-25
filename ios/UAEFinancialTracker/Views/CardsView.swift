@@ -18,9 +18,9 @@ struct CardsView: View {
                     )
                 }
                 ForEach(cards) { card in
-                    NavigationLink { CardDetailView(card: card) } label: {
-                        CardTile(card: card, txns: txns.filter { $0.cardKey == card.key }, statement: latestStatement(card.key))
-                    }
+                    // The whole card opens its details (no list chevron beside it).
+                    CardTile(card: card, txns: txns.filter { $0.cardKey == card.key }, statement: latestStatement(card.key))
+                        .background(NavigationLink { CardDetailView(card: card) } label: { EmptyView() }.opacity(0))
                     .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
                     .listRowSeparator(.hidden)
                 }
