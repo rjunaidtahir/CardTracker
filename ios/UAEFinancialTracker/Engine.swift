@@ -74,6 +74,7 @@ final class Engine {
         } else {
             reading = bridge.readSmsAnySender(body: body, receivedAtMillis: millis, rates: rates)
             let read = reading.kind == "transaction" || reading.kind == "statement"
+            if reading.kind == "otp" { return .otp }
             if reading.kind == "notBank" { return .notBank }
             if (!read || requireBankLike) && !bridge.looksLikeBankAlert(body: body) { return .notBank }
         }

@@ -5,6 +5,10 @@ import SwiftData
 @MainActor
 enum AppData {
     static let container: ModelContainer = {
+        // SwiftData keeps its store in Application Support, which doesn't exist on a fresh install.
+        if let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
         let schema = Schema(AppModels.all)
         // Financial data stays on this phone: no iCloud sync.
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)

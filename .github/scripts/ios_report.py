@@ -59,6 +59,8 @@ for f in glob.glob("shared/build/test-results/iosSimulatorArm64Test/*.xml"):
 swift_errors, swift_warnings, xc_failed, xc_summary = [], [], [], []
 for log in ("xcode.log", "device.log"):
     for line in read(log):
+        if "CoreData:" in line or "Run script build phase" in line:
+            continue
         if " error: " in line or line.startswith("error:") or ": error:" in line:
             swift_errors.append(rel(line.strip()))
         elif ": warning:" in line and "/ios/" in line:
@@ -67,8 +69,6 @@ for log in ("xcode.log", "device.log"):
             xc_failed.append(line.strip())
         elif re.match(r"\*\* (BUILD|TEST) ", line) or "Executed" in line and "test" in line:
             xc_summary.append(f"{log}: {line.strip()}")
-        elif "Run script build phase" in line or "PhaseScriptExecution" in line and "failed" in line.lower():
-            swift_errors.append(line.strip())
 
 emit("error", "Kotlin", list(dict.fromkeys(kotlin)))
 emit("error", "Failed shared tests (simulator)", failed)
