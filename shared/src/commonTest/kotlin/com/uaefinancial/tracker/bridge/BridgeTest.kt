@@ -4,6 +4,7 @@ import com.uaefinancial.tracker.core.CalendarDate
 import com.uaefinancial.tracker.core.DateTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -96,5 +97,29 @@ class BridgeTest {
         assertEquals("2468", st.cardLast4)
         assertEquals(8, st.rows.size)
         assertEquals(1, st.addsUp)
+    }
+
+    @Test fun helpers_for_the_iphone_app() {
+        assertEquals("FAB ·1234", Bridge.cardKey("FAB", "1234"))
+        assertEquals("FAB ·????", Bridge.cardKey("FAB", null))
+        assertEquals(10000L, Bridge.toAedMinor(10000, "aed", emptyMap()))
+        assertEquals(36725L, Bridge.toAedMinor(10000, "USD", mapOf("USD" to "3.6725")))
+        assertEquals(Bridge.NONE, Bridge.toAedMinor(10000, "XYZ", mapOf("USD" to "3.6725")))
+        assertTrue(Bridge.defaultRates().containsKey("USD"))
+        assertTrue(Bridge.canHaveCategory("PURCHASE"))
+        assertFalse(Bridge.canHaveCategory("PAYMENT"))
+        val g = Bridge.guessTransaction("Other bank", "AED 45.00 was spent on your card ending 1234 at CARREFOUR on 10/09/2026", 1_757_000_000_000)
+        assertEquals(4500L, g?.amountMinor)
+    }
+
+    @Test fun statement_rows_missing_from_the_app() {
+        val d = CalendarDate.of(2026, 9, 1).toEpochDay()
+        val rows = listOf(
+            StatementRow(d, "CARREFOUR", 12_000, false, null),
+            StatementRow(d + 2, "NOON", 5_000, false, null),
+            StatementRow(d + 5, "PAYMENT THANK YOU", 50_000, true, null),
+        )
+        val app = listOf(AppTxn(d + 1, 12_000, false, false), AppTxn(d + 5, 50_000, true, false))
+        assertEquals(listOf("NOON"), Bridge.missingRows(rows, app).map { it.details })
     }
 }

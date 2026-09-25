@@ -3,6 +3,10 @@ name: Build APK
 on:
   push:
     branches: ['**']
+    paths-ignore:
+      - 'ios/**'
+      - '.github/workflows/ios.yml'
+      - '.github/scripts/ios_report.py'
   workflow_dispatch:
 
 permissions:

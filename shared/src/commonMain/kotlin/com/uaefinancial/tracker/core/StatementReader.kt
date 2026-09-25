@@ -44,7 +44,7 @@ object StatementReader {
     /** Groups glyphs into printed lines (same page, same baseline) and words, dropping Arabic / unreadable glyphs. */
     fun linesFromGlyphs(glyphs: List<Glyph>): List<PrintedLine> {
         val out = mutableListOf<PrintedLine>()
-        for ((page, pg) in glyphs.filter { it.text.isNotBlank() }.groupBy { it.page }.toSortedMap()) {
+        for ((page, pg) in glyphs.filter { it.text.isNotBlank() }.groupBy { it.page }.entries.sortedBy { it.key }) {
             val sorted = pg.sortedWith(compareBy({ it.y }, { it.x }))
             val rows = mutableListOf<MutableList<Glyph>>()
             for (g in sorted) {

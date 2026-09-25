@@ -4,6 +4,7 @@ import com.uaefinancial.tracker.core.CalendarDate
 import com.uaefinancial.tracker.core.Glyph
 import com.uaefinancial.tracker.core.SmsKey
 import com.uaefinancial.tracker.core.Spending
+import com.uaefinancial.tracker.core.StatementImport
 import com.uaefinancial.tracker.core.StatementReader
 import com.uaefinancial.tracker.parser.BankRules
 import com.uaefinancial.tracker.parser.CardType
@@ -52,7 +53,7 @@ data class SmsReading(
     val hasStatementDate: Boolean,
 )
 
-data class StatementRow(val epochDay: Long, val description: String, val amountMinor: Long, val isCredit: Boolean, val cardLast4: String?)
+data class StatementRow(val epochDay: Long, val details: String, val amountMinor: Long, val isCredit: Boolean, val cardLast4: String?)
 
 /** A statement PDF read into figures and rows. Amounts in fils; -1 means "not found on the statement". */
 data class StatementReading(
@@ -73,9 +74,12 @@ data class StatementReading(
     val addsUp: Int,
 )
 
+/** A transaction already in the app, for checking a statement against it. */
+data class AppTxn(val epochDay: Long, val amountMinor: Long, val isCredit: Boolean, val estimated: Boolean)
+
 data class CategoryInfo(val id: Long, val name: String)
 
-data class TypedEntry(val description: String, val amountMinor: Long, val currency: String, val cardLast4: String?, val type: String)
+data class TypedEntry(val details: String, val amountMinor: Long, val currency: String, val cardLast4: String?, val type: String)
 
 object Bridge {
     const val NONE = -1L
@@ -194,6 +198,16 @@ object Bridge {
         )
     }
 
+    /** The statement rows that aren't in the app yet (same amount within 3 days; foreign spends within 3%). */
+    fun missingRows(rows: List<StatementRow>, app: List<AppTxn>): List<StatementRow> {
+        val lines = rows.map {
+            com.uaefinancial.tracker.core.StatementLine(CalendarDate.ofEpochDay(it.epochDay), it.details, it.amountMinor, it.isCredit, it.details, it.cardLast4)
+        }
+        val refs = app.mapIndexed { i, a -> com.uaefinancial.tracker.core.AppTxnRef(i.toLong(), CalendarDate.ofEpochDay(a.epochDay), a.amountMinor, a.isCredit, a.estimated, "") }
+        val missing = StatementImport.reconcile(lines, refs).missing.toSet()
+        return rows.filterIndexed { i, _ -> lines[i] in missing }
+    }
+
     /** "lunch 45", "usd 20 netflix #1234", "refund amazon 50". Null when there's no amount. */
     fun typedEntry(text: String): TypedEntry? = ManualEntryParser.parse(text)?.let {
         TypedEntry(it.description, Money.toMinor(it.amount), it.currency, it.cardLast4, it.type.name)
@@ -216,6 +230,30 @@ object Bridge {
     fun countsByDefault(cardType: String): Boolean = Spending.defaultCountInSpending(cardTypeOf(cardType))
 
     fun transferLabel(last4: String): String = SmsParser.transferLabel(last4)
+
+    /** Key of a card or account: "Bank ·1234", or "Bank ·????" when the number isn't known (same as Android). */
+    fun cardKey(bank: String, last4: String?): String = "$bank ·${last4 ?: "????"}"
+
+    /** Whether this type can carry a category (card payments can't). */
+    fun canHaveCategory(type: String): Boolean = CategoryRules.canHaveCategory(txnType(type))
+
+    /** Key a learned category is stored under: the same text and amount for generic debits, otherwise the merchant. */
+    fun learningKey(merchant: String, amountMinor: Long, type: String): String = CategoryRules.learningKey(merchant, amountMinor, txnType(type))
+
+    /** The smart reader's best guess for a message it couldn't read for sure (pre-fills the Fix form). */
+    fun guessTransaction(bank: String, body: String, receivedAtMillis: Long): SmsReading? =
+        runCatching { SmartParser.read(bank, SmsParser.normalizeBody(body), receivedAtMillis) }.getOrNull()
+            ?.let { it as? ParseResult.Transaction }?.let { reading(it, emptyMap()) }
+
+    /** Converts an amount in [currency] to fils of AED with the given rates; -1 when there's no rate. */
+    fun toAedMinor(amountMinor: Long, currency: String, rates: Map<String, String>): Long {
+        val rateMap = rates.mapNotNull { (k, v) -> com.uaefinancial.tracker.core.Decimal.parseOrNull(v)?.let { k.uppercase() to it } }.toMap()
+        return runCatching { Money.toAedMinor(Money.fromMinor(amountMinor), currency.uppercase(), rateMap.ifEmpty { BankRules.fxToAed }) }
+            .getOrNull()?.first ?: NONE
+    }
+
+    /** Built-in approximate rates (currency to AED), as text. */
+    fun defaultRates(): Map<String, String> = BankRules.fxToAed.mapValues { it.value.toPlainString() }
 
     private fun txnType(name: String) = runCatching { TxnType.valueOf(name) }.getOrDefault(TxnType.PURCHASE)
     private fun cardTypeOf(name: String) = runCatching { CardType.valueOf(name) }.getOrDefault(CardType.CREDIT)
