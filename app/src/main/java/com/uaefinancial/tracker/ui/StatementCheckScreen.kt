@@ -84,7 +84,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
             Spacer(Modifier.height(10.dp))
             Button(onClick = { picker.launch(arrayOf("application/pdf")) }, shape = RoundedCornerShape(50), enabled = st?.loading != true) {
                 Icon(Icons.Filled.PictureAsPdf, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp))
-                Text(if (pickedUri == null) "Choose statement PDF" else "Choose another PDF")
+                Text(if (pickedUri == null && st?.uri == null) "Choose statement PDF" else "Choose another PDF")
             }
         }
         if (st?.loading == true) item { Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)); Text("Reading the statement…") } }
@@ -97,7 +97,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
                         password, { password = it }, label = { Text("PDF password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     )
-                    Button(onClick = { pickedUri?.let { vm.checkStatement(it.toUri(), password) } }, shape = RoundedCornerShape(50), modifier = Modifier.padding(top = 8.dp)) { Text("Open") }
+                    Button(onClick = { (st?.uri ?: pickedUri)?.let { vm.checkStatement(it.toUri(), password) } }, shape = RoundedCornerShape(50), modifier = Modifier.padding(top = 8.dp)) { Text("Open") }
                 }
             }
         }

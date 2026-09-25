@@ -453,6 +453,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun startStatementCheck(cardKey: String?) { statementCheck.value = StatementCheck(cardKey) }
 
+    /** A PDF opened from another app (Gmail "Open with", Files, Share), waiting until the app is ready to show it. */
+    val incomingPdf = MutableStateFlow<Uri?>(null)
+
+    /**
+     * Opens a statement PDF handed over by another app. The file is copied into the app first (the other app's
+     * permission to read it can end at any time), then read like a picked file: password prompt if needed, then
+     * the card is recognised from its last 4 digits or you choose it.
+     */
+    fun openIncomingPdf(uri: Uri) {
+        startStatementCheck(null)
+        statementCheck.value = statementCheck.value?.copy(loading = true)
+        viewModelScope.launch {
+            try {
+                val copy = withContext(Dispatchers.IO) {
+                    val f = java.io.File(getApplication<Application>().cacheDir, "incoming-statement.pdf")
+                    getApplication<Application>().contentResolver.openInputStream(uri)?.use { input -> f.outputStream().use { input.copyTo(it) } }
+                        ?: error("Couldn't open the file")
+                    Uri.fromFile(f)
+                }
+                checkStatement(copy, null)
+            } catch (e: Exception) {
+                statementCheck.value = statementCheck.value?.copy(loading = false, error = "Couldn't open that PDF: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
     fun checkStatement(uri: Uri, password: String?) {
         val cur = statementCheck.value ?: return
         statementCheck.value = cur.copy(uri = uri.toString(), loading = true, error = null, needsPassword = false, result = null, summarySaved = emptyList())

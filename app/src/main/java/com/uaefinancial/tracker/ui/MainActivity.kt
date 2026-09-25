@@ -5,6 +5,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -94,6 +95,8 @@ class MainActivity : FragmentActivity() {
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
             .build()
         val showBiometric = { biometricPrompt.authenticate(promptInfo) }
+        // Only on a fresh start: after a rotation the same intent must not open the PDF again.
+        if (savedInstanceState == null) handleIncoming(intent)
         setContent {
             // Status / navigation bar icons follow the theme (dark icons on the light themes).
             val palette = AppThemes.current
@@ -110,6 +113,25 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncoming(intent)
+    }
+
+    /** A statement PDF sent here by another app ("Open with" / Share). */
+    @Suppress("DEPRECATION")
+    private fun handleIncoming(intent: Intent?) {
+        intent ?: return
+        val uri: Uri? = when (intent.action) {
+            Intent.ACTION_VIEW -> intent.data
+            Intent.ACTION_SEND -> if (Build.VERSION.SDK_INT >= 33) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                else intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            else -> null
+        }
+        if (uri != null) vm.incomingPdf.value = uri
     }
 
     override fun onStart() {
@@ -253,6 +275,16 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
             },
             onDismiss = { vm.markBatteryTipShown(); showBatteryTip = false },
         )
+    }
+
+    // A statement PDF opened from Gmail / Files / Share: straight to the statement check (after the setup, if it's running).
+    val incoming by vm.incomingPdf.collectAsStateWithLifecycle()
+    LaunchedEffect(incoming, onboarded) {
+        val uri = incoming ?: return@LaunchedEffect
+        if (!onboarded) return@LaunchedEffect
+        vm.incomingPdf.value = null
+        vm.openIncomingPdf(uri)
+        if (nav.current !is Route.StatementCheck) nav.push(Route.StatementCheck(null))
     }
 
     if (!onboarded) {
