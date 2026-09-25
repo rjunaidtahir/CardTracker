@@ -6,15 +6,15 @@ plugins {
 }
 
 android {
-    namespace = "com.junaid.cardtracker"
+    namespace = "com.uaefinancial.tracker"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.junaid.cardtracker"
+        applicationId = "com.uaefinancial.tracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.6"
+        versionCode = 20
+        versionName = "2.0"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.

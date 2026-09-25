@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
@@ -7,15 +8,17 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- No internet, ever: nothing can leave the phone. Removes it even if a library asks for it. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
 
     <application
-        android:name=".CardTrackerApp"
+        android:name=".TrackerApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.CardTracker">
+        android:theme="@style/Theme.FinancialTracker">
 
         <activity
             android:name=".ui.MainActivity"
