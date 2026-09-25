@@ -93,6 +93,23 @@ jobs:
           grep -E "error:|\*\* BUILD" ../device.log
           exit $rc
 
+      - name: Build with Xcode 16.2 (the newest Xcode for macOS Sonoma / Intel Macs)
+        id: xcode162
+        if: steps.xcode.outcome == 'success'
+        continue-on-error: true
+        run: |
+          ls -d /Applications/Xcode_16.2*.app || { echo "::warning title=Xcode 16.2::Not on this runner"; exit 0; }
+          export DEVELOPER_DIR=/Applications/Xcode_16.2.app/Contents/Developer
+          unset ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
+          rm -rf shared/build/xcode-frameworks shared/build/bin
+          cd ios
+          set +e
+          xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Debug \
+            -destination 'generic/platform=iOS' -derivedDataPath ../dd162 CODE_SIGNING_ALLOWED=NO > ../xcode162.log 2>&1
+          rc=$?
+          grep -E "error:|\*\* BUILD" ../xcode162.log | sed 's/^/[Xcode 16.2] /'
+          exit $rc
+
       - name: Screenshots with sample data
         id: shots
         if: steps.xcode.outcome == 'success'
@@ -154,5 +171,5 @@ jobs:
             shared/build/reports/tests/
 
       - name: Fail if anything failed
-        if: steps.shared.outcome != 'success' || steps.xcode.outcome != 'success' || steps.device.outcome == 'failure'
+        if: steps.shared.outcome != 'success' || steps.xcode.outcome != 'success' || steps.device.outcome == 'failure' || steps.xcode162.outcome == 'failure'
         run: exit 1

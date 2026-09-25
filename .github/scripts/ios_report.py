@@ -57,7 +57,7 @@ for f in glob.glob("shared/build/test-results/iosSimulatorArm64Test/*.xml"):
 
 # Xcode: Swift errors, warnings in our files, test results
 swift_errors, swift_warnings, xc_failed, xc_summary = [], [], [], []
-for log in ("xcode.log", "device.log"):
+for log in ("xcode.log", "device.log", "xcode162.log"):
     for line in read(log):
         if "CoreData:" in line or "Run script build phase" in line:
             continue
