@@ -112,7 +112,7 @@ jobs:
           rc=$?
           if [ $rc -ne 0 ] && grep -q "Unable to find a destination\|is not installed" ../xcode162.log; then
             echo "Downloading the iOS platform for Xcode 16.2"
-            xcodebuild -downloadPlatform iOS > /dev/null 2>&1
+            xcodebuild -downloadPlatform iOS 2>&1 | tail -3
             build162
             rc=$?
           fi
