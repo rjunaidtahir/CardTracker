@@ -2,7 +2,17 @@
 
 UAE Financial Tracker: a sideloaded Android app (Kotlin, Jetpack Compose, Room, WorkManager) that turns UAE bank SMS into spending, statements and due dates. Base currency AED. No internet permission.
 
-## v2.0: for everyone, any UAE bank (current)
+## v2.1: statements from any bank (current)
+
+- **Open a statement from anywhere.** "Open with" from a Gmail attachment or My Files, or Share, goes straight into the statement check. It asks for the password if needed, then matches the card by its last 4 digits or lets you pick one.
+- **Statement reader for unseen layouts** (`core/StatementReader.kt`):
+  - Labels are recognised by word concepts with their abbreviations (Stmt Dt, Tot. Amt. Due, Min. Amt., Avl. Cr. Limit, Prev. Bal.).
+  - Figures are found beside their label, below it, above it (summary tiles), just before it, or in a sentence ("pay at least AED 31.75 by 4 October").
+  - "Balance at start / end" is recognised on account statements.
+  - Rows of summary figures are never read as transactions.
+- **Tested blind on real PDFs.** Three rounds, 22 statements, each written and scored before the reader was changed for it: 4/8, then 6/8, then 5/6. All pass now. Also 26 text layouts and your 7 real statements. The generators are in `tools/`.
+
+## v2.0: for everyone, any UAE bank
 
 - **New identity.** The app is now called UAE Financial Tracker, with app ID `com.uaefinancial.tracker` and database schema v1. It installs alongside the older personal build, so that build can be uninstalled.
 - **No personal data in the code.** The hard-coded accounts, transfer destinations, card looks and card names chosen by last 4 digits are gone.

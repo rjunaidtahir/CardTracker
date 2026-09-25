@@ -13,8 +13,8 @@ android {
         applicationId = "com.uaefinancial.tracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 20
-        versionName = "2.0"
+        versionCode = 21
+        versionName = "2.1"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.

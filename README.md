@@ -39,6 +39,15 @@ You can run the setup again from **More → Run the setup again**.
 
 **Sync (↻):** tap it to import new bank SMS. You can also switch on **More → Record new messages automatically** to import each SMS as it arrives.
 
+**Statements:** open a bank statement PDF with the app from Gmail, Files or Share, or use More → Check a statement PDF. The app:
+
+- asks for the password if the PDF has one
+- recognises the card from its last 4 digits
+- reads the statement date, due date, amounts due, limits and every transaction
+- checks the arithmetic, previous balance + spends − credits = balance, and shows ✓ or a warning
+
+It reads the layout and wording rather than using per-bank templates. It has been tested on 55 different layouts.
+
 **Needs review:** bank messages that mention an amount but that the app couldn't read. **Fix** tells the app what one was. The form is pre-filled with the app's best guess, and your fix is remembered even after an update. You can also mark a message as **Not a transaction** or dismiss it.
 
 **What counts as spending:** purchases minus refunds and cashback. These never count:
