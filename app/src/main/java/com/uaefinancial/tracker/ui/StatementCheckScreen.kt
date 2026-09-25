@@ -214,7 +214,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
                     CountTile("Only in app", result.extra.size, Ink.violet, Modifier.weight(1f))
                 }
                 if (result.from != null && result.to != null) {
-                    Text("Statement lines ${result.from.format(dateFmt)} – ${result.to.format(dateFmt)} · ${st?.lineCount ?: 0} read",
+                    Text("Statement lines ${result.from?.toJava()?.format(dateFmt)} – ${result.to?.toJava()?.format(dateFmt)} · ${st?.lineCount ?: 0} read",
                         style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 6.dp))
                 }
             }
@@ -257,7 +257,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
                             Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                                 Column(Modifier.weight(1f)) {
                                     Text(a.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(a.date.format(dateFmt), style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                                    Text(a.date.toJava().format(dateFmt), style = MaterialTheme.typography.bodySmall, color = Ink.muted)
                                 }
                                 Text((if (a.isCredit) "+" else "−") + fmtAmount(a.amountMinor), fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                             }
