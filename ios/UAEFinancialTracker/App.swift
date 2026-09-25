@@ -11,7 +11,7 @@ enum AppData {
         }
         let schema = Schema(AppModels.all)
         // Financial data stays on this phone: no iCloud sync.
-        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false, cloudKitDatabase: .none)
+        let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: DemoData.isOn, cloudKitDatabase: .none)
         do {
             return try ModelContainer(for: schema, configurations: [config])
         } catch {
@@ -19,7 +19,11 @@ enum AppData {
         }
     }()
 
-    static let engine = Engine(context: container.mainContext)
+    static let engine: Engine = {
+        let e = Engine(context: container.mainContext)
+        if DemoData.isOn { DemoData.load(into: e) }
+        return e
+    }()
 }
 
 @main
@@ -43,10 +47,12 @@ final class AppModel {
     let engine = AppData.engine
     var incomingPdf: URL?
     var toast: String?
-    var tab: Tab = .home
-    var showOnboarding = !Settings.onboarded
+    var tab: Tab = Tab(rawValue: UserDefaults.standard.string(forKey: "tab") ?? "") ?? .home
+    var showOnboarding = DemoData.isOn ? UserDefaults.standard.bool(forKey: "onboarding") : !Settings.onboarded
+    /// Screenshots only: a screen to open on launch ("automation", "review", "type").
+    var screen = UserDefaults.standard.string(forKey: "screen")
 
-    enum Tab: Hashable { case home, activity, cards, more }
+    enum Tab: String, Hashable { case home, activity, cards, more }
 
     /// A statement PDF or a messages file opened with the app ("Open in…", Share, Files).
     func open(_ url: URL) {
@@ -91,6 +97,15 @@ struct RootView: View {
         }
         .sheet(item: Binding(get: { model.incomingPdf.map(IdentifiedURL.init) }, set: { model.incomingPdf = $0?.url })) { item in
             NavigationStack { StatementView(url: item.url) }
+        }
+        .sheet(item: Binding(get: { model.screen.map { IdentifiedURL(url: URL(string: "screen:" + $0)!) } }, set: { model.screen = $0 == nil ? nil : model.screen })) { item in
+            NavigationStack {
+                switch item.url.absoluteString {
+                case "screen:automation": AutomationGuideView()
+                case "screen:review": ReviewView()
+                default: PasteView()
+                }
+            }
         }
         .fullScreenCover(isPresented: $model.showOnboarding) {
             OnboardingView { Settings.onboarded = true; model.showOnboarding = false }

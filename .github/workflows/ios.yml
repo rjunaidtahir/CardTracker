@@ -11,6 +11,9 @@ on:
       - '.github/scripts/ios_report.py'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   ios:
     runs-on: macos-15
@@ -59,10 +62,11 @@ jobs:
                       print(dev['udid']); sys.exit()
           ")
           echo "Simulator: $DEST"
+          echo "$DEST" > sim.txt
           cd ios
           set +e
           xcodebuild test -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker \
-            -destination "id=$DEST" CODE_SIGNING_ALLOWED=NO > ../xcode.log 2>&1
+            -destination "id=$DEST" -derivedDataPath ../dd CODE_SIGNING_ALLOWED=NO > ../xcode.log 2>&1
           rc=$?
           grep -E "error:|Test Case .* (passed|failed)|\*\* (BUILD|TEST)" ../xcode.log
           exit $rc
@@ -79,6 +83,48 @@ jobs:
           rc=$?
           grep -E "error:|\*\* BUILD" ../device.log
           exit $rc
+
+      - name: Screenshots with sample data
+        id: shots
+        if: steps.xcode.outcome == 'success'
+        continue-on-error: true
+        run: |
+          DEST=$(cat sim.txt)
+          APP=dd/Build/Products/Debug-iphonesimulator/UAEFinancialTracker.app
+          xcrun simctl boot "$DEST" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEST" -b > /dev/null
+          xcrun simctl status_bar "$DEST" override --time "9:41" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3 || true
+          xcrun simctl install "$DEST" "$APP"
+          mkdir -p shots
+          shot() {
+            name=$1; shift
+            xcrun simctl terminate "$DEST" com.uaefinancial.tracker 2>/dev/null || true
+            xcrun simctl launch "$DEST" com.uaefinancial.tracker -demo YES "$@" > /dev/null
+            sleep 7
+            xcrun simctl io "$DEST" screenshot "shots/$name.png" > /dev/null
+          }
+          shot 1-home -tab home
+          shot 2-activity -tab activity
+          shot 3-cards -tab cards
+          shot 4-more -tab more
+          shot 5-review -tab home -screen review
+          shot 6-automation -tab more -screen automation
+          shot 7-welcome -onboarding YES
+          xcrun simctl ui "$DEST" appearance dark
+          shot 8-home-dark -tab home
+          shot 9-cards-dark -tab cards
+          ls -la shots
+
+      - name: Publish screenshots (branch ios-screenshots)
+        if: steps.shots.outcome == 'success'
+        continue-on-error: true
+        run: |
+          cd shots
+          git init -q
+          git checkout -q -b ios-screenshots
+          git add .
+          git -c user.name="CI" -c user.email="ci@users.noreply.github.com" commit -qm "iPhone screenshots from ${{ github.sha }}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ios-screenshots
 
       - name: Report results
         if: always()
