@@ -140,6 +140,20 @@ object SmsParser {
 
     fun parse(sender: String?, body: String, receivedAt: Long, zone: Int = UAE_ZONE): ParseResult {
         val cb = compiledBankFor(sender) ?: return ParseResult.NotBank
+        return parseWith(cb, body, receivedAt, zone)
+    }
+
+    /**
+     * Reads a message as coming from [bankName] (when the sender isn't known, e.g. pasted text). A built-in bank uses
+     * its rules; any other name is read by the smart reader only.
+     */
+    fun parseAsBank(bankName: String, body: String, receivedAt: Long, zone: Int = UAE_ZONE): ParseResult {
+        val cb = compiled.firstOrNull { it.bank.name.equals(bankName, ignoreCase = true) }
+            ?: CompiledBank(Bank(bankName, emptyList(), emptyList()), emptyList(), globalIgnore)
+        return parseWith(cb, body, receivedAt, zone)
+    }
+
+    private fun parseWith(cb: CompiledBank, body: String, receivedAt: Long, zone: Int): ParseResult {
         val text = normalizeBody(body)
         if (otpRegex.containsMatchIn(text)) return ParseResult.Ignored(cb.bank.name, BankRules.otpPreCheck.label, store = false)
         val errors = mutableListOf<String>()
