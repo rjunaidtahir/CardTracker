@@ -29,6 +29,7 @@ struct AddBankMessageIntent: AppIntent {
         let text: String
         switch outcome {
         case .transaction: text = "Added a transaction"
+        case .merged: text = "Added (same transfer as an earlier message)"
         case .statement: text = "Added a statement"
         case .failed: text = "Saved to Needs review"
         case .duplicate: text = "Already in the app"

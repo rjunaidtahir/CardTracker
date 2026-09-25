@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-java@v5
         with:
@@ -39,6 +41,10 @@ jobs:
         continue-on-error: true
         run: |
           chmod +x gradlew
+          # Only when the shared engine changed (its tests also run on Android for every push).
+          if [ "${{ github.event_name }}" = "push" ] && ! git diff --name-only HEAD~1 HEAD | grep -q '^shared/'; then
+            echo "Shared engine unchanged: skipped"; exit 0
+          fi
           ./gradlew :shared:iosSimulatorArm64Test --no-daemon --continue 2>&1 | tee ios-shared.log
           exit ${PIPESTATUS[0]}
 
