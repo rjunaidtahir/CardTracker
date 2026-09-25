@@ -23,6 +23,9 @@ object SmartParser {
 
     private val I = RegexOption.IGNORE_CASE
 
+    /** Anything this big is a reference number, not money. */
+    private val MAX_AMOUNT = BigDecimal("100000000000")
+
     // ------------------------------------------------------------------ amounts
 
     private enum class Role { TXN, AVAILABLE, MINIMUM, TOTAL, FEE }
@@ -32,7 +35,8 @@ object SmartParser {
     private val money: Regex by lazy {
         val cur = SmsParser.currencyAlternation
         val amt = SmsParser.AMT
-        Regex("""(?<![A-Za-z])(?<c1>$cur)\.?\s?(?<a1>-?\s?$amt)|(?<![A-Za-z0-9*•#.,])(?<a2>-?$amt)\s?(?<c2>$cur)(?![A-Za-z])""", I)
+        // Not IGNORE_CASE: currency codes are upper case in bank SMS ([currencyAlternation] handles "Dhs").
+        Regex("""(?<![A-Za-z])(?<c1>$cur)\.?\s?(?<a1>-?\s?$amt)|(?<![A-Za-z0-9*•#.,])(?<a2>-?$amt)\s?(?<c2>$cur)(?![A-Za-z])""")
     }
 
     private val availLabel = Regex(
@@ -54,7 +58,7 @@ object SmartParser {
     private fun mentions(text: String): List<Mention> = money.findAll(text).mapNotNull { m ->
         val rawAmt = (m.groups["a1"]?.value ?: m.groups["a2"]?.value)?.replace(" ", "") ?: return@mapNotNull null
         val cur = m.groups["c1"]?.value ?: m.groups["c2"]?.value ?: return@mapNotNull null
-        val amount = runCatching { SmsParser.parseAmount(rawAmt) }.getOrNull() ?: return@mapNotNull null
+        val amount = runCatching { SmsParser.parseAmount(rawAmt) }.getOrNull()?.takeIf { it.abs() < MAX_AMOUNT } ?: return@mapNotNull null
         val before = text.substring(maxOf(0, m.range.first - 45), m.range.first).lowercase()
         val role = when {
             minLabel.containsMatchIn(before) -> Role.MINIMUM

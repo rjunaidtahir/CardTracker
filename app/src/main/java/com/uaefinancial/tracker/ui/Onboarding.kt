@@ -1,8 +1,8 @@
 package com.uaefinancial.tracker.ui
 
+import androidx.core.net.toUri
 import android.Manifest
 import android.content.Intent
-import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -109,7 +109,7 @@ fun OnboardingFlow(
                             OutlinedButton(
                                 onClick = {
                                     ctx.startActivity(
-                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+                                        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${ctx.packageName}".toUri())
                                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                                     )
                                 },

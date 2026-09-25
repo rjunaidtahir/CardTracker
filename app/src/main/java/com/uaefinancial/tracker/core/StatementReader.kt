@@ -430,7 +430,7 @@ object StatementReader {
                     }
                 }
                 if (amount == null) amount = amts.filter { a -> targets.minByOrNull { abs(it.second - (a.xEnd - 8f)) }?.first != "original" }.lastOrNull() ?: amts.last()
-                if (amount != null && amount.credit) credit = true
+                if (amount.credit) credit = true
             } else if (fromBlock) {
                 // multi-line transaction: the last amount of the block is the AED total (includes fees)
                 amount = amts.last(); credit = amount.credit
@@ -441,7 +441,6 @@ object StatementReader {
                 if (amts.size >= 2 && aed == null) balance = amts.last().let { if (it.credit) -it.minor else it.minor }
             }
             val a = amount
-            if (a == null) { i = j; continue }
             // a rising running balance means money in (when columns didn't already say)
             if (balance != null && lastBalance != null && (c?.credit == null || c.debit == null)) {
                 if (balance != lastBalance) credit = balance > lastBalance!!

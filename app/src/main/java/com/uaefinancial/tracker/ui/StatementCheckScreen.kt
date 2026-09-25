@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import androidx.core.net.toUri
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -97,7 +98,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
                         password, { password = it }, label = { Text("PDF password") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     )
-                    Button(onClick = { pickedUri?.let { vm.checkStatement(Uri.parse(it), password) } }, shape = RoundedCornerShape(50), modifier = Modifier.padding(top = 8.dp)) { Text("Open") }
+                    Button(onClick = { pickedUri?.let { vm.checkStatement(it.toUri(), password) } }, shape = RoundedCornerShape(50), modifier = Modifier.padding(top = 8.dp)) { Text("Open") }
                 }
             }
         }

@@ -160,12 +160,15 @@ class Repository(private val db: AppDatabase) {
         dao.insertCard(CardEntity(key, bank, last4, type.dbName(), Spending.defaultCountInSpending(type)))
     }
 
-    /** One of your cards/accounts that a transfer went to (by last 4 digits), or null. */
+    /**
+     * One of your cards/accounts that a transfer went to (by last 4 digits), or null. Only an unambiguous match
+     * counts: if two of your cards end in the same digits, the app doesn't guess.
+     */
     private suspend fun destinationFor(last4: String, fromBank: String): CardEntity? {
         val matches = dao.cardsByLast4(last4)
-        return matches.firstOrNull { it.cardType == CardTypes.CREDIT && it.owner == null }
-            ?: matches.firstOrNull { it.bank == fromBank }
-            ?: matches.firstOrNull()
+        return matches.singleOrNull()
+            ?: matches.filter { it.cardType == CardTypes.CREDIT && it.owner == null }.singleOrNull()
+            ?: matches.filter { it.bank == fromBank }.singleOrNull()
     }
 
     /** "ENBD credit card ·9940", or your nickname for it. */
@@ -174,6 +177,11 @@ class Repository(private val db: AppDatabase) {
 
     private suspend fun applyTransaction(smsId: Long, dedupKey: String, r: ParseResult.Transaction): IngestOutcome {
         var t = r.txn
+        // A reference number read as an amount: never let one message break a Sync or a re-read.
+        if (t.amount.abs() >= java.math.BigDecimal("100000000000")) {
+            dao.setSmsResult(smsId, SmsStatus.FAILED, t.bank, r.ruleId, "The amount looked wrong")
+            return IngestOutcome.FAILED
+        }
         // The SMS doesn't name the account (e.g. some bill payments): use your only account at that bank.
         if (t.cardLast4 == null && t.accountNotNamed) {
             dao.cardsOfBank(t.bank, CardTypes.ACCOUNT).singleOrNull()?.let { t = t.copy(cardLast4 = it.last4, cardType = CardType.ACCOUNT) }
@@ -192,9 +200,10 @@ class Repository(private val db: AppDatabase) {
         val availMinor = t.availableLimit?.let { Money.toMinor(it) }
 
         // A transfer to one of your own cards is a payment to that card (never spending); name it after the card.
-        val dest = t.toLast4?.let { destinationFor(it, t.bank) }
+        val to = t.toLast4
+        val dest = to?.let { destinationFor(it, t.bank) }
         val counterpartyKey = dest?.takeIf { it.cardType == CardTypes.CREDIT && it.owner == null && it.cardKey != key }?.cardKey
-        if (dest != null && t.toLast4 != null && t.merchant == SmsParser.transferLabel(t.toLast4!!)) {
+        if (dest != null && to != null && t.merchant == SmsParser.transferLabel(to)) {
             t = t.copy(merchant = (if (counterpartyKey != null) "Payment to " else "Transfer to ") + label(dest))
         }
         val merchantKey = CategoryRules.merchantKey(t.merchant)

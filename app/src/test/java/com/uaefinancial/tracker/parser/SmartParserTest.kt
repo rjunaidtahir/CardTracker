@@ -212,6 +212,17 @@ class SmartParserTest {
         assertEquals("ADCB", SmsParser.bankFor("AD-ADCBAlert")?.name)
     }
 
+    @Test fun lower_case_words_are_not_currencies() {
+        // "try" is also the Turkish lira code: only upper-case codes count.
+        val r = SmsParser.parse("CBD", "Please try 2 times later or call us. Your card ending 1234 is active.", received, zone)
+        assertIs<ParseResult.Ignored>(r, "no amount in this message: $r")
+    }
+
+    @Test fun reference_numbers_are_not_amounts() {
+        val r = SmartParser.read("X", "Payment of AED 123456789012345.00 with card ending 1111 at SHOP", received, zone)
+        assertNull(r as? ParseResult.Transaction)
+    }
+
     @Test fun masked_card_number_is_not_an_amount() {
         val t = txn("DIB", "Card XXXX0831 AED 5.00 spent at PICCADILLY CAFE on 19/09/2026 17:48")
         assertEquals(bd("5.00"), t.amount)

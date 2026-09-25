@@ -117,15 +117,18 @@ object SmsParser {
     fun normalizeBody(body: String): String =
         body.replace(' ', ' ').replace(Regex("""[ \t]*\r?\n[ \t]*"""), " ").trim()
 
-    /** Currency codes the app understands, plus the "Dhs" ways of writing AED. */
+    /**
+     * Currency codes the app understands, plus the "Dhs" ways of writing AED. Codes must be upper case (so words
+     * like "try 2 times" aren't Turkish lira); the dirham spellings match in any case.
+     */
     internal val currencyAlternation: String by lazy {
-        (BankRules.fxToAed.keys + BankRules.aedAliases).sortedByDescending { it.length }.joinToString("|")
+        BankRules.fxToAed.keys.sortedByDescending { it.length }.joinToString("|") + "|(?i:dirhams?|dhs?)"
     }
 
     /** "Contains an amount": a known currency code next to a number (card masks like XXX3538 don't count). */
     private val looksFinancial by lazy {
         val cur = currencyAlternation
-        Regex("""\b(?:$cur)\s?\.?\s?\d|\d\s?(?:$cur)\b""", RegexOption.IGNORE_CASE)
+        Regex("""\b(?:$cur)\s?\.?\s?\d|\d\s?(?:$cur)\b""")
     }
 
     fun looksFinancial(text: String): Boolean = looksFinancial.containsMatchIn(text)

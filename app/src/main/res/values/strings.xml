@@ -1,5 +1,4 @@
 <resources>
     <string name="app_name">UAE Financial Tracker</string>
-    <string name="app_short">Financial Tracker</string>
     <string name="widget_description">This month\'s spending and the next card payment due</string>
 </resources>

@@ -48,10 +48,8 @@ object DueReminders {
     }
 
     fun ensureChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = context.getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(NotificationChannel(CHANNEL, "Card due dates", NotificationManager.IMPORTANCE_DEFAULT))
-        }
+        val nm = context.getSystemService(NotificationManager::class.java)
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Card due dates", NotificationManager.IMPORTANCE_DEFAULT))
     }
 
     fun canNotify(context: Context): Boolean =
@@ -72,7 +70,8 @@ class DueReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
         for (d in dues) {
             if (!d.card.remindersEnabled || !d.card.countInSpending) continue
             val offset = Reminders.offsetToday(d.status) ?: continue
-            val tag = "${d.statement.id}:$offset"
+            // Card + due date (not the statement's row id, which changes when stored messages are re-read).
+            val tag = "st:${d.card.cardKey}:${d.statement.dueDateEpochDay}:$offset"
             if (tag in sent) continue
             val text = Reminders.message(d.label, d.status, d.statement.minimumDueMinor) { fmtMoney(it, d.statement.currency) }
             val n = NotificationCompat.Builder(applicationContext, DueReminders.CHANNEL)
@@ -121,9 +120,16 @@ class DueReminderWorker(ctx: Context, params: WorkerParameters) : CoroutineWorke
                 break
             }
         }
-        // Keep only this and last month's tags.
+        // Keep only recent tags: fixed payments of this and last month, statements due in the last ~2 months.
         val keep = setOf(java.time.YearMonth.now().toString(), java.time.YearMonth.now().minusMonths(1).toString())
-        app.prefs.sentReminders = sent.filter { !it.startsWith("fp:") || keep.any { m -> it.contains(m) } }.toSet()
+        val oldestDue = today.minusDays(60).toEpochDay()
+        app.prefs.sentReminders = sent.filter { tag ->
+            when {
+                tag.startsWith("fp:") -> keep.any { m -> tag.contains(m) }
+                tag.startsWith("st:") -> tag.split(":").getOrNull(tag.split(":").size - 2)?.toLongOrNull()?.let { it >= oldestDue } ?: false
+                else -> false
+            }
+        }.toSet()
         return Result.success()
     }
 }

@@ -1,146 +1,102 @@
-# RJ's Financials Tracker
+# UAE Financial Tracker
 
-(Formerly Card Tracker. The package name is unchanged, so updates install over the old app and keep your data.)
+An Android app that turns the SMS your UAE banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
-A personal Android app that reads your UAE bank SMS and turns them into credit card transactions and statements. Everything stays on the phone in a local Room database.
+- **Works with any UAE bank.** The main banks have built-in formats, and a smart reader handles any other bank.
+- **Private.** No internet permission, no account, no ads. Everything stays on the phone. One-time passwords (OTPs) are never stored.
+- **Free to share.** Anyone can install it. It is not tied to one person's banks or cards.
 
-## Build the APK on GitHub (no installs on the PC)
+## Install
 
-GitHub builds the APK for free, and you download it straight onto the phone.
+The app is not on the Play Store. You install the APK file directly.
 
-1. **Create a private repo.** Sign in at github.com (a free personal account is fine) and choose **New repository**. Name it `CardTracker`, set it to **Private**, and leave "Add a README" **unticked**.
-2. **Upload the files.** On the empty repo page, click **uploading an existing file**. Open this `CardTracker` folder in File Explorer, select **everything inside it**, drag it onto the page, and click **Commit changes**.
-3. **Add the build script.** In the repo, choose **Add file → Create new file**. Type the name `.github/workflows/build.yml` (the slashes create the folders). Open `build-workflow.yml` from this folder in Notepad, copy all of it, paste it in, and click **Commit changes**.
-4. **Wait for the build.** Open the **Actions** tab and wait about 5 minutes for the green tick. A red cross means something failed: open it and send Claude the error.
-5. **On the phone:** open the repo in the browser (signed in) and go to **Releases**. Tap `CardTracker-buildN.apk` to download it, then open it to install. Allow "Install unknown apps" for your browser when asked.
-6. **Allow SMS access.** Android 15 blocks SMS permissions for apps installed from a file. Go to **Settings → Apps → Card Tracker → ⋮ (top right) → Allow restricted settings**. Then open the app and tap **Sync SMS**; it asks for read access the first time.
+1. On the phone, open the **Releases** page of this repository and download the newest `UAE-Financial-Tracker-….apk`.
+2. Open the downloaded file. If Android asks, allow your browser or Files app to **install unknown apps**.
+3. Open **UAE Financial Tracker**. The setup walks you through the rest.
+4. **Android 13 and later:** Android blocks SMS access for apps installed from a file. If the SMS permission is refused or greyed out, go to **Settings → Apps → UAE Financial Tracker → ⋮ (top right) → Allow restricted settings**, then allow SMS in the app. The setup shows the same steps and a button that opens the right screen.
 
-**Updating later:** upload the changed files (for example `BankRules.kt`) to the same path in the repo. Actions builds a new release, and you install it over the old app. Your data is kept because every build is signed with the same key, `app/debug.keystore`.
+Updates install over the old version and keep your data. Every build is signed with the same key, `app/debug.keystore`.
 
-## Alternative: build on a PC with Android Studio
+## First run
 
-Android Studio (the .zip version runs without admin rights): File → Open this folder → **Build → Build APK(s)**. Then copy `app\build\outputs\apk\debug\app-debug.apk` to the phone and follow steps 5–6 above.
+The setup takes about a minute:
 
-## Tests
+1. **Allow SMS.** The app only keeps messages from bank senders.
+2. **Your banks.** It scans your messages. It shows the banks it recognised and suggests other senders that look like banks, which you can tick to add.
+3. **Import.** It reads your existing bank SMS into transactions.
+4. **Optional:** record new messages automatically, and turn on card due-date reminders.
 
-`ParserTest.kt` covers the bank formats. `CoreTest.kt` covers the duplicate-check key, the spending rules and the Sync summary text. The GitHub build runs both on every upload (Actions tab → test-report). In Android Studio, run them with `gradlew testDebugUnitTest`.
+You can run the setup again from **More → Run the setup again**.
 
-## Editing parsing rules
+## Using the app
 
-All bank formats live in **`app/src/main/java/com/junaid/cardtracker/parser/BankRules.kt`**. The comment at the top of that file lists the placeholder tokens you can use.
+| Tab | What's there |
+|---|---|
+| **Home** | Total spent with a comparison to the period before, spending by category, budgets, fixed payments, payments due, 12-month history, top merchants, recurring payments and savings goals. |
+| **Activity** | Every transaction, grouped by day, with search and card and category filters. Tap one to see the original SMS or change its category. The app learns from your changes. **Add** logs a cash spend by typing it, e.g. `lunch 45`. |
+| **Cards** | Your cards and accounts, with available credit and utilisation, spend since the last statement, and the statement's due and paid status. **+** adds a card by hand. |
+| **More** | **Needs review**, **Bank senders**, fixed payments, statement PDF check, reports (PDF or Excel), exchange rates, notifications, app lock, backup, themes and help. |
 
-1. Copy the new SMS from the Review tab (you can select and copy the text).
-2. Add a test with that SMS to `ParserTest.kt`, then add or adjust a `Rule` in `BankRules.kt` until the test passes.
-3. Upload the changed files to GitHub, install the new release, then use ⋮ → **Re-parse all SMS**. Every stored raw SMS is parsed again with the new rules.
+**Sync (↻):** tap it to import new bank SMS. You can also switch on **More → Record new messages automatically** to import each SMS as it arrives.
 
-## Status of each bank
+**Needs review:** bank messages that mention an amount but that the app couldn't read. **Fix** tells the app what one was. The form is pre-filled with the app's best guess, and your fix is remembered even after an update. You can also mark a message as **Not a transaction** or dismiss it.
 
-| Bank | Sender ID | Card SMS | Statements | Accounts / other |
-|---|---|---|---|---|
-| FAB | FAB | purchases (·0831), cashback, payments to card (·3115) | statements, incl. "payment due date" and credit balances | ·8001/·8003/·8005: remittances, salary, deposits, credits, debits (EMIs), debit-card purchases, ATM, transfers, UAE PGS payments, Dubai First card payments, bills, rewards |
-| Emirates NBD | EmiratesNBD | "Purchase of…" and "Payment of … to …", Nol top-ups, refunds, payments received | Mini Stmt | – |
-| ADCB | ADCBAlert | all "was used for" formats, "purchase transaction … performed", bills from card, foreign-fee format, reversals, payments | Billing alert | account ·0001 credits/debits, online transfers |
-| Al Hilal | AlHilal | purchases, refunds, cashback | "Payment … is due on" (total, no minimum) | – |
-| HSBC | HSBC-UAE | purchases (old and new format), reversals, cashback, payments | statements | – |
-| Mashreq | Mashreq | card purchases ·4680, debit-card ATM withdrawals | – | accounts ·7639/·8902 in/out, Aani payments, card payments ·4680 |
+**What counts as spending:** purchases minus refunds and cashback. These never count:
 
-OTP, auth-code and transaction-PIN messages are dropped. Adverts, payment reminders, card-setting notices, approval prompts, transfer requests, scheduled transfers and standing instructions, declined or failed transactions, instalment conversions, loan and mortgage notices, IPO requests, invoices, lounge notices and limit changes are ignored.
+- paying off a card
+- transfers between your accounts
+- money coming in
 
-**Bank account and transfers.** FAB account 8001 is tracked as a *bank account*, with both money in and money out, and "Count in spending" is off by default. FAB often sends two SMS for one transfer ("Outward Remittance Debit" and "funds transfer … processed"). The app merges those into one transaction.
+Each card has a **Show & count** switch. Debit cards and bank accounts start switched off, so money isn't counted twice when you pay a card from your account.
 
-Transfers to your own cards (FAB ·0831, ENBD ·9940, Al Hilal ·3976, or any other credit card the app already knows) show as **payments received** on that card. Transfers to your wife's ENBD account ·7701 and Emirates Islamic card ·6901 are just money out. None of these count as spending. You can edit this list in `BankRules.knownAccounts`.
+## How messages are read
 
-**EMIs and other account payments.** FAB "An amount of AED … has been debited from your FAB account" SMS (EMIs, direct debits), bill payments and ATM withdrawals are recorded as *purchases* on the account. Switch the account **on** (Show & count) on the Cards tab to include them in spending. Money coming in and transfers are never counted. If a debit SMS turns out to be the same money as a transfer SMS (same amount, within a day), the two are merged and it becomes a transfer instead. Any bank SMS that contains an amount but doesn't match a rule shows up on the **Review** tab with its raw text.
+1. **Sender check.** Only SMS from bank senders are looked at. That covers the built-in list plus any senders you add in **More → Bank senders**.
+2. **OTPs dropped.** OTP and verification messages are dropped without being stored.
+3. **Bank rules.** Banks with verified formats are read by their rules in [`parser/BankRules.kt`](app/src/main/java/com/uaefinancial/tracker/parser/BankRules.kt). These are FAB, Emirates NBD, ADCB, Al Hilal, HSBC and Mashreq.
+4. **Ignored messages.** Adverts, declines, limit changes, scheduled transfers and similar notices are recognised and ignored.
+5. **Smart reader.** Anything else goes to the smart reader, [`parser/SmartParser.kt`](app/src/main/java/com/uaefinancial/tracker/parser/SmartParser.kt). It reads the message by its wording:
+   - amounts and what they are (the spend, the available limit, the total due, the minimum due)
+   - the card or account number
+   - whether money went out or came in
+   - the merchant and the date
 
-## How SMS get in
+   It covers Dubai Islamic Bank, Emirates Islamic, ADIB, RAKBANK, CBD, Citibank, Standard Chartered, NBF, Liv, Wio and any sender you add. It also catches new formats from banks that have rules. It is deliberately careful: when unsure, it sends the message to Needs review instead of guessing.
+6. **Needs review.** Anything left over that contains an amount goes to Needs review.
 
-- **Sync (always available):** the **Sync SMS** button reads your inbox from the last successful sync onward. The first Sync imports everything already there. It then shows a result like "12 new transactions, 1 statement, 2 couldn't be parsed". It needs permission to read SMS, which it asks for the first time you tap it.
-- **Live listening (optional, off by default):** turn it on in Settings to capture bank SMS as they arrive. It asks for permission to receive SMS the first time you switch it on. When it's off, the receiver is disabled at the system level and nothing runs in the background. The first time you turn it on, a tip explains how to add the app to Samsung's **Never sleeping apps**.
-- **Both modes** only look at your bank sender IDs, drop OTP messages without storing them, and share one duplicate check. Each SMS gets a unique key from its sender, sent time and a hash of the text, so a message caught live is skipped by Sync and vice versa.
+With all bank rules switched off, the smart reader still reads 61 of the 62 real sample messages in the tests with the right type and amount.
 
-## Screens
+## Building
 
-Pick a **theme** in Settings: Midnight Neon, Deep Ocean, Royal Violet, Pure Black, Daylight (light) or Warm Paper (light). Each category keeps a fixed colour, so it looks the same in every chart.
+GitHub Actions builds everything, so nothing needs to be installed on a PC.
 
-- **Period chips (Overview, Transactions, Cards):** Month (with arrows), 1W, 1M, 3M, 6M, 12M, All and **Custom** (pick any date range on a calendar). The arrows step back or forward by the period's own length. Tap the date line to open the calendar.
-- **Overview (home):**
-  - **Total spent** for the period, compared with the same-length period before it, plus per-day average, number of spends and money in.
-  - **Chart card** with two views: an **arc chart** of categories (tap a segment or chip to highlight it and open its transactions) and a **trend line** over time (days, weeks or months depending on the period; touch or drag to read a value).
-  - **Category list** with amounts, shares and bars; tap one to see its transactions.
-  - **Budgets** for this month: progress bar per category (green, amber at 80%, red at 100%). Tap Set budgets / Edit to change the limits.
-  - **Fixed payments** (rent, school fees, loans without SMS): what's still to pay this month, with **Mark paid**.
-  - **Payments due:** card statements (only cards switched on) plus fixed payments due in the next 10 days.
-  - **Recurring payments** now include account debits and categorised transfers, shown by their category name. **Track as fixed payment** adds one to your fixed payments so it gets a due date and reminders.
-  - **Last 12 months** bars (tap a month to open it), **top merchants**, **by card**, **recurring payments**, **foreign currency** and **savings goals**.
-- **Transactions:**
-  - Sync and **Add** (type "lunch 45 aed") at the top, then a **search** box (merchant, category, card, amount), period chips and card chips.
-  - A bank account (for example FAB ·8001) shows **Net** on top and **Money in / Money out** as two tiles below it.
-  - Transactions are grouped by day with a daily total. Each row has a coloured category icon, "Category • Card", the amount and the time.
-  - Money leaving a bank account (transfers, EMIs) can have a category too. For generic texts like "Account debit (EMI / direct debit)" or a transfer, "Apply to all" only covers the same text **and amount**, so your car EMI and your rent stay separate.
-  - Tap a row for details, the raw SMS, **Change** category ("Apply to all" teaches the app that merchant) or Delete.
-- **Cards:**
-  - **Available credit** across cards, with utilisation bars (green / amber / red).
-  - Each card is drawn in **its own look** (modelled on your Samsung Wallet cards, with a small bank-name badge and Visa / Mastercard label), showing spend or account net for the period, available limit or balance, the latest statement and its paid/due status, and the **Show & count** switch.
-  - **Arrange:** tap Arrange and drag the handles to put your most-used cards on top. The order is used everywhere.
-  - **Your own card picture:** open a card → **Use my picture** and pick an image (for example a screenshot of the card from Samsung Wallet or the bank's website, cropped to the card). The figures sit on a soft shade so they stay readable. Pictures stay on the phone and aren't part of backups.
-  - The profile's **statement day and due day** fill in automatically from a statement SMS received in the last 30 days (you can still change them; your own values are never overwritten).
-  - Tap a card for its profile: a **card look picker** (Automatic, your cards' looks, bank colours and general looks), a **balance / available-limit history chart**, payments to the card, card type, Show & count, nickname, credit limit, statement day, due day and reminders.
-- **Fixed payments** (Overview → Manage, or Settings): add name, amount, day of month, category and the card it's paid from. Reminders 3 days before, the day before and on the day (with Due-date reminders on). **Mark paid** adds it to your transactions so it counts in spending and budgets. If a bank SMS this month shows the same amount (within 5%) from the chosen card or account, it is marked paid automatically and no reminder is sent.
-- **Check statement** (open a card → Check statement, or the PDF icon on the Cards tab for **any bank**): also reads the **statement date, payment due date, total credit limit, available limit, amount due to avoid finance charges and minimum due**, compares them with the app, and **Save to card profile** stores them (and adds the statement to Payments due if no SMS had it). A statement for a card the app doesn't know (another bank, or your wife's card) can be added as a new card; mark it "Someone else's card I pay for" and its spends go to the **Family** category.
-- **Since last statement** (Cards tab and each card): what you've spent on each credit card since its last statement, with **Show these transactions**.
-- **Money in** (salary, remittances) can be categorised too; salary is recognised automatically.
-- Old **Check statement** notes: pick the bank's statement PDF (password-protected ones work; enter the password when asked). The app reads it on the phone and shows **Matched**, **Missing in app** (tick and **Add** them as typed entries on that card) and **Only in app** (pending, duplicates or reversals to check). If a bank's layout isn't recognised, **Share extracted text** so a rule can be added.
-- **Export report** (share icon at the top of Overview and Transactions, or Settings): a **PDF** of the selected period with the summary, category chart, budgets, cards, top merchants and every transaction, or the same as a **CSV** for Excel.
-- **Review:** unparsed SMS, with **Share unparsed SMS**.
-- **Settings:**
-  - **Theme**, live listening and **due-date reminders**.
-  - **Spending alerts:** a notification for a single spend at or above your amount, an account balance or card available limit below your amount (once a day per card), and budgets at 80% / 100% (once a month). Checked when new SMS arrive or you Sync; only transactions from the last 24 hours alert, so a first Sync doesn't flood you.
-  - **App lock:** PIN plus fingerprint/face, re-lock after immediately / 1 / 5 / 15 min.
-  - Sync, re-parse, **backup export/restore** (zip of CSVs) and **exchange rates**.
-- **Home-screen widget:** long-press the home screen → Widgets → Card Tracker. Shows this month's spending and the next payment due.
+- **Every push** runs the unit tests, builds the APK and runs Android lint. Results show on the run page as annotations.
+- **Pushes to `main`** also publish the APK as a new release, which you then install from the phone.
 
-## After installing v1.6
+To build locally, open the folder in Android Studio and use **Build → Build APK(s)**, or run `./gradlew assembleDebug`.
 
-Statement reading is rebuilt (`core/StatementReader.kt`). It reads the position of every word on the page, so it copes with different layouts and wordings:
-- **Figures** (statement date, due date, credit limit, available limit, amount due, minimum due, previous balance) are found by their many names and read to the right of the label or in the column under it. When a bank prints its labels as pictures (e.g. ADCB), they are worked out: the dates at the top in order, credit limit = available + balance, minimum due ≈ 5% or AED 100.
-- **Transactions**: the Debit / Credit / Balance / Amount columns are found from the table header, "CR" or a trailing minus mark credits, multi-line entries (foreign spends with fees) and wrapped descriptions are joined, and supplementary-card sections are compared with that card.
-- **Self-check**: previous balance + spends − credits is compared with the statement's balance, and the screen tells you whether they add up.
-- Tested on FAB (card and account), Emirates NBD, ADCB, Al Hilal, Mashreq and HSBC statements: all seven add up to the cent.
+## Adding or fixing a bank format
 
-## After installing v1.5
+1. Copy the SMS from **Needs review**, or use **Share these messages**.
+2. Add it as a test in `app/src/test/.../parser/ParserTest.kt`, or in `SmartParserTest.kt` for the smart reader.
+3. Add a `Rule` for that bank in `BankRules.kt`, or add its sender ID to the bank's `senderIds`. The comment at the top of the file explains the placeholder tokens.
+4. Push. Once the release is installed, tap **More → Re-read stored** to apply the new rules to messages already on the phone.
 
-1. The app is now **RJ's Financials Tracker** with a new icon (the old icon may take a moment to refresh on the home screen).
-2. Tap **Re-parse all SMS** once: salary credits get the new **Salary & income** category.
-3. Cards tab → the PDF icon → pick your wife's statement → "+ A card not listed" → tick "Someone else's card I pay for". Its spends go to the **Family** category.
+## Project layout
 
-## After installing v1.4
+| Path | Contents |
+|---|---|
+| `parser/` | `BankRules.kt` (bank formats and sender IDs), `SmartParser.kt` (reader for any bank), `SmsParser.kt` (the engine), `CategoryRules.kt` (categories and keywords), `ManualEntryParser.kt` (typed entries) |
+| `core/` | Pure logic with unit tests: spending rules (`Spending.kt`), periods, insights, budgets, due status, the statement PDF reader (`StatementReader.kt`) |
+| `data/` | Room database (`Database.kt`, schema v1), `Repository.kt` (SMS to transactions, fixes, senders), `Backup.kt`, `Prefs.kt` |
+| `sms/` | Inbox reading and sender scan, sync, and the optional live SMS receiver |
+| `ui/` | Jetpack Compose screens: Home, Activity, Cards, More, setup, review, senders, help |
+| `notify/`, `widget/`, `report/` | Reminders and alerts, the home-screen widget, and PDF/CSV reports |
 
-1. Open a card → **Check statement** → choose last month's statement PDF.
-2. Statement and due days on each card fill in by themselves after the next Sync.
+**Rules to keep:**
 
-## After installing v1.3
-
-1. For your car EMI: on Transactions, pick FAB ·8001, tap the EMI debit → **Change** → create "Car EMI" → keep "Apply to every … of AED …" ticked.
-2. On Overview → Recurring payments, tap **Track as fixed payment** on it.
-3. Open each card and tap **Use my picture** if you'd like its real look.
-
-## After installing v1.2
-
-1. Pick a theme in Settings.
-2. On the Cards tab, tap **Arrange** to order your cards; open a card to change its look.
-3. Set **budgets** on Overview, add your **fixed payments**, and switch on **spending alerts** in Settings (allow notifications).
-
-## First steps (new install)
-
-1. **Re-parse all SMS** (Review or Settings) so every transaction gets a category.
-2. On the Cards tab, open each credit card and enter its **credit limit** (optional: statement day and due day).
-3. In Settings, switch on **Due-date reminders** and allow notifications.
-4. Optionally switch on **App lock**, and **Export backup** now and then (save it to Google Drive or Files).
-
-## Data model
-
-- Amounts are stored in minor units (fils/cents) with their original currency. Each one also has an AED equivalent.
-- SMS usually don't give an AED amount for foreign-currency spends, so the AED figure uses the approximate rates in `BankRules.fxToAed` and is flagged as an estimate.
-- Spend = purchases − refunds/cashback, on cards with "Show & count" switched on, plus typed entries. Credit card payments never count. The rules are in `core/Spending.kt`.
-- Categories: `parser/CategoryRules.kt` holds the default categories and the keywords that auto-assign them. Your corrections take priority over the keywords.
-- See `ROADMAP.md` for how each feature is built and ideas for later.
+- All spending totals go through `core/Spending.kt`.
+- Database changes need a Room migration (`data/Migrations.kt`), never a destructive fallback.
+- Bank formats live only in `BankRules.kt`.
+- Nothing runs in the background unless the user switches it on.
+- The app has no internet permission.

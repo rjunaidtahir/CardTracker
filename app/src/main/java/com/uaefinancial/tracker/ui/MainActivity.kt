@@ -1,10 +1,10 @@
 package com.uaefinancial.tracker.ui
 
+import androidx.core.net.toUri
 import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -247,7 +247,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
             onOpenSettings = {
                 vm.markBatteryTipShown(); showBatteryTip = false
                 ctx.startActivity(
-                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}"))
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${ctx.packageName}".toUri())
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
                 )
             },

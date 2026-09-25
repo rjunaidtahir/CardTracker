@@ -5,7 +5,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.uaefinancial.tracker.TrackerApp
@@ -33,10 +32,8 @@ object Alerts {
     const val CHANNEL = "spending_alerts"
 
     fun ensureChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(NotificationChannel(CHANNEL, "Spending alerts", NotificationManager.IMPORTANCE_HIGH))
-        }
+        context.getSystemService(NotificationManager::class.java)
+            .createNotificationChannel(NotificationChannel(CHANNEL, "Spending alerts", NotificationManager.IMPORTANCE_HIGH))
     }
 
     suspend fun onNewTransactions(context: Context, txns: List<TransactionEntity>) {
@@ -54,7 +51,7 @@ object Alerts {
 
         for (t in txns.filter { AlertRules.isFresh(it.timestamp, now) }) {
             val card = t.cardKey?.let { cards[it] }
-            val cardName = card?.let { it.nickname ?: it.cardKey } ?: t.bank
+            val cardName = card?.let { com.uaefinancial.tracker.ui.CardArts.displayName(it) } ?: t.bank
             val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
             // Big spend: only on cards you track (Show & count on) or typed entries.
             if ((card == null || card.countInSpending) && AlertRules.isBigSpend(type, t.amountAedMinor, prefs.bigSpendMinor)) {
