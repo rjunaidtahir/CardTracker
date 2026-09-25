@@ -1,113 +1,58 @@
-# Card Tracker roadmap
+# Roadmap
 
-A personal, sideloaded Android app (Kotlin, Compose, Room, WorkManager) for UAE card spending. Base currency is AED.
+UAE Financial Tracker: a sideloaded Android app (Kotlin, Jetpack Compose, Room, WorkManager) that turns UAE bank SMS into spending, statements and due dates. Base currency AED. No internet permission.
 
-## Status
+## v2.0: for everyone, any UAE bank (current)
 
-v1.1 includes every phase below plus the redesign. Keep adding to this file for future ideas.
+- **New identity.** The app is now called UAE Financial Tracker, with app ID `com.uaefinancial.tracker` and database schema v1. It installs alongside the older personal build, so that build can be uninstalled.
+- **No personal data in the code.** The hard-coded accounts, transfer destinations, card looks and card names chosen by last 4 digits are gone.
+  - Transfers to your own cards are recognised from the cards in the app. The match has to be unambiguous.
+  - If an SMS names no account, the app uses your only account at that bank.
+- **Any bank.**
+  - There are 29 UAE banks in `BankRules.kt`. Six have verified formats: FAB, Emirates NBD, ADCB, Al Hilal, HSBC and Mashreq. The rest have sender IDs only.
+  - The smart reader (`parser/SmartParser.kt`) handles any wording. With the rules bypassed, it reads 61 of 62 real sample messages with the right type and amount, and 6 of 6 statement SMS.
+  - You can add bank senders yourself (`bank_senders` table), and a scan of the inbox suggests them (`InboxReader.scanSenders`).
+- **Fix by hand.** Needs review → Fix stores your reading of an SMS in `sms_fixes`, keyed by the SMS, so it survives "Re-read stored" and backups. "Not a transaction" is stored the same way.
+- **First-run setup** (`ui/Onboarding.kt`):
+  1. SMS permission, with help for Android's "restricted settings"
+  2. Bank scan
+  3. First import
+  4. Optional extras
+- **Clearer layout.** There are four tabs: Home, Activity, Cards and More. Sync (↻) sits in the top bar. More holds the tools and settings in plain groups. There's a Help screen, and Cards has an "Add card or account" button.
+- **Fixes:**
+  - Due-reminder "already sent" markers no longer repeat after a re-read, and they're pruned.
+  - Typed "paid rent 3000" is a spend, not a card payment.
+  - Lower-case words aren't read as currency codes.
+  - An absurd amount can't break a re-read.
+  - Spends on a family card get the Family category from SMS too.
+  - Cloud backup of financial data is excluded (`data_extraction_rules.xml`), and the internet permission is removed outright.
+- **CI.** Every push runs the unit tests, the build and lint, and reports them as annotations. Pushes to `main` publish a release.
 
-## Phase 1: SMS capture and core screens (done)
+## Earlier (personal builds, v1.0 to v1.6)
 
-- **Two capture modes, one parser and one de-duplication path:**
-  - **Manual Sync:** reads the inbox from the last successful sync; the first run reads everything.
-  - **Live listening:** an optional BroadcastReceiver, off by default. It is fully disabled when off.
-- **De-duplication:** a unique key per SMS: normalized sender, sent time (service-centre timestamp) and SHA-256 of the body. There's also a fallback check for when a sent time is missing.
-- **Filtering:** only your bank sender IDs are processed. OTP messages are dropped and never stored.
-- **Parsing:** rules live in `parser/BankRules.kt`. The raw SMS is stored, and anything that can't be parsed goes to the Review tab.
-- **Cards and accounts:** credit cards, debit cards and bank accounts (FAB ·8001: money in and out). Each has a "Show & count" switch: on for credit, off for debit and accounts by default. Switched-off cards are hidden from the Transactions tab and left out of totals. Card payments and transfers never count as spending. Two FAB SMS for one transfer are merged into one transaction, and transfers to your own cards show as payments received on that card.
-- **Screens:** Transactions (month and card filters, add by typing), Cards, Card detail, Review, Settings.
-
-## Phase 2: Cards and safety (done in v1.0)
-
-| Feature | Plan / where it plugs in |
-|---|---|
-| Card profiles: limit, statement day, due day | `cards.creditLimitMinor`, `statementDay`, `dueDay` already exist. Extend `CardDetailScreen` into an edit form. |
-| Due-date reminders | A new `reminders` table (migration v3→v4). WorkManager periodic job plus notifications, using `cards.remindersEnabled` (already exists). Runs only if reminders are on. |
-| Auto-mark paid from payment SMS | `statements.paidAt` and `paidByTxnId` already exist. When a PAYMENT transaction arrives, or a TRANSFER_OUT whose `counterpartyKey` is the card (already recorded from v3), match the latest unpaid statement on the same card: amount ≥ minimum due marks it paid, ≥ balance marks it fully paid. |
-| Balances side by side with utilization % | Available limit comes from `transactions.availableLimitMinor` (latest per card), limit comes from the profile. Utilization = (limit − available) / limit. |
-| App lock: biometric with PIN fallback, re-lock after background timeout | `ui/AppLockGate` already wraps the whole UI. Add androidx.biometric, a PIN hash in Prefs, and a timeout measured from `ON_STOP`. |
-| CSV export/import backup | Storage Access Framework (`CreateDocument` / `OpenDocument`), one CSV per table. Import de-duplicates on `sms.dedupKey` and on the transaction id. |
-
-## Phase 3: Insights (done in v1.0)
-
-| Feature | Plan / where it plugs in |
-|---|---|
-| Auto-categories from merchant, learning from corrections | New `categories` and `merchant_category_rules` tables (migration). `transactions.categoryId` and `categoryUserSet` already exist. A correction writes a rule for the normalized merchant name, and later transactions use it. |
-| Spending by category chart | New `Tab.INSIGHTS`. Totals must go through `core.Spending`, so excluded cards and payments stay out. |
-| Month-by-month history chart | Same Insights tab, same `core.Spending` rule. |
-| Recurring payment detection | `transactions.recurringGroupId` already exists. Group by merchant, similar amount, and a roughly monthly or weekly interval. |
-
-## Phase 4: Extras (done in v1.0)
-
-| Feature | Plan / where it plugs in |
-|---|---|
-| Home screen widgets | Jetpack Glance: this month's spend and next due date. Reads the same DAO. |
-| Savings goals | New `savings_goals` table (migration) and a new Route. |
-| Full multi-currency reporting in AED | Every transaction already stores the original amount and currency plus an AED figure (`fxEstimated` flags approximate rates). Add a rates table with dated rates to replace the static `BankRules.fxToAed`, and per-currency breakdowns. |
-
-## How v1.0 implemented it
-
-- **Paid / due status** is worked out on the fly (`core/CardStatus.kt`): payments to the card after its statement date, from the card's bank SMS and from your transfers without double counting. The planned `statements.paidAt` column was not needed.
-- **Reminders:** `notify/DueReminders.kt`. A WorkManager job twice a day, only while switched on, notifying 3 days before, 1 day before and on the due day while the minimum is unpaid.
-- **Categories:** keyword rules in `parser/CategoryRules.kt`. Learned rules go in `merchant_rules`, and per-SMS choices in `txn_overrides` (keyed by SMS dedupKey, so they survive Re-parse and backups).
-- **Charts:** plain Compose, no chart library (see v1.1 below).
-- **Recurring detection:** `core/Insights.kt` (3+ roughly monthly charges of a similar amount).
-- **Widget:** a classic AppWidgetProvider (`widget/SummaryWidget.kt`), no Glance dependency.
-- **Multi-currency:** editable rates in `fx_rates`. Saving a rate recalculates past AED amounts.
-- **App lock:** PIN (salted SHA-256, 10k rounds) plus BiometricPrompt, with a re-lock timeout.
-- **Backup:** a zip of CSVs via the system file picker (`data/Backup.kt`).
-
-## v1.1: periods, redesign, more formats (done)
-
-- **Any period:** `core/Period.kt` (Month, 1W, 1M, 3M, 6M, 12M, All, Custom range) replaces the single month everywhere, with a same-length previous period for comparisons.
-- **Charts:** `ui/Charts.kt` in plain Compose Canvas: category arc chart, trend line with gradient and touch readout (`core/Period.kt` → `Timeline` picks day, week or month buckets), 12-month bars, share bars.
-- **Look:** `ui/Theme.kt`: dark theme, fixed colour and icon per category, bank-coloured card tiles, panels and pills.
-- **Transactions:** search, day groups, readable Net / Money in / Money out tiles for accounts.
-- **Parsing:** about 25 new formats from the Review list (Mashreq card purchases and ATM, Aani, ADCB online transfers, FAB PGS and Dubai First payments, Al Hilal refunds and due notices, ENBD Nol and card payments, negative balances, AM/PM and weekday dates) and many more ignore rules.
-
-## v1.2: refinements (done)
-
-- **Readability:** the default text colour now follows the theme (screens sit on a transparent background, so plain text used to fall back to black). Muted and faint text colours raised for contrast.
-- **Themes:** `ui/Theme.kt` `AppThemes` (4 dark, 2 light), saved in Prefs; system bar icons follow the theme.
-- **Card looks and order:** `ui/CardArt.kt` (gradient + simple pattern per card, bank-name badge, network label; automatic by last 4 digits, or pick one). Drag to reorder on the Cards tab (`cards.sortOrder`, DB v5).
-- **Budgets** (`budgets` table), **fixed payments** (`fixed_payments` table), logic in `core/Planning.kt` with tests.
-- **Alerts:** `notify/Alerts.kt`, run after Sync and live SMS.
-- **Reports:** `report/Report.kt` (PDF with Android's PdfDocument, and CSV).
-
-## v1.3 (done)
-
-- Own card pictures (`ui/CardImages.kt`, photo picker, stored in app files).
-- Switched-off cards no longer show in Payments due, the widget or reminders.
-- Categories on money-out transactions; amount-specific learning for generic texts (`CategoryRules.learningKey`).
-- Recurring detection includes account debits and categorised transfers; "Track as fixed payment"; fixed payments auto-marked paid from SMS (`FixedSchedule.autoPaid`).
-
-## v1.4 (done)
-
-- Statement PDF check: text via PdfBox-Android (`report/PdfText.kt`), parsing and matching in `core/StatementImport.kt` (tests), screen `ui/StatementCheckScreen.kt`.
-- Card statement / due day auto-filled from statement SMS of the last 30 days (`CardDays`).
-- Transactions tab: amounts without the AED prefix, single-line rows, summary as stat chips.
-
-## v1.5 (done)
-
-- Renamed to RJ's Financials Tracker (same package id); new adaptive icon with a themed (monochrome) layer.
-- Statement PDFs: key figures (`StatementImport.summary`), saving them to the card and as a statement (`smsId = 0`, kept by Re-parse); any-bank / family cards (`cards.owner`, DB v6); Family and Salary & income categories (ids 101/102).
-- Usage since the last statement (`SinceStatement`).
-- Money in can be categorised; smaller one-line transaction rows.
-
-## v1.6 (done)
-
-- Layout-aware statement reader (`core/StatementReader.kt`, tests in `StatementReaderTest.kt`): glyph positions from PdfBox (`report/PdfText.kt`), label→value by position, column-aware transactions, inference when labels are images, supplementary cards, totals self-check.
+- SMS capture:
+  - Manual Sync, plus optional live listening, with one duplicate check between them.
+  - Two-SMS transfers are merged.
+- Spending:
+  - Categories that learn from corrections, budgets, fixed payments and recurring detection.
+  - Alerts, due reminders, reports, app lock, backup, widget.
+- Statements:
+  - Layout-aware statement PDF reader (`core/StatementReader.kt`) with a totals self-check.
+  - Usage since the last statement.
+- Looks: themes, card looks and your own card pictures.
 
 ## Ideas for later
 
-- A manual recurring-payments list for EMIs that don't send an SMS.
-- Monthly budget per category, with a warning when close.
 - Dated exchange rates (a rate per month) instead of one current rate.
+- Rules contributed from real SMS for the banks that only use the smart reader today (DIB, Emirates Islamic, ADIB, RAKBANK, CBD and others). Add each sample to the tests first.
+- Editable date in the "Fix" form (it uses the day the SMS arrived for now).
+- Arabic-language bank SMS.
 
 ## Design rules to keep
 
 - All spending totals and charts go through `core/Spending.kt`: excluded cards and credit card payments never count.
-- Schema changes from v2 onward are proper Room migrations in `data/Migrations.kt`, never destructive, so your data survives updates.
-- New screens are added as a `Route` or `Tab` in `ui/Navigation.kt`.
-- Nothing runs in the background unless a feature you've switched on needs it (live listening, reminders).
-- The debug signing key (`app/debug.keystore`) stays the same, so each new APK installs over the old one without losing data.
+- Every schema change is a Room migration in `data/Migrations.kt`, never destructive.
+- Bank formats live in `parser/BankRules.kt`. When there's no matching rule, the smart reader takes over, and anything still unread goes to Needs review. Never guess silently.
+- Nothing runs in the background unless a feature the user switched on needs it (live listening, reminders).
+- No internet permission.
+- The signing key (`app/debug.keystore`) stays the same, so each new APK installs over the previous one without losing data.

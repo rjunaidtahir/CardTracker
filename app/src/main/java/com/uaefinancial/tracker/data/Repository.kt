@@ -203,7 +203,7 @@ class Repository(private val db: AppDatabase) {
         val to = t.toLast4
         val dest = to?.let { destinationFor(it, t.bank) }
         val counterpartyKey = dest?.takeIf { it.cardType == CardTypes.CREDIT && it.owner == null && it.cardKey != key }?.cardKey
-        if (dest != null && to != null && t.merchant == SmsParser.transferLabel(to)) {
+        if (dest != null && t.merchant == SmsParser.transferLabel(to)) {
             t = t.copy(merchant = (if (counterpartyKey != null) "Payment to " else "Transfer to ") + label(dest))
         }
         val merchantKey = CategoryRules.merchantKey(t.merchant)

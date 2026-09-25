@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import androidx.core.graphics.scale
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -53,7 +54,7 @@ object CardImages {
             BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
         } ?: error("can't read it")
         val bmp = if (decoded.width > MAX_W) {
-            Bitmap.createScaledBitmap(decoded, MAX_W, (decoded.height.toLong() * MAX_W / decoded.width).toInt(), true)
+            decoded.scale(MAX_W, (decoded.height.toLong() * MAX_W / decoded.width).toInt())
         } else decoded
         val safe = cardKey.filter { it.isLetterOrDigit() }
         dir(ctx).listFiles { f -> f.name.startsWith("$safe-") }?.forEach { it.delete() }

@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,7 +68,7 @@ fun OnboardingFlow(
     onRemindersToggle: (Boolean) -> Unit,
 ) {
     val ctx = LocalContext.current
-    var step by rememberSaveable { mutableStateOf(0) }
+    var step by rememberSaveable { mutableIntStateOf(0) }
     var denied by rememberSaveable { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) { denied = false; step = 2 } else denied = true
@@ -140,7 +141,7 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
     val names = remember { mutableStateMapOf<String, String>() }
     val finished by vm.syncsFinished.collectAsStateWithLifecycle()
     // -1 = not importing; otherwise the finished-sync count when Import was tapped.
-    var importFrom by rememberSaveable { mutableStateOf(-1) }
+    var importFrom by rememberSaveable { mutableIntStateOf(-1) }
     val importing = importFrom >= 0
     LaunchedEffect(Unit) { if (scan.result == null) vm.scanSenders() }
     // Move on once the import started by the button has finished.

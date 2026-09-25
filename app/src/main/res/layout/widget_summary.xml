@@ -11,7 +11,7 @@
         android:id="@+id/widget_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Spent this month"
+        android:text="@string/widget_title_default"
         android:textColor="#CCFFFFFF"
         android:textSize="13sp" />
 
@@ -19,7 +19,7 @@
         android:id="@+id/widget_amount"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="AED 0.00"
+        android:text="@string/widget_amount_default"
         android:textColor="#FFFFFFFF"
         android:textSize="24sp"
         android:textStyle="bold" />
@@ -30,7 +30,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:maxLines="2"
-        android:text="No card payments due"
+        android:text="@string/widget_due_default"
         android:textColor="#E6FFFFFF"
         android:textSize="13sp" />
 </LinearLayout>

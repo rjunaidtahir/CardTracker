@@ -210,7 +210,6 @@ object SmartParser {
         if (all.all { it.role == Role.AVAILABLE }) return ParseResult.Ignored(bank, "Balance update")
         val found = dates(text, zone)
         val references = refs(text)
-        val lower = text.lowercase()
 
         // ---- statement / payment due
         val total = all.firstOrNull { it.role == Role.TOTAL }

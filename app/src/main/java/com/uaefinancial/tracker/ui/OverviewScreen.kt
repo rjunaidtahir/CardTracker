@@ -45,6 +45,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -115,7 +116,7 @@ fun OverviewScreen(
         BudgetDialog(categories, budgetLimits, onSave = { vm.saveBudgets(it) }, onDismiss = { editingBudgets = false })
     }
     val cardNames = cards.associate { it.cardKey to CardArts.displayName(it) }
-    var chartMode by rememberSaveable { mutableStateOf(0) } // 0 = arc, 1 = trend
+    var chartMode by rememberSaveable { mutableIntStateOf(0) } // 0 = arc, 1 = trend
     var selectedCat by remember(o.period) { mutableStateOf<Long?>(null) }
     var hasSel by remember(o.period) { mutableStateOf(false) }
 
