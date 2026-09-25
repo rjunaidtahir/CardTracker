@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import com.uaefinancial.tracker.core.toDecimalOrNull
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -566,8 +567,8 @@ private fun GoalDialog(existing: GoalEntity?, onSave: (GoalEntity) -> Unit, onDi
         },
         confirmButton = {
             TextButton(onClick = {
-                val t = target.replace(",", "").toBigDecimalOrNull()
-                val s = saved.replace(",", "").ifBlank { "0" }.toBigDecimalOrNull()
+                val t = target.replace(",", "").toDecimalOrNull()
+                val s = saved.replace(",", "").ifBlank { "0" }.toDecimalOrNull()
                 val d = date.trim().takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 when {
                     name.isBlank() -> error = "Give it a name"
@@ -598,7 +599,7 @@ private fun AmountDialog(title: String, onDone: (Long) -> Unit, onDismiss: () ->
             )
         },
         confirmButton = {
-            TextButton(onClick = { text.replace(",", "").trim().toBigDecimalOrNull()?.let { onDone(Money.toMinor(it)) } }) { Text("Add") }
+            TextButton(onClick = { text.replace(",", "").trim().toDecimalOrNull()?.let { onDone(Money.toMinor(it)) } }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

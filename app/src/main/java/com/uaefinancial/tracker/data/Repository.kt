@@ -1,5 +1,8 @@
 package com.uaefinancial.tracker.data
 
+import com.uaefinancial.tracker.toJava
+import com.uaefinancial.tracker.core.toDecimalOrNull
+import com.uaefinancial.tracker.core.Decimal
 import androidx.room.withTransaction
 import com.uaefinancial.tracker.core.IngestOutcome
 import com.uaefinancial.tracker.core.SmsKey
@@ -15,7 +18,6 @@ import com.uaefinancial.tracker.parser.SmsParser
 import com.uaefinancial.tracker.parser.CategoryRules
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.math.BigDecimal
 
 /** Shared by Sync and live listening: same parser, same de-duplication. */
 class Repository(private val db: AppDatabase) {
@@ -27,7 +29,7 @@ class Repository(private val db: AppDatabase) {
 
     /** Current AED rates (from the fx_rates table; defaults from BankRules.fxToAed). */
     @Volatile
-    var rates: Map<String, BigDecimal> = BankRules.fxToAed
+    var rates: Map<String, Decimal> = BankRules.fxToAed
         private set
 
     /** New transactions from Sync / live SMS since the last drain, for alerts. Not filled by Re-parse. */
@@ -64,8 +66,8 @@ class Repository(private val db: AppDatabase) {
     }
 
     private suspend fun loadRates() {
-        rates = dao.allRates().mapNotNull { r -> r.rateToAed.toBigDecimalOrNull()?.let { r.currency to it } }.toMap() +
-            (BankRules.BASE_CURRENCY to BigDecimal.ONE)
+        rates = dao.allRates().mapNotNull { r -> r.rateToAed.toDecimalOrNull()?.let { r.currency to it } }.toMap() +
+            (BankRules.BASE_CURRENCY to Decimal.ONE)
     }
 
     // ------------------------------------------------------------ bank senders
@@ -178,7 +180,7 @@ class Repository(private val db: AppDatabase) {
     private suspend fun applyTransaction(smsId: Long, dedupKey: String, r: ParseResult.Transaction): IngestOutcome {
         var t = r.txn
         // A reference number read as an amount: never let one message break a Sync or a re-read.
-        if (t.amount.abs() >= java.math.BigDecimal("100000000000")) {
+        if (t.amount.abs() >= Decimal("100000000000")) {
             dao.setSmsResult(smsId, SmsStatus.FAILED, t.bank, r.ruleId, "The amount looked wrong")
             return IngestOutcome.FAILED
         }
@@ -438,7 +440,7 @@ class Repository(private val db: AppDatabase) {
     // -------------------------------------------------------------- rates
 
     /** Saves a rate and recalculates the AED amount of every transaction in that currency. */
-    suspend fun setRate(currency: String, rate: BigDecimal) = lock.withLock {
+    suspend fun setRate(currency: String, rate: Decimal) = lock.withLock {
         db.withTransaction {
             dao.upsertRates(listOf(FxRateEntity(currency.uppercase(), rate.toPlainString(), System.currentTimeMillis())))
             loadRates()
@@ -477,7 +479,7 @@ class Repository(private val db: AppDatabase) {
                 Regex("PAYMENT|THANK YOU", RegexOption.IGNORE_CASE).containsMatchIn(l.description) -> TxnType.PAYMENT
                 else -> TxnType.REFUND
             }
-            val ts = l.date.atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
+            val ts = l.date.toJava().atTime(12, 0).atZone(zone).toInstant().toEpochMilli()
             if (dao.countManual(ts, l.amountMinor, l.description) > 0) continue
             val key = CategoryRules.merchantKey(l.description)
             dao.insertTxn(

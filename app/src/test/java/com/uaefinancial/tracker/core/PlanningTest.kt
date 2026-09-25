@@ -90,4 +90,16 @@ class PlanningTest {
         assertEquals(20, noDate.statementDay)
         assertNull(CardDays.fromStatements(listOf(st[1]), today))
     }
+
+    @Test fun since_statement() {
+        val start = SinceStatement.startDate(CalendarDate.of(2026, 9, 9), CalendarDate.of(2026, 9, 10))
+        assertEquals(CalendarDate.of(2026, 9, 10), start)
+        val txns = listOf(
+            InsightTxn(CalendarDate.of(2026, 9, 9), TxnType.PURCHASE, 5000, "C", null, "a", "a", "AED", 5000),
+            InsightTxn(CalendarDate.of(2026, 9, 12), TxnType.PURCHASE, 7000, "C", null, "b", "b", "AED", 7000),
+            InsightTxn(CalendarDate.of(2026, 9, 13), TxnType.REFUND, 1000, "C", null, "c", "c", "AED", 1000),
+            InsightTxn(CalendarDate.of(2026, 9, 14), TxnType.PAYMENT, 9000, "C", null, "d", "d", "AED", 9000),
+        )
+        assertEquals(6000L, SinceStatement.spend(txns, start))
+    }
 }

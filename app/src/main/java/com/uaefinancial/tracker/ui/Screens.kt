@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import com.uaefinancial.tracker.toJava
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -107,10 +108,10 @@ import java.util.Locale
 
 // DecimalFormat isn't thread-safe and fmtMoney is also used by the widget and reminder worker.
 private val moneyFmt = ThreadLocal.withInitial { DecimalFormat("#,##0.00", DecimalFormatSymbols(Locale.ENGLISH)) }
-fun fmtMoney(minor: Long, currency: String = "AED") = "$currency ${moneyFmt.get()!!.format(Money.fromMinor(minor))}"
+fun fmtMoney(minor: Long, currency: String = "AED") = "$currency ${moneyFmt.get()!!.format(Money.fromMinor(minor).toJava())}"
 
 /** 1,234.56 without a currency. */
-fun fmtAmount(minor: Long): String = moneyFmt.get()!!.format(Money.fromMinor(minor))
+fun fmtAmount(minor: Long): String = moneyFmt.get()!!.format(Money.fromMinor(minor).toJava())
 
 private val dateTimeFmt = DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.ENGLISH)
 val dateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)

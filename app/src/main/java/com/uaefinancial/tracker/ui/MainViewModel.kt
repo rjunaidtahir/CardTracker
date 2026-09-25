@@ -1,5 +1,8 @@
 package com.uaefinancial.tracker.ui
 
+import com.uaefinancial.tracker.toShared
+import com.uaefinancial.tracker.toJava
+import com.uaefinancial.tracker.core.toDecimalOrNull
 import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
@@ -57,7 +60,6 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
@@ -380,7 +382,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun saveBudgets(texts: Map<Long, String>) = viewModelScope.launch {
-        val parsed = texts.mapValues { (_, t) -> t.replace(",", "").trim().toBigDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) } }
+        val parsed = texts.mapValues { (_, t) -> t.replace(",", "").trim().toDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) } }
         repo.setBudgets(parsed)
         message.value = "Budgets saved"
     }
@@ -517,8 +519,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val others = lines.mapNotNull { it.cardLast4 }.filter { it != main?.last4 }.toSet()
             .associateWith { l4 -> (allCards.filter { it.last4 == l4 && it.bank == main?.bank } + allCards.filter { it.last4 == l4 }).firstOrNull()?.cardKey }
         val keys = setOf(key) + others.values.filterNotNull()
-        val from = lines.minOf { it.date }.minusDays(5)
-        val to = lines.maxOf { it.date }.plusDays(6)
+        val from = lines.minOf { it.date }.minusDays(5).toJava()
+        val to = lines.maxOf { it.date }.plusDays(6).toJava()
         val appTxns = dao.txnsListBetween(from.startMs(), to.startMs())
             .filter { it.cardKey in keys || it.counterpartyKey in keys }
             .map { t ->
@@ -526,7 +528,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 // A transfer to this card is a payment (credit) from the card's point of view.
                 val credit = t.counterpartyKey in keys || type == TxnType.REFUND || type == TxnType.PAYMENT || type == TxnType.TRANSFER_IN
                 com.uaefinancial.tracker.core.AppTxnRef(
-                    t.id, Instant.ofEpochMilli(t.timestamp).atZone(zone).toLocalDate(),
+                    t.id, Instant.ofEpochMilli(t.timestamp).atZone(zone).toLocalDate().toShared(),
                     t.amountAedMinor ?: t.amountMinor, credit, t.fxEstimated, t.merchant,
                 )
             }
@@ -624,7 +626,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** kind: "big", "account", "card". Empty or 0 turns that alert off. */
     fun setAlertAmount(kind: String, text: String) {
-        val minor = text.replace(",", "").trim().ifEmpty { "0" }.toBigDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
+        val minor = text.replace(",", "").trim().ifEmpty { "0" }.toDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
         if (minor == null || minor < 0) { message.value = "Enter an amount like 1000"; return }
         when (kind) {
             "big" -> { prefs.bigSpendMinor = minor; bigSpendMinor.value = minor }
@@ -745,7 +747,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveCardProfile(key: String, nickname: String, limitAed: String, statementDay: String, dueDay: String, reminders: Boolean) =
         viewModelScope.launch {
-            val limit = limitAed.replace(",", "").trim().toBigDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
+            val limit = limitAed.replace(",", "").trim().toDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
             val sd = statementDay.trim().toIntOrNull()?.takeIf { it in 1..31 }
             val dd = dueDay.trim().toIntOrNull()?.takeIf { it in 1..31 }
             repo.updateCardProfile(key, nickname, limit, sd, dd, reminders)
@@ -770,8 +772,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ rates
     fun setRate(currency: String, rateText: String) = viewModelScope.launch {
-        val r = rateText.trim().toBigDecimalOrNull()
-        if (r == null || r <= BigDecimal.ZERO) {
+        val r = rateText.trim().toDecimalOrNull()
+        if (r == null || r.signum() <= 0) {
             message.value = "Enter a rate like 3.6725"
             return@launch
         }
@@ -900,7 +902,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun saveFix(
         sms: SmsEntity, type: TxnType, amountText: String, currency: String, merchant: String, cardLast4: String, cardType: CardType,
     ) = viewModelScope.launch {
-        val amount = amountText.replace(",", "").trim().toBigDecimalOrNull()
+        val amount = amountText.replace(",", "").trim().toDecimalOrNull()
         if (amount == null || amount.signum() <= 0) { message.value = "Enter the amount, e.g. 120.50"; return@launch }
         val cur = currency.trim().uppercase().ifEmpty { "AED" }
         if (!Regex("[A-Z]{3}").matches(cur)) { message.value = "Currency is a 3-letter code, e.g. AED or USD"; return@launch }

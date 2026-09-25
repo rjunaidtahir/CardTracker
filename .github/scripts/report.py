@@ -56,7 +56,7 @@ warnings = list(dict.fromkeys(warnings))
 # Unit tests
 tests = fails = skipped = 0
 failed = []
-for f in glob.glob("app/build/test-results/testDebugUnitTest/*.xml"):
+for f in glob.glob("*/build/test-results/testDebugUnitTest/*.xml"):
     root = ET.parse(f).getroot()
     tests += int(root.get("tests", 0))
     skipped += int(root.get("skipped", 0))

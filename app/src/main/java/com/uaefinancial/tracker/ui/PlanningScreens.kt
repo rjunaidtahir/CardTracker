@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import com.uaefinancial.tracker.core.toDecimalOrNull
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -327,7 +328,7 @@ private fun FixedPaymentDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val a = amount.replace(",", "").trim().toBigDecimalOrNull()
+                val a = amount.replace(",", "").trim().toDecimalOrNull()
                 val d = day.toIntOrNull()
                 when {
                     name.isBlank() -> error = "Give it a name"

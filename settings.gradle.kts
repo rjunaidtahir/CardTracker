@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "UAEFinancialTracker"
 include(":app")
+include(":shared")

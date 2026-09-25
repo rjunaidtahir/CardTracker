@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import com.uaefinancial.tracker.toJava
 import androidx.core.net.toUri
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -163,12 +164,12 @@ fun StatementCheckScreen(vm: MainViewModel) {
                     )
                     Spacer(Modifier.height(6.dp))
                     if (sm.isAccount) {
-                        FigureRow("Period", listOfNotNull(sm.periodFrom?.format(dateFmt), sm.periodTo?.format(dateFmt)).joinToString(" – ").ifEmpty { null }, null, showApp = false)
+                        FigureRow("Period", listOfNotNull(sm.periodFrom?.toJava()?.format(dateFmt), sm.periodTo?.toJava()?.format(dateFmt)).joinToString(" – ").ifEmpty { null }, null, showApp = false)
                         FigureRow("Opening balance", sm.previousBalanceMinor?.let { fmtMoney(it) }, null, showApp = false)
                         FigureRow("Closing balance", sm.closingBalanceMinor?.let { fmtMoney(it) }, cs?.latestBalanceMinor?.let { fmtMoney(it) })
                     } else {
-                    FigureRow("Statement date", sm.statementDate?.format(dateFmt), appSt?.statementDateEpochDay?.let { fmtEpochDay(it) })
-                    FigureRow("Payment due date", sm.dueDate?.format(dateFmt), appSt?.dueDateEpochDay?.let { fmtEpochDay(it) })
+                    FigureRow("Statement date", sm.statementDate?.toJava()?.format(dateFmt), appSt?.statementDateEpochDay?.let { fmtEpochDay(it) })
+                    FigureRow("Payment due date", sm.dueDate?.toJava()?.format(dateFmt), appSt?.dueDateEpochDay?.let { fmtEpochDay(it) })
                     FigureRow("Amount due (avoid finance charges)", sm.totalDueMinor?.let { fmtMoney(it) }, appSt?.balanceMinor?.let { fmtMoney(it, appSt.currency) })
                     FigureRow("Minimum due", sm.minimumDueMinor?.let { fmtMoney(it) }, appSt?.minimumDueMinor?.let { fmtMoney(it, appSt.currency) })
                     FigureRow("Total credit limit", sm.creditLimitMinor?.let { fmtMoney(it) }, card.creditLimitMinor?.let { fmtMoney(it) })
@@ -230,7 +231,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
                                 Checkbox(on, { c -> if (c) selected.add(l) else selected.remove(l) })
                                 Column(Modifier.weight(1f)) {
                                     Text(l.description, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(l.date.format(dateFmt) + if (l.isCredit) " · credit" else "", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                                    Text(l.date.toJava().format(dateFmt) + if (l.isCredit) " · credit" else "", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
                                 }
                                 Text((if (l.isCredit) "+" else "−") + fmtAmount(l.amountMinor), fontWeight = FontWeight.SemiBold,
                                     color = if (l.isCredit) Ink.green else Ink.text, maxLines = 1, softWrap = false, modifier = Modifier.padding(end = 8.dp))
@@ -273,7 +274,7 @@ fun StatementCheckScreen(vm: MainViewModel) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp)) {
                             Column(Modifier.weight(1f)) {
                                 Text(l.description, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text("${l.date.format(dateFmt)} · in app: ${a.label}", style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text("${l.date.toJava().format(dateFmt)} · in app: ${a.label}", style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Text(fmtAmount(l.amountMinor), color = Ink.green, maxLines = 1, softWrap = false)
                         }
