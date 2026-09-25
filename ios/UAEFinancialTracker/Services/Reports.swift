@@ -172,7 +172,7 @@ enum Reports {
             }
             y += 74
 
-            func newPageIfNeeded(_ needed: CGFloat) {
+            @MainActor func newPageIfNeeded(_ needed: CGFloat) {
                 if y + needed > page.height - margin {
                     ctx.beginPage()
                     pageNo += 1
@@ -252,7 +252,7 @@ enum Reports {
             text("Transactions (\(d.txns.count))", margin, y, font(13, .bold))
             y += 22
             let cols: [CGFloat] = [margin, margin + 60, margin + 250, margin + 360]
-            func header() {
+            @MainActor func header() {
                 for (i, h) in ["DATE", "MERCHANT", "CATEGORY", "CARD"].enumerated() { text(h, cols[i], y, font(8, .semibold), muted) }
                 text("AMOUNT", page.width - margin, y, font(8, .semibold), muted, right: true)
                 y += 14
