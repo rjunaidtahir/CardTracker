@@ -107,7 +107,8 @@ enum Insights {
         for t in txns where SpendRules.counted(t, excluded: excluded) {
             sums[t.cardKey ?? "", default: 0] += SpendRules.contribution(t.type, t.aed)
         }
-        return sums.filter { $0.value > 0 }.map { (cardKey: $0.key, amount: $0.value) }.sorted { $0.amount > $1.amount }
+        return sums.filter { $0.value > 0 }.map { (cardKey: $0.key, amount: $0.value) }
+            .sorted { $0.amount != $1.amount ? $0.amount > $1.amount : $0.cardKey < $1.cardKey }
     }
 
     /// SpendRules in each of the [months] months ending with the month of [endDay] (oldest first, zero months included).
@@ -132,10 +133,13 @@ enum Insights {
             let c = SpendRules.contribution(t, excluded: excluded)
             guard c != 0 else { continue }
             let key = t.merchantKey.isEmpty ? t.merchant.uppercased() : t.merchantKey
+            if key.trimmingCharacters(in: .whitespaces).isEmpty { continue }
             let old = sums[key] ?? (name: t.merchant, amount: 0, count: 0)
             sums[key] = (name: old.name, amount: old.amount + c, count: old.count + 1)
         }
-        return Array(sums.values.filter { $0.amount > 0 }.sorted { $0.amount > $1.amount }.prefix(limit))
+        // Largest first; equal amounts by name, so the order never changes between runs.
+        return Array(sums.values.filter { $0.amount > 0 }
+            .sorted { $0.amount != $1.amount ? $0.amount > $1.amount : $0.name < $1.name }.prefix(limit))
     }
 
     /// Purchases in each non-AED currency: original total and AED equivalent.
@@ -143,7 +147,7 @@ enum Insights {
         let foreign = txns.filter { SpendRules.counted($0, excluded: excluded) && $0.type == .purchase && $0.currency != "AED" }
         return Dictionary(grouping: foreign, by: \.currency).map { cur, l in
             CurrencyTotal(currency: cur, originalMinor: l.reduce(0) { $0 + $1.amountMinor }, aedMinor: l.reduce(0) { $0 + ($1.aed ?? 0) }, count: l.count)
-        }.sorted { $0.aedMinor > $1.aedMinor }
+        }.sorted { $0.aedMinor != $1.aedMinor ? $0.aedMinor > $1.aedMinor : $0.currency < $1.currency }
     }
 
     /// SpendRules per day, week or month from [start] to [end] (inclusive), oldest first, empty buckets included.
@@ -210,6 +214,6 @@ enum Insights {
                 lastDay: last.day, nextExpected: next, cardKey: last.cardKey, categoryId: byDay.last { $0.categoryId != nil }?.categoryId
             ))
         }
-        return out.sorted { $0.averageMinor > $1.averageMinor }
+        return out.sorted { $0.averageMinor != $1.averageMinor ? $0.averageMinor > $1.averageMinor : $0.merchant < $1.merchant }
     }
 }
