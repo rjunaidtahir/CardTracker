@@ -113,6 +113,32 @@ To build Android locally, open the folder in Android Studio and use **Build → 
 3. Add these repository secrets: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` (the contents of the .p8 file).
 4. Run **Actions → iPhone app to TestFlight**. It signs automatically and uploads the build. Install it on the iPhone with the TestFlight app, then submit it for review from App Store Connect.
 
+## Google Drive copies
+
+After every build on `main` or `rebuild`, GitHub copies the project into Google Drive: **Fils & UAE Financial Tracker – Project → Versions → <date>**. Each date folder holds that day's latest:
+- `Android-project-v….zip`: the Android app with the shared engine
+- `iPhone-Fils-project-v….zip`: the iPhone app with the shared engine
+- the APK, for builds from `main`
+- `Changes.txt`: what changed that day
+
+One-time setup (about 10 minutes):
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project (e.g. "Fils uploads").
+2. **APIs & Services → Library → Google Drive API → Enable.**
+3. **Google Auth Platform → Branding** (the OAuth consent screen):
+   - Choose External and enter the app name and your email.
+   - Then, under **Audience**, tap **Publish app**, so access doesn't expire after 7 days.
+4. **Clients → Create client → Web application.**
+   - Add the redirect URI `https://developers.google.com/oauthplayground`.
+   - Copy the Client ID and Client secret.
+5. In the [OAuth Playground](https://developers.google.com/oauthplayground):
+   - Open the ⚙ gear, tick **Use your own OAuth credentials**, and paste the ID and secret.
+   - In "Input your own scopes", type `https://www.googleapis.com/auth/drive.file` and tap **Authorize APIs**.
+   - Sign in and allow. If there's a warning, tap Advanced → Go to …
+   - Tap **Exchange authorization code for tokens** and copy the **Refresh token**.
+6. In the GitHub repo, go to **Settings → Secrets and variables → Actions** and add three secrets: `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET` and `GDRIVE_REFRESH_TOKEN`.
+
+The `drive.file` permission only lets GitHub see the files it creates itself, nothing else in your Drive.
+
 ## Adding or fixing a bank format
 
 1. Copy the SMS from **Needs review**, or use **Share these messages**.
