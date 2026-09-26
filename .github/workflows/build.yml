@@ -7,6 +7,8 @@ on:
       - 'ios/**'
       - '.github/workflows/ios.yml'
       - '.github/scripts/ios_report.py'
+      - '.github/workflows/drive-copy.yml'
+      - '.github/scripts/drive_upload.py'
   workflow_dispatch:
 
 permissions:

@@ -1,0 +1,76 @@
+name: Copy to Google Drive
+
+# After every Android or iPhone build on main or rebuild, puts that day's project files into Google Drive:
+# "Fils & UAE Financial Tracker – Project / Versions / <date>". Needs the three GDRIVE_* secrets (README → Google Drive
+# copies); without them it does nothing.
+on:
+  workflow_run:
+    workflows: ["Build APK", "iPhone app"]
+    types: [completed]
+    branches: [main, rebuild]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  copy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 50
+
+      - name: Check the Google Drive secrets are set
+        id: secrets
+        env:
+          ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+        run: |
+          if [ -z "$ID" ] || [ -z "$SECRET" ] || [ -z "$TOKEN" ]; then
+            echo "::notice title=Google Drive::Not set up yet (add GDRIVE_CLIENT_ID, GDRIVE_CLIENT_SECRET, GDRIVE_REFRESH_TOKEN)"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Make the project files
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          WORKFLOW: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          DAY=$(TZ=Asia/Dubai date +%F)
+          echo "DAY=$DAY" >> "$GITHUB_ENV"
+          AVER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          IVER=$(grep -oP 'MARKETING_VERSION: "\K[^"]+' ios/project.yml | head -1)
+          mkdir -p out
+          COMMON="shared gradle gradlew gradlew.bat build.gradle.kts settings.gradle.kts gradle.properties .github README.md ROADMAP.md .gitignore"
+          git archive --format=zip --prefix=UAE-Financial-Tracker-Android/ -o "out/Android-project-v$AVER.zip" HEAD app $COMMON
+          git archive --format=zip --prefix=Fils-iPhone/ -o "out/iPhone-Fils-project-v$IVER.zip" HEAD ios $COMMON
+          # The APK built from main (published as a release by the Android build).
+          if [ "$WORKFLOW" = "Build APK" ] && [ "$BRANCH" = "main" ] && [ -n "$RUN_NUMBER" ]; then
+            gh release download "build-$RUN_NUMBER" --pattern '*.apk' --dir out || echo "No APK release for build $RUN_NUMBER"
+          fi
+          {
+            echo "Fils & UAE Financial Tracker – project files for $DAY"
+            echo "Branch: $BRANCH   Commit: $(git rev-parse --short HEAD)"
+            echo "Android app: v$AVER   iPhone app (Fils): v$IVER"
+            echo
+            echo "Changes on $DAY (Dubai time):"
+            git log --since="$DAY 00:00 +0400" --format='- %ad  %s' --date=format:'%H:%M' HEAD
+          } > out/Changes.txt
+          ls -la out
+
+      - name: Upload to Google Drive
+        if: steps.secrets.outputs.ready == 'true'
+        env:
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+        run: python3 .github/scripts/drive_upload.py "$DAY" out/*
