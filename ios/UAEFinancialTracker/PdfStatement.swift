@@ -34,7 +34,7 @@ enum PdfStatement {
                 let chars = Array(text)
                 let step = bounds.width / CGFloat(chars.count)
                 for (i, ch) in chars.enumerated() {
-                    if ch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || ch == "\t" { continue }
+                    if ch.isWhitespace { continue }
                     let x = bounds.minX - box.minX + CGFloat(i) * step
                     out += "\(p)\t\(fmt(x))\t\(fmt(y))\t\(fmt(step))\t\(fmt(size))\t\(ch)\n"
                 }

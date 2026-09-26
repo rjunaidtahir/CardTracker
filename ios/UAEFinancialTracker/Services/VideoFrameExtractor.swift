@@ -32,16 +32,19 @@ enum VideoFrameExtractor {
 
         var kept: [UIImage] = []
         var lastSignature: [UInt8]?
-        for await item in generator.images(for: times) {
-            guard let result = try? item.get() else { continue }
-            let cgImage = result.image
-            let signature = thumbprint(of: cgImage)
-            // Two frames that look the same (paused, or between scroll gestures) would just read the same
-            // messages twice — the engine already skips messages it's seen, but skipping the OCR pass itself
-            // here keeps a long recording fast.
-            if let last = lastSignature, similar(signature, last) { continue }
-            lastSignature = signature
-            kept.append(UIImage(cgImage: cgImage))
+        do {
+            for try await item in generator.images(for: times) {
+                let cgImage = item.image
+                let signature = thumbprint(of: cgImage)
+                // Two frames that look the same (paused, or between scroll gestures) would just read the same
+                // messages twice — the engine already skips messages it's seen, but skipping the OCR pass itself
+                // here keeps a long recording fast.
+                if let last = lastSignature, similar(signature, last) { continue }
+                lastSignature = signature
+                kept.append(UIImage(cgImage: cgImage))
+            }
+        } catch {
+            // A mid-stream generation failure shouldn't discard the frames already collected.
         }
         return kept
     }
