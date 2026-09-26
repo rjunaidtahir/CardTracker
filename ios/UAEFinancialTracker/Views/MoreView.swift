@@ -109,25 +109,36 @@ struct RowLabel: View {
 
 struct PasteView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var result: String?
+    @State private var result: Engine.Tally?
 
     var body: some View {
         Form {
-            Section {
-                TextEditor(text: $text)
-                    .frame(minHeight: 200)
-                    .font(.callout)
-                if text.isEmpty {
-                    Button {
-                        if let s = UIPasteboard.general.string { text = s }
-                    } label: { Label("Paste from clipboard", systemImage: "doc.on.clipboard") }
-                }
-            } footer: {
-                Text("In Messages, touch and hold a bank SMS → Copy, then paste it here. For several messages, leave an empty line between them. OTPs are never stored, and messages already in the app are skipped.")
-            }
             if let result {
-                Section { Label(result, systemImage: "checkmark.circle").foregroundStyle(Palette.green) }
+                ImportResultSection(tally: result, note: nil, addMoreTitle: "Paste more messages") { self.result = nil }
+            } else {
+                Section {
+                    TextEditor(text: $text)
+                        .frame(minHeight: 200)
+                        .font(.callout)
+                    if text.isEmpty {
+                        Button {
+                            if let s = UIPasteboard.general.string { text = s }
+                        } label: { Label("Paste from clipboard", systemImage: "doc.on.clipboard") }
+                    } else {
+                        Button {
+                            result = MessageFiles.importPaste(text, engine: model.engine)
+                            text = ""
+                        } label: {
+                            Text("Add messages").font(.headline).frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    }
+                } footer: {
+                    Text("In Messages, touch and hold a bank SMS → Copy, then paste it here. For several messages, leave an empty line between them. OTPs are never stored, and messages already in the app are skipped.")
+                }
             }
         }
         .themedScreen()
@@ -135,43 +146,129 @@ struct PasteView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Add") {
-                    result = MessageFiles.importPaste(text, engine: model.engine).summary
-                    text = ""
-                }
-                .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if result != nil { Button("Done") { dismiss() }.fontWeight(.semibold) }
             }
+        }
+    }
+}
+
+/// What an import added, with clear next steps: see the transactions, review what couldn't be read, add more, or finish.
+struct ImportResultSection: View {
+    let tally: Engine.Tally
+    let note: String?
+    let addMoreTitle: String
+    let addMore: () -> Void
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let nothing = tally.transactions + tally.merged + tally.statements + tally.review == 0
+        Section {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(nothing ? "Nothing new added" : "Done", systemImage: nothing ? "info.circle.fill" : "checkmark.circle.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(nothing ? Palette.amber : Palette.green)
+                if let note { Text(note).font(.footnote).foregroundStyle(.secondary) }
+            }
+            .padding(.vertical, 4)
+            if tally.transactions + tally.merged > 0 {
+                countRow("Transactions added", tally.transactions + tally.merged, "list.bullet.rectangle", Palette.green)
+            }
+            if tally.statements > 0 { countRow("Card statements added", tally.statements, "doc.text", Palette.green) }
+            if tally.review > 0 { countRow("Need a look", tally.review, "exclamationmark.bubble", Palette.amber) }
+            if tally.duplicates > 0 { countRow("Already in the app (skipped)", tally.duplicates, "checkmark.circle", .secondary) }
+            if tally.skipped > 0 { countRow("Not needed: OTPs, adverts, other messages", tally.skipped, "minus.circle", .secondary) }
+        }
+        Section {
+            if tally.transactions + tally.merged + tally.statements > 0 {
+                Button {
+                    model.tab = .activity
+                    dismiss()
+                } label: {
+                    Text("See transactions").font(.headline).frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+            if tally.review > 0 {
+                NavigationLink {
+                    ReviewView()
+                } label: {
+                    Label("Review \(tally.review) message\(tally.review == 1 ? "" : "s")", systemImage: "exclamationmark.bubble")
+                }
+            }
+            Button(action: addMore) { Label(addMoreTitle, systemImage: "plus.circle") }
+            Button { dismiss() } label: { Label("Done", systemImage: "checkmark") }
+        }
+    }
+
+    private func countRow(_ title: String, _ n: Int, _ symbol: String, _ color: Color) -> some View {
+        HStack {
+            Label { Text(title) } icon: { Image(systemName: symbol).foregroundStyle(color) }
+            Spacer()
+            Text("\(n)").font(.headline.monospacedDigit())
         }
     }
 }
 
 struct ScreenshotImportView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var items: [PhotosPickerItem] = []
     @State private var working = false
-    @State private var result: String?
+    @State private var result: MessageFiles.ScreenshotResult?
 
     var body: some View {
         Form {
-            Section {
-                PhotosPicker(selection: $items, maxSelectionCount: 20, matching: .screenshots) {
-                    Label("Choose screenshots", systemImage: "photo.on.rectangle.angled")
+            if working {
+                Section {
+                    HStack(spacing: 12) {
+                        ProgressView()
+                        Text("Reading your screenshots…")
+                    }
+                    .padding(.vertical, 6)
                 }
-                if working { ProgressView("Reading the screenshots…") }
-                if let result { Label(result, systemImage: "checkmark.circle").foregroundStyle(Palette.green) }
-            } footer: {
-                Text("Take screenshots of a bank's conversation in Messages (scroll so the time labels, like \"Yesterday 21:05\", are visible), then choose them here. The text is read on your iPhone. You can also share screenshots from Photos to \(AppInfo.name).")
+            } else if let result {
+                if result.found == 0 {
+                    Section {
+                        Label("No bank messages found", systemImage: "exclamationmark.triangle.fill")
+                            .font(.headline).foregroundStyle(Palette.amber)
+                        Text("Use screenshots of a bank's conversation in Messages, with the message bubbles clearly visible.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                    Section { picker(title: "Try other screenshots") }
+                } else {
+                    ImportResultSection(
+                        tally: result.tally,
+                        note: result.undated > 0
+                            ? "\(result.undated) message\(result.undated == 1 ? " had" : "s had") no time on the screenshot, so the date inside the message (or today) was used."
+                            : nil,
+                        addMoreTitle: "Add more screenshots"
+                    ) { self.result = nil }
+                }
+            } else {
+                Section {
+                    picker(title: "Choose screenshots")
+                } footer: {
+                    Text("Take screenshots of a bank's conversation in Messages (scroll so the time labels, like \"Yesterday 21:05\", are visible). Choose them here, then tap Add at the top of the photo picker. The text is read on your iPhone.")
+                }
+                Section("Tips") {
+                    Label("One bank per screenshot works best.", systemImage: "1.circle")
+                    Label("Messages without a visible time use the date inside the message, or today.", systemImage: "clock.badge.questionmark")
+                    Label("Messages already in the app are skipped, so it's fine to include old ones.", systemImage: "checkmark.circle")
+                    Label("You can also share screenshots from Photos straight to \(AppInfo.name).", systemImage: "square.and.arrow.up")
+                }
+                .font(.subheadline)
             }
-            Section("Tips") {
-                Label("One bank per screenshot works best.", systemImage: "1.circle")
-                Label("Messages without a visible time use the date inside the message, or today.", systemImage: "clock.badge.questionmark")
-                Label("Messages already in the app are skipped.", systemImage: "checkmark.circle")
-            }
-            .font(.subheadline)
         }
         .themedScreen()
         .navigationTitle("Screenshots")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                if result != nil && !working { Button("Done") { dismiss() }.fontWeight(.semibold) }
+            }
+        }
         .onChange(of: items) { _, picked in
             guard !picked.isEmpty else { return }
             working = true
@@ -181,11 +278,16 @@ struct ScreenshotImportView: View {
                 for item in picked {
                     if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) { images.append(img) }
                 }
-                let r = await MessageFiles.importScreenshots(images, engine: model.engine)
-                result = r.summary
+                result = await MessageFiles.importScreenshots(images, engine: model.engine)
                 working = false
                 items = []
             }
+        }
+    }
+
+    private func picker(title: String) -> some View {
+        PhotosPicker(selection: $items, maxSelectionCount: 20, matching: .screenshots) {
+            Label(title, systemImage: "photo.on.rectangle.angled").font(.headline)
         }
     }
 }
