@@ -16,6 +16,12 @@ enum AppInfo {
         // "-sharedAutomation YES" at launch shows the iOS 27 screen on an older simulator (screenshots only).
         ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 || UserDefaults.standard.bool(forKey: "sharedAutomation")
     }
+    /// "1.0 (3)", from the build's Info.plist.
+    static var version: String {
+        let short = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
+        return "\(short) (\(build))"
+    }
 }
 
 /// Whether the Shortcuts automation is handing bank messages to the app.

@@ -36,7 +36,8 @@ targets:
         LSApplicationCategoryType: public.app-category.finance
         ITSAppUsesNonExemptEncryption: false
         NSFaceIDUsageDescription: Unlock Fils with Face ID instead of your PIN.
-        UILaunchScreen: {}
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         LSSupportsOpeningDocumentsInPlace: false

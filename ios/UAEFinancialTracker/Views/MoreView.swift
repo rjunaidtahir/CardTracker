@@ -20,6 +20,25 @@ struct MoreView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    HStack(spacing: 12) {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Palette.brand)
+                            .frame(width: 44, height: 44)
+                            .overlay {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    RoundedRectangle(cornerRadius: 1.5).fill(.white.opacity(0.9)).frame(width: 8, height: 6)
+                                    RoundedRectangle(cornerRadius: 1).fill(.white.opacity(0.7)).frame(width: 16, height: 2.5)
+                                }
+                            }
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(AppInfo.fullName).font(.headline)
+                            Text("Version \(AppInfo.version)").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listRowBackground(Color.clear)
                 Section("Add bank messages") {
                     NavigationLink { AutomationGuideView() } label: { Label("Automatic import", systemImage: "wand.and.stars") }
                     NavigationLink { PasteView() } label: { Label("Paste messages", systemImage: "doc.on.clipboard") }
@@ -69,7 +88,7 @@ struct MoreView: View {
                     Button { model.showOnboarding = true } label: { RowLabel("Run the setup again", "sparkles") }
                 }
                 Section {
-                    Text("\(AppInfo.fullName). Your data stays on this iPhone: no account, no ads, no tracking, and nothing is sent anywhere or backed up to iCloud. One-time passwords (OTPs) are never stored.")
+                    Text("Your data stays on this iPhone: no account, no ads, no tracking, and nothing is sent anywhere or backed up to iCloud. One-time passwords (OTPs) are never stored.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
@@ -229,7 +248,9 @@ struct ScreenshotImportView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var items: [PhotosPickerItem] = []
+    @State private var videoItem: PhotosPickerItem?
     @State private var stage: Stage = .pick
+    @State private var readingKind: ReadingKind = .screenshots
     @State private var groups: [MessageFiles.ScreenshotGroup] = []
     /// The bank chosen for each group; "" = not chosen yet, [notSure] = let the app work it out per message.
     @State private var banks: [UUID: String] = [:]
@@ -237,6 +258,7 @@ struct ScreenshotImportView: View {
     @State private var startedPreloaded = false
 
     enum Stage { case pick, reading, check, done }
+    enum ReadingKind { case screenshots, recording }
     private static let notSure = "__auto__"
 
     var body: some View {
@@ -247,7 +269,7 @@ struct ScreenshotImportView: View {
                 Section {
                     HStack(spacing: 12) {
                         ProgressView()
-                        Text("Reading your screenshots…")
+                        Text(readingKind == .recording ? "Reading your recording…" : "Reading your screenshots…")
                     }
                     .padding(.vertical, 6)
                 }
@@ -269,6 +291,7 @@ struct ScreenshotImportView: View {
         .onChange(of: items) { _, picked in
             guard !picked.isEmpty else { return }
             Task {
+                readingKind = .screenshots
                 stage = .reading
                 var images: [UIImage] = []
                 for item in picked {
@@ -278,9 +301,25 @@ struct ScreenshotImportView: View {
                 await read(images)
             }
         }
+        .onChange(of: videoItem) { _, picked in
+            guard let picked else { return }
+            Task {
+                readingKind = .recording
+                stage = .reading
+                defer { videoItem = nil }
+                guard let file = try? await picked.loadTransferable(type: PickedVideo.self) else {
+                    stage = .pick
+                    return
+                }
+                let frames = await VideoFrameExtractor.frames(from: file.url)
+                try? FileManager.default.removeItem(at: file.url)
+                await read(frames)
+            }
+        }
         .task {
             guard !preloaded.isEmpty, !startedPreloaded else { return }
             startedPreloaded = true
+            readingKind = .screenshots
             stage = .reading
             await read(preloaded)
         }
@@ -294,6 +333,13 @@ struct ScreenshotImportView: View {
             picker(title: "Choose screenshots")
         } footer: {
             Text("Open the bank's conversation in Messages and take screenshots as you scroll. Choose them here and tap Add in the photo picker. You'll see what Fils found before anything is saved.")
+        }
+        Section {
+            PhotosPicker(selection: $videoItem, matching: .videos) {
+                Label("Import a screen recording", systemImage: "record.circle").font(.headline)
+            }
+        } footer: {
+            Text("For a whole conversation at once: turn on Screen Recording (Control Center), open the bank's conversation in Messages, scroll slowly from top to bottom, then stop. Choose that recording here — Fils reads it on this iPhone the same way it reads screenshots, and the video itself isn't kept.")
         }
         Section("Tips") {
             Label("Include the bank's name at the top of the screen.", systemImage: "text.below.photo")
@@ -1220,6 +1266,8 @@ struct HelpView: View {
          "On Activity, tap + and type it like you'd say it: \"lunch 45\", \"taxi 30 aed\", \"usd 20 netflix #1234\" (#1234 = the card's last 4 digits), \"refund amazon 50\"."),
         ("Screenshots",
          "Screenshots of a bank's conversation in Messages are read on your iPhone. Keep the time labels (\"Yesterday 21:05\") visible so each message gets its date; messages already in the app are skipped."),
+        ("Importing a screen recording",
+         "For a lot of history at once, More → Screenshots of messages → Import a screen recording. Record the conversation scrolling by (Control Center → Screen Recording), then choose that recording. Fils reads it frame by frame on your iPhone, the same way it reads screenshots; the video isn't kept afterwards."),
         ("Moving from the Android app",
          "In the Android app, More → Back up. Send the .zip to your iPhone and open it with \(AppInfo.name) (or More → Restore a backup). Your messages, cards, categories, budgets and fixed payments come across."),
     ]

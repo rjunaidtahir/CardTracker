@@ -193,6 +193,7 @@ final class AppModel {
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Query(filter: #Predicate<SmsRecord> { $0.status == "failed" }) private var toReview: [SmsRecord]
+    @State private var showLaunch = true
 
     var body: some View {
         @Bindable var model = model
@@ -246,6 +247,16 @@ struct RootView: View {
         }
         .overlay {
             if model.locked { LockView { model.locked = false } }
+        }
+        .overlay {
+            if showLaunch {
+                LaunchView()
+                    .transition(.opacity)
+                    .task {
+                        try? await Task.sleep(for: .milliseconds(1100))
+                        withAnimation(.easeInOut(duration: 0.45)) { showLaunch = false }
+                    }
+            }
         }
         .overlay(alignment: .bottom) {
             if let t = model.toast {
