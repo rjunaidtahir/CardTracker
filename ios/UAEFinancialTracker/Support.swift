@@ -12,7 +12,10 @@ enum AppInfo {
     /// Message to Fils". Opening it adds the shortcut in the Shortcuts app.
     static let automationShortcut = URL(string: "https://www.icloud.com/shortcuts/53d0ba37867348a78566067761e526a5")!
     /// Shortcuts can share automations from iOS 27.
-    static var canInstallSharedAutomation: Bool { ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 }
+    static var canInstallSharedAutomation: Bool {
+        // "-sharedAutomation YES" at launch shows the iOS 27 screen on an older simulator (screenshots only).
+        ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 || UserDefaults.standard.bool(forKey: "sharedAutomation")
+    }
 }
 
 /// Whether the Shortcuts automation is handing bank messages to the app.

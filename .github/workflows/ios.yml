@@ -148,7 +148,8 @@ jobs:
           shot 05-card-detail -tab cards -screen card
           shot 06-fixed -tab home -screen fixed
           shot 07-review -tab home -screen review
-          shot 08-automation -tab more -screen automation
+          shot 08-automation -tab more -screen automation -sharedAutomation YES
+          shot 08b-automation-older-ios -tab more -screen automation
           shot 09-statement -tab more -screen statement
           shot 10-notifications -tab more -screen notifications
           shot 11-welcome -onboarding YES
