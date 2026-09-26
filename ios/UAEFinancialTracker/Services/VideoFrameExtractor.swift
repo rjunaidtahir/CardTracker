@@ -34,7 +34,7 @@ enum VideoFrameExtractor {
         var lastSignature: [UInt8]?
         do {
             for try await item in generator.images(for: times) {
-                let cgImage = item.image
+                let cgImage = try item.image
                 let signature = thumbprint(of: cgImage)
                 // Two frames that look the same (paused, or between scroll gestures) would just read the same
                 // messages twice — the engine already skips messages it's seen, but skipping the OCR pass itself
