@@ -247,6 +247,9 @@ struct CardDetailView: View {
     @State private var cantDelete = false
     @State private var photo: PhotosPickerItem?
     @State private var checking = false
+    @State private var merging = false
+    @State private var mergeTarget: Card?
+    @Query(sort: \Card.order) private var allCards: [Card]
 
     var body: some View {
         let key = card.key
@@ -382,12 +385,46 @@ struct CardDetailView: View {
                 }
             }
             Section {
+                let others = allCards.filter { $0.key != card.key }
+                if !others.isEmpty {
+                    Menu {
+                        ForEach(others) { other in
+                            Button("\(other.label) – \(other.bank)") { mergeTarget = other }
+                        }
+                    } label: {
+                        Label("This is the same card as…", systemImage: "arrow.triangle.merge")
+                    }
+                }
                 Button("Remove this card", role: .destructive) {
                     if model.engine.deleteCardIfEmpty(card) { dismiss() } else { cantDelete = true }
                 }
+            } footer: {
+                Text("If this card shows twice (for example once under \"Other bank\"), merge it into the other one. Its transactions and statements move across and stay together.")
             }
         }
         .themedScreen()
+        .confirmationDialog(
+            "Merge into \(mergeTarget?.label ?? "")?",
+            isPresented: Binding(get: { mergeTarget != nil }, set: { if !$0 { mergeTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Merge") {
+                if let target = mergeTarget {
+                    let from = card
+                    let engine = model.engine
+                    mergeTarget = nil
+                    // Leave this screen first: the card it shows goes away.
+                    dismiss()
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(400))
+                        engine.mergeCards(from, into: target)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) { mergeTarget = nil }
+        } message: {
+            Text("\(card.label) and \(mergeTarget?.label ?? "") become one card. This can't be undone.")
+        }
         .navigationTitle(card.label)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear(perform: load)

@@ -144,12 +144,13 @@ struct StatementView: View {
         reading = r
         if let pre = preselectedCard, cards.contains(where: { $0.key == pre }) {
             cardKey = pre
-        } else if let l4 = r.cardLast4, cards.filter({ $0.last4 == l4 }).count == 1, let c = cards.first(where: { $0.last4 == l4 }) {
+        } else if let c = model.engine.suggestedCard(bank: r.bank, last4: r.cardLast4, isAccount: r.isAccount) {
+            // Same last 4 digits (and bank, however the statement spells it): that card, never a new one.
             cardKey = c.key
         } else {
             cardKey = Self.newCard
         }
-        newBank = BankList.names.first { $0.caseInsensitiveCompare(r.bank ?? "") == .orderedSame } ?? (r.bank ?? "")
+        newBank = r.bank.map { model.engine.canonicalBank($0) }.flatMap { $0 == Bridge.shared.UNKNOWN_BANK ? nil : $0 } ?? ""
         newLast4 = r.cardLast4 ?? ""
         refreshMissing()
     }
@@ -186,13 +187,31 @@ struct StatementView: View {
         let appStatement = statements.filter { $0.cardKey == cardKey }.max { $0.dueEpochDay < $1.dueEpochDay }
         let appAvailable = latestAvailable(txns.filter { $0.cardKey == cardKey }.map(TxnView.init))
         List {
-            Section("Card or account") {
+            Section {
+                if let card, cardKey != Self.newCard {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Saving to \(card.label)").font(.subheadline.weight(.semibold))
+                            Text(r.cardLast4 == card.last4 && r.cardLast4 != nil
+                                 ? "Matched by the card number on the statement (····\(card.last4 ?? ""))."
+                                 : "Change it below if this statement is for another card.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    } icon: { Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.green) }
+                }
                 Picker("Card", selection: $cardKey) {
                     ForEach(cards.sorted { ($0.kind == .account ? 1 : 0) < ($1.kind == .account ? 1 : 0) }) { c in Text(c.label).tag(c.key) }
                     Text("+ A card not listed (other bank / family)").tag(Self.newCard)
                 }
                 .onChange(of: cardKey) { _, _ in refreshMissing() }
                 if cardKey == Self.newCard {
+                    let twins = model.engine.cards(endingIn: newLast4)
+                    if !twins.isEmpty {
+                        Label {
+                            Text("You already have \(twins.map(\.label).joined(separator: ", ")) ending \(newLast4). If it's the same card, pick it above instead of adding it again.")
+                                .font(.footnote)
+                        } icon: { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.amber) }
+                    }
                     TextField("Bank", text: $newBank)
                     TextField("Last 4 digits", text: $newLast4).keyboardType(.numberPad)
                     TextField("Name (optional)", text: $newName)
@@ -204,6 +223,8 @@ struct StatementView: View {
                 } else if let card, card.kind == .credit {
                     Toggle("Someone else's card I pay for", isOn: Binding(get: { card.family }, set: { model.engine.setFamily(card, $0) }))
                 }
+            } header: {
+                Text("Card or account")
             }
             Section("What the statement says") {
                 if r.isAccount {

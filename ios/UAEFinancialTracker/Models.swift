@@ -315,9 +315,20 @@ enum CardLabels {
     }
 }
 
+/// "This card is the same as that one": set when you merge two cards, or when the app finds a copy of a card under
+/// "Other bank". Kept so re-reading messages never splits them again.
+@Model final class CardMerge {
+    @Attribute(.unique) var fromKey: String
+    var intoKey: String
+    init(fromKey: String, intoKey: String) {
+        self.fromKey = fromKey
+        self.intoKey = intoKey
+    }
+}
+
 enum AppModels {
     static let all: [any PersistentModel.Type] = [
         SmsRecord.self, Txn.self, Card.self, StatementRecord.self, BankSender.self, MerchantRule.self, CategoryOverride.self, SmsFix.self,
-        CustomCategory.self, Budget.self, FixedPayment.self, Goal.self,
+        CustomCategory.self, Budget.self, FixedPayment.self, Goal.self, CardMerge.self,
     ]
 }

@@ -8,6 +8,32 @@ enum AppInfo {
     static let fullName = "Fils – Card & Spend Tracker"
     /// Shared with the widget and the Share extension.
     static let appGroup = "group.com.uaefinancial.tracker"
+    /// The ready-made Shortcuts automation (iOS 27 and later): "When I receive a message containing AED → Add Bank
+    /// Message to Fils". Opening it adds the shortcut in the Shortcuts app.
+    static let automationShortcut = URL(string: "https://www.icloud.com/shortcuts/53d0ba37867348a78566067761e526a5")!
+    /// Shortcuts can share automations from iOS 27.
+    static var canInstallSharedAutomation: Bool { ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 27 }
+}
+
+/// Whether the Shortcuts automation is handing bank messages to the app.
+enum AutomationStatus: Equatable {
+    /// Never ran.
+    case off
+    /// You opened the ready-made shortcut, but no message has come through yet.
+    case waiting
+    /// Ran; [last] is the last time it passed a message.
+    case on(last: Date)
+
+    var isOn: Bool {
+        if case .on = self { return true }
+        return false
+    }
+
+    static var current: AutomationStatus {
+        if let last = Settings.automationLastRun { return .on(last: last) }
+        if Settings.automationLinkOpenedAt != nil { return .waiting }
+        return .off
+    }
 }
 
 /// Small settings kept on the phone.
@@ -18,6 +44,30 @@ enum Settings {
     static var rates: [String: String] {
         get { (defaults.dictionary(forKey: "rates") as? [String: String]) ?? Bridge.shared.defaultRates() }
         set { defaults.set(newValue, forKey: "rates") }
+    }
+
+    /// The last time the Shortcuts automation passed a message to the app (any message, bank or not).
+    static var automationLastRun: Date? {
+        get { defaults.object(forKey: "automationLastRun") as? Date }
+        set { defaults.set(newValue, forKey: "automationLastRun") }
+    }
+
+    /// When you opened the ready-made automation from the app.
+    static var automationLinkOpenedAt: Date? {
+        get { defaults.object(forKey: "automationLinkOpenedAt") as? Date }
+        set { defaults.set(newValue, forKey: "automationLinkOpenedAt") }
+    }
+
+    /// "Not now" on Home's automatic-import card.
+    static var automationCardDismissed: Bool {
+        get { defaults.bool(forKey: "automationCardDismissed") }
+        set { defaults.set(newValue, forKey: "automationCardDismissed") }
+    }
+
+    /// Version of the stored data's layout; raising it makes the app re-read everything once after an update.
+    static var dataVersion: Int {
+        get { defaults.integer(forKey: "dataVersion") }
+        set { defaults.set(newValue, forKey: "dataVersion") }
     }
 
     static var onboarded: Bool {

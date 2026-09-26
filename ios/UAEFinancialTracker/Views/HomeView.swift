@@ -11,6 +11,7 @@ struct HomeView: View {
     @Query(sort: \FixedPayment.dayOfMonth) private var fixed: [FixedPayment]
     @Query(sort: \Goal.createdAt) private var goals: [Goal]
     @AppStorage("homeChart") private var chartKind = "donut"
+    @AppStorage("automationCardDismissed") private var automationCardDismissed = false
     @State private var selectedSlice: Int64??
     @State private var editingBudgets = false
     @State private var exporting = false
@@ -40,6 +41,22 @@ struct HomeView: View {
             List {
                 if txns.isEmpty && cards.isEmpty {
                     Section { WelcomePanel() }
+                }
+                if !(txns.isEmpty && cards.isEmpty) && !automationCardDismissed && !AutomationStatus.current.isOn && !DemoData.isOn {
+                    Section {
+                        VStack(alignment: .leading, spacing: 8) {
+                            AutomationStatusCard(status: AutomationStatus.current)
+                            HStack {
+                                NavigationLink { AutomationGuideView() } label: {
+                                    Text(AutomationStatus.current == .waiting ? "Check the set-up" : "Turn on – 3 taps").font(.subheadline.weight(.semibold))
+                                }
+                                .buttonStyle(.borderedProminent)
+                                Spacer()
+                                Button("Not now") { automationCardDismissed = true }
+                                    .font(.subheadline).foregroundStyle(.secondary).buttonStyle(.borderless)
+                            }
+                        }
+                    }
                 }
                 if !toReview.isEmpty {
                     Section {
@@ -206,9 +223,9 @@ private struct WelcomePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Add your bank messages").font(.headline)
-            Text("iPhone apps can't read your SMS on their own. Set up the one-minute Shortcuts automation, and each bank SMS is added as it arrives. You can also paste messages, add screenshots, or import a file.")
+            Text("Turn on automatic import once (3 taps), and each bank SMS is added as it arrives. For messages you already have, add screenshots of them or paste them.")
                 .font(.subheadline).foregroundStyle(.secondary)
-            NavigationLink { AutomationGuideView() } label: { Label("Set up automatic import", systemImage: "wand.and.stars") }
+            NavigationLink { AutomationGuideView() } label: { Label("Turn on automatic import", systemImage: "wand.and.stars") }
                 .buttonStyle(.borderedProminent)
             HStack {
                 NavigationLink { PasteView() } label: { Label("Paste", systemImage: "doc.on.clipboard") }

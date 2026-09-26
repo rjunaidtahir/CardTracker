@@ -58,7 +58,7 @@ struct OnboardingView: View {
             title: "Your bank messages",
             text: "iPhone apps can't read SMS on their own, so there are a few easy ways in:",
             points: [
-                ("wand.and.stars", "Automatic: a one-minute Shortcuts automation adds each bank SMS as it arrives"),
+                ("wand.and.stars", "Automatic: turn it on once (3 taps) and each bank SMS is added as it arrives"),
                 ("doc.on.clipboard", "Paste messages you already have, or add screenshots of them"),
                 ("square.and.arrow.down", "Moving from Android? Open your backup with the app"),
             ]

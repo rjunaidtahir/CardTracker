@@ -21,6 +21,8 @@ struct AddBankMessageIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
         let engine = AppData.engine
+        // The automation works: the app shows "Automatic import is on".
+        Settings.automationLastRun = Date()
         let outcome = engine.ingest(
             body: message, sender: sender, receivedAt: Date(), timeKnown: true, source: "Shortcut", requireBankLike: true
         )

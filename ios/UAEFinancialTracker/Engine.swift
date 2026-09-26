@@ -40,6 +40,11 @@ final class Engine {
             case .ignored, .otp, .notBank: skipped += 1
             }
         }
+        mutating func merge(_ o: Tally) {
+            transactions += o.transactions; merged += o.merged; statements += o.statements
+            review += o.review; duplicates += o.duplicates; skipped += o.skipped
+        }
+
         var summary: String {
             var parts: [String] = []
             if transactions > 0 { parts.append("\(transactions) transaction\(transactions == 1 ? "" : "s")") }
@@ -88,17 +93,31 @@ final class Engine {
     ///   - sender: who sent it, when known (the Shortcut passes it; pasted text has none).
     ///   - timeKnown: false when [receivedAt] is only the moment of import.
     ///   - requireBankLike: for messages from a sender that isn't a known bank: keep them only when they read like a bank alert.
+    ///   - bankHint: the bank these messages are from when there's no sender (e.g. the name at the top of a screenshot,
+    ///     or the bank you picked). Its messages are then read as that bank's, and stored under its sender name.
     @discardableResult
-    func ingest(body raw: String, sender: String?, receivedAt: Date, timeKnown: Bool, source: String, requireBankLike: Bool = false) -> Outcome {
+    func ingest(body raw: String, sender: String?, receivedAt: Date, timeKnown: Bool, source: String, requireBankLike: Bool = false,
+                bankHint: String? = nil) -> Outcome {
         let body = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { return .notBank }
         let millis = Self.millis(receivedAt)
-        let cleanSender = sender?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        var cleanSender = sender?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let hint = bankHint.map(canonicalBank).flatMap { $0 == Bridge.shared.UNKNOWN_BANK ? nil : $0 }
+        if let hint, cleanSender.isEmpty || bridge.bankFor(sender: cleanSender) == nil {
+            // Store it under the bank's sender name, so re-reading it later reads it as that bank's message too.
+            cleanSender = senderName(forBank: hint)
+        }
         let reading: SmsReading
         if !cleanSender.isEmpty, bridge.bankFor(sender: cleanSender) != nil {
             reading = bridge.readSms(sender: cleanSender, body: body, receivedAtMillis: millis, rates: rates)
+            if reading.kind == "notBank" || reading.kind == "otp" { return reading.kind == "otp" ? .otp : .notBank }
+            if hint != nil, reading.kind != "transaction", reading.kind != "statement", !bridge.looksLikeBankAlert(body: body),
+               reading.kind != "ignored" {
+                return .notBank
+            }
         } else {
-            reading = bridge.readSmsAnySender(body: body, receivedAtMillis: millis, rates: rates)
+            reading = hint.map { bridge.readSmsAsBank(bank: $0, body: body, receivedAtMillis: millis, rates: rates) }
+                ?? bridge.readSmsAnySender(body: body, receivedAtMillis: millis, rates: rates)
             let read = reading.kind == "transaction" || reading.kind == "statement"
             if reading.kind == "otp" { return .otp }
             if reading.kind == "notBank" { return .notBank }
@@ -116,20 +135,32 @@ final class Engine {
         )
         sms.dedupKey = bridge.dedupKey(sender: senderName, sentAtMillis: 0, receivedAtMillis: millis, body: body)
         context.insert(sms)
+        let cardsBefore = fetchAll(Card.self).count
         let outcome = apply(sms, reading)
         save()
+        // A new card appeared: make sure it isn't a copy of one you already have (e.g. under "Other bank").
+        if fetchAll(Card.self).count > cardsBefore { tidyCards() }
         return outcome
     }
 
     /// Adds many messages (a paste, a file, screenshots), oldest first so transfers and statements line up.
-    func ingestAll(_ items: [(body: String, sender: String?, date: Date?)], source: String) -> Tally {
+    func ingestAll(_ items: [(body: String, sender: String?, date: Date?)], source: String, bankHint: String? = nil) -> Tally {
         var tally = Tally()
         let now = Date()
         for item in items.sorted(by: { ($0.date ?? now) < ($1.date ?? now) }) {
-            tally.add(ingest(body: item.body, sender: item.sender, receivedAt: item.date ?? now, timeKnown: item.date != nil, source: source))
+            tally.add(ingest(body: item.body, sender: item.sender, receivedAt: item.date ?? now, timeKnown: item.date != nil,
+                             source: source, bankHint: bankHint))
         }
+        tidyCards()
         changed()
         return tally
+    }
+
+    /// The sender name messages from [bank] are stored under: its usual sender ID, or a sender you added for it.
+    func senderName(forBank bank: String) -> String {
+        if let id = bridge.senderIds(bank: bank).first { return id }
+        if let mine = fetchAll(BankSender.self).first(where: { canonicalBank($0.bank) == bank }) { return mine.sender }
+        return bank
     }
 
     /// The same message twice: same text, and either close in time or one of them without a known time.
@@ -153,6 +184,7 @@ final class Engine {
             tally.add(apply(sms, read(sms), cleared: true))
         }
         save()
+        tidyCards()
         autoFillCardDays()
         changed()
         return tally
@@ -162,6 +194,10 @@ final class Engine {
         let millis = Self.millis(sms.receivedAt)
         if bridge.bankFor(sender: sms.sender) != nil {
             return bridge.readSms(sender: sms.sender, body: sms.body, receivedAtMillis: millis, rates: rates)
+        }
+        // Stored under a bank's name (you told the app which bank it's from).
+        if let bank = bridge.canonicalBank(name: sms.sender) {
+            return bridge.readSmsAsBank(bank: bank, body: sms.body, receivedAtMillis: millis, rates: rates)
         }
         return bridge.readSmsAnySender(body: sms.body, receivedAtMillis: millis, rates: rates)
     }
@@ -195,11 +231,24 @@ final class Engine {
         case "transaction":
             return applyTransaction(sms, TxnInput(r, fallbackTime: sms.receivedAt))
         case "statement":
-            let bank = r.bank ?? sms.bank ?? Bridge.shared.UNKNOWN_BANK
-            let key = bridge.cardKey(bank: bank, last4: r.cardLast4)
-            ensureCard(key: key, bank: bank, last4: r.cardLast4, type: r.cardType ?? CardKind.credit.rawValue)
+            let target = resolveCard(bank: r.bank ?? sms.bank ?? Bridge.shared.UNKNOWN_BANK, last4: r.cardLast4,
+                                     type: r.cardType ?? CardKind.credit.rawValue)
+            let key = mergedKey(bridge.cardKey(bank: target.bank, last4: target.last4))
+            ensureCard(key: key, bank: target.bank, last4: target.last4, type: target.type)
+            let card = self.card(key)
+            let bank = card?.bank ?? target.bank
+            // One statement per card and due date: a reminder SMS for the same statement updates it instead.
+            if let same = fetchAll(StatementRecord.self).first(where: { $0.cardKey == key && $0.dueEpochDay == r.dueEpochDay }) {
+                if sms.receivedAt >= same.receivedAt {
+                    same.balanceMinor = r.balanceMinor
+                    if r.hasMinimumDue { same.minimumDueMinor = r.minimumDueMinor }
+                    if r.hasStatementDate { same.statementEpochDay = r.statementEpochDay }
+                }
+                setResult(sms, SmsStatus.statement, bank: bank, ruleId: r.ruleId, note: "Same statement as an earlier message")
+                return .statement
+            }
             let st = StatementRecord(
-                cardKey: key, bank: bank, cardLast4: r.cardLast4, receivedAt: sms.receivedAt, balanceMinor: r.balanceMinor,
+                cardKey: key, bank: bank, cardLast4: card?.last4 ?? target.last4, receivedAt: sms.receivedAt, balanceMinor: r.balanceMinor,
                 currency: r.currency ?? "AED", dueEpochDay: r.dueEpochDay
             )
             st.smsId = sms.id
@@ -296,16 +345,14 @@ final class Engine {
             setResult(sms, SmsStatus.failed, bank: t.bank, ruleId: t.ruleId, note: "The amount looked wrong")
             return .failed
         }
-        let cards = fetchAll(Card.self)
-        // The message doesn't name the account: use your only account at that bank.
-        if t.cardLast4 == nil && t.accountNotNamed {
-            let accounts = cards.filter { $0.bank == t.bank && $0.cardType == CardKind.account.rawValue }
-            if accounts.count == 1, let only = accounts.first {
-                t.cardLast4 = only.last4
-                t.cardType = CardKind.account.rawValue
-            }
-        }
-        let key: String?
+        // Which of your cards it is: same bank + last 4, a copy under "Other bank", or the bank's only card when the
+        // message doesn't give a number.
+        let target = resolveCard(bank: t.bank, last4: t.cardLast4,
+                                 type: t.accountNotNamed && t.cardLast4 == nil ? CardKind.account.rawValue : t.cardType)
+        t.bank = target.bank
+        t.cardLast4 = target.last4
+        t.cardType = target.type
+        var key: String?
         if let l4 = t.cardLast4 {
             key = bridge.cardKey(bank: t.bank, last4: l4)
         } else if t.accountNotNamed || t.cardType == CardKind.account.rawValue {
@@ -313,8 +360,17 @@ final class Engine {
         } else {
             key = nil
         }
-        if let key { ensureCard(key: key, bank: t.bank, last4: t.cardLast4, type: t.cardType) }
-        let card = key.flatMap { k in fetchAll(Card.self).first { $0.key == k } }
+        if let k = key {
+            let merged = mergedKey(k)
+            key = merged
+            if let into = self.card(merged) {
+                t.bank = into.bank
+                t.cardLast4 = into.last4
+            } else {
+                ensureCard(key: merged, bank: t.bank, last4: t.cardLast4, type: t.cardType)
+            }
+        }
+        let card = self.card(key)
 
         // A transfer to one of your own cards is a payment to that card (never spending): name it after the card.
         var counterparty: String?
@@ -793,6 +849,279 @@ final class Engine {
     }
 
     func missingRows(_ s: StatementReading, cardKey: String) -> [StatementRow] { reconcile(s, cardKey: cardKey).result.missing }
+
+    // MARK: - One card is one card
+
+    /// The usual name of a bank ("RAK BANK" → "RAKBANK"). Names the app doesn't know are kept as written.
+    func canonicalBank(_ raw: String) -> String {
+        let t = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.isEmpty || t == Bridge.shared.UNKNOWN_BANK { return Bridge.shared.UNKNOWN_BANK }
+        if let known = bridge.canonicalBank(name: t) { return known }
+        // A bank you added under Bank senders.
+        if let mine = fetchAll(BankSender.self).first(where: { $0.bank.caseInsensitiveCompare(t) == .orderedSame }) { return mine.bank }
+        return t
+    }
+
+    private func isUnknown(_ bank: String) -> Bool { canonicalBank(bank) == Bridge.shared.UNKNOWN_BANK }
+
+    struct CardTarget: Equatable {
+        var bank: String
+        var last4: String?
+        var type: String
+    }
+
+    /// Which of your cards a message is about:
+    /// - the same bank and last 4 digits;
+    /// - a message that doesn't say its bank (e.g. from a screenshot) goes to your card with those last 4 digits;
+    /// - a message without a card number goes to the bank's only card of that kind.
+    /// Otherwise the message's own bank and number (a new card).
+    func resolveCard(bank rawBank: String, last4: String?, type: String) -> CardTarget {
+        let bank = canonicalBank(rawBank)
+        let unknown = bank == Bridge.shared.UNKNOWN_BANK
+        let cards = fetchAll(Card.self)
+        if let l4 = last4 {
+            let withDigits = cards.filter { $0.last4 == l4 }
+            let sameBank = withDigits.filter { canonicalBank($0.bank) == bank }
+            if let c = sameBank.first(where: { $0.cardType == type }) ?? sameBank.first {
+                return CardTarget(bank: c.bank, last4: l4, type: c.cardType)
+            }
+            if unknown {
+                let known = withDigits.filter { !isUnknown($0.bank) }
+                if Set(known.map { canonicalBank($0.bank) }).count == 1, let c = known.first(where: { $0.cardType == type }) ?? known.first {
+                    return CardTarget(bank: c.bank, last4: l4, type: c.cardType)
+                }
+            }
+            return CardTarget(bank: bank, last4: l4, type: type)
+        }
+        guard !unknown else { return CardTarget(bank: bank, last4: nil, type: type) }
+        let numbered = cards.filter { $0.last4 != nil && canonicalBank($0.bank) == bank && $0.cardType == type }
+        if numbered.count == 1, let c = numbered.first {
+            return CardTarget(bank: c.bank, last4: c.last4, type: c.cardType)
+        }
+        return CardTarget(bank: bank, last4: nil, type: type)
+    }
+
+    /// What adding these messages would do, card by card, without saving anything: "RAKBANK credit card ·0552 – 12".
+    struct PreviewLine: Identifiable, Equatable {
+        let id: String
+        let label: String
+        let count: Int
+        /// A card the app doesn't have yet.
+        let isNew: Bool
+    }
+
+    struct Preview: Equatable {
+        var lines: [PreviewLine] = []
+        var review = 0
+        var skipped = 0
+    }
+
+    func preview(_ bodies: [String], bankHint: String?) -> Preview {
+        let hint = bankHint.map(canonicalBank).flatMap { $0 == Bridge.shared.UNKNOWN_BANK ? nil : $0 }
+        let now = Self.millis(Date())
+        var out = Preview()
+        struct Item { let reading: SmsReading; var target: CardTarget; let accountNotNamed: Bool }
+        var items: [Item] = []
+        for body in bodies {
+            let r = hint.map { bridge.readSmsAsBank(bank: $0, body: body, receivedAtMillis: now, rates: rates) }
+                ?? bridge.readSmsAnySender(body: body, receivedAtMillis: now, rates: rates)
+            switch r.kind {
+            case "transaction", "statement":
+                let accountNotNamed = r.kind == "transaction" && r.accountNotNamed && r.cardLast4 == nil
+                let target = resolveCard(bank: r.bank ?? Bridge.shared.UNKNOWN_BANK, last4: r.cardLast4,
+                                         type: accountNotNamed ? CardKind.account.rawValue : (r.cardType ?? CardKind.credit.rawValue))
+                items.append(Item(reading: r, target: target, accountNotNamed: accountNotNamed))
+            case "failed":
+                out.review += 1
+            default:
+                out.skipped += 1
+            }
+        }
+        // Cards this batch will add: a message without a number then goes to the bank's one new card, as when adding.
+        var newCards: [String: Set<String>] = [:]
+        for i in items {
+            guard let l4 = i.target.last4, card(mergedKey(bridge.cardKey(bank: i.target.bank, last4: l4))) == nil else { continue }
+            newCards["\(canonicalBank(i.target.bank))|\(i.target.type)", default: []].insert(l4)
+        }
+        var counts: [String: (label: String, count: Int, isNew: Bool)] = [:]
+        for var i in items {
+            if i.target.last4 == nil, let only = newCards["\(canonicalBank(i.target.bank))|\(i.target.type)"], only.count == 1,
+               !isUnknown(i.target.bank), !fetchAll(Card.self).contains(where: { canonicalBank($0.bank) == canonicalBank(i.target.bank) && $0.cardType == i.target.type && $0.last4 != nil }) {
+                i.target.last4 = only.first
+            }
+            let id: String
+            let label: String
+            var isNew = false
+            if i.target.last4 == nil && i.reading.kind == "transaction" && !i.accountNotNamed {
+                id = "none"
+                label = "Not linked to a card (no card number)"
+            } else {
+                id = mergedKey(bridge.cardKey(bank: i.target.bank, last4: i.target.last4))
+                if let c = card(id) {
+                    label = c.label
+                } else {
+                    isNew = true
+                    let kind = CardKind(rawValue: i.target.type)?.label.lowercased() ?? "card"
+                    label = "New: \(CardLabels.shortBank(i.target.bank)) \(kind) ·\(i.target.last4 ?? "····")"
+                }
+            }
+            let old = counts[id] ?? (label, 0, isNew)
+            counts[id] = (old.label, old.count + 1, old.isNew)
+        }
+        out.lines = counts.map { PreviewLine(id: $0.key, label: $0.value.label, count: $0.value.count, isNew: $0.value.isNew) }
+            .sorted { $0.count != $1.count ? $0.count > $1.count : $0.label < $1.label }
+        return out
+    }
+
+    /// The card a key now belongs to, after merges ("Other bank ·0552" → "RAKBANK ·0552").
+    func mergedKey(_ key: String) -> String {
+        let merges = fetchAll(CardMerge.self)
+        var k = key
+        var seen: Set<String> = []
+        while let m = merges.first(where: { $0.fromKey == k }), !seen.contains(k) {
+            seen.insert(k)
+            k = m.intoKey
+        }
+        return k
+    }
+
+    /// The card a statement PDF is most likely for: same last 4 digits and bank; a card under "Other bank" or another
+    /// spelling of the bank counts too. Without digits, the bank's only card of that kind.
+    func suggestedCard(bank rawBank: String?, last4: String?, isAccount: Bool) -> Card? {
+        let cards = fetchAll(Card.self).sorted { $0.order < $1.order }
+        let bank = rawBank.map(canonicalBank).flatMap { $0 == Bridge.shared.UNKNOWN_BANK ? nil : $0 }
+        if let l4 = last4?.trimmingCharacters(in: .whitespaces), !l4.isEmpty {
+            let withDigits = cards.filter { $0.last4 == l4 }
+            if let b = bank, let c = withDigits.first(where: { canonicalBank($0.bank) == b }) { return c }
+            let known = withDigits.filter { !isUnknown($0.bank) }
+            if known.count == 1 { return known[0] }
+            if withDigits.count == 1 { return withDigits[0] }
+            if bank == nil { return known.first ?? withDigits.first }
+            return nil
+        }
+        guard let b = bank else { return nil }
+        let kind: CardKind = isAccount ? .account : .credit
+        let mine = cards.filter { canonicalBank($0.bank) == b && $0.kind == kind }
+        return mine.count == 1 ? mine[0] : nil
+    }
+
+    /// Cards with these last 4 digits (to warn before adding the same card twice).
+    func cards(endingIn last4: String) -> [Card] {
+        let l4 = last4.trimmingCharacters(in: .whitespaces)
+        guard !l4.isEmpty else { return [] }
+        return fetchAll(Card.self).filter { $0.last4 == l4 }
+    }
+
+    /// Moves everything from one card to another and removes the first. [remember]: keep it merged when messages are
+    /// read again (always for merges you make; the app's own tidy-ups remember only "Other bank" copies).
+    func merge(_ from: Card, into: Card, remember: Bool = true) {
+        let fk = from.key, ik = into.key
+        guard fk != ik else { return }
+        for t in fetchAll(Txn.self) {
+            if t.cardKey == fk {
+                t.cardKey = ik
+                t.cardLast4 = into.last4
+                t.bank = into.bank
+            }
+            if t.counterpartyKey == fk { t.counterpartyKey = ik }
+        }
+        for st in fetchAll(StatementRecord.self) where st.cardKey == fk {
+            st.cardKey = ik
+            st.bank = into.bank
+            st.cardLast4 = into.last4
+        }
+        for f in fetchAll(FixedPayment.self) where f.cardKey == fk { f.cardKey = ik }
+        // Keep what you set on the card that goes away, where the other card has nothing.
+        if into.nickname == nil { into.nickname = from.nickname }
+        if into.creditLimitMinor == nil { into.creditLimitMinor = from.creditLimitMinor }
+        if into.statementDay == nil { into.statementDay = from.statementDay }
+        if into.dueDay == nil { into.dueDay = from.dueDay }
+        if into.themeKey == nil { into.themeKey = from.themeKey } else if let t = from.themeKey, t.hasPrefix("img:") { CardPictures.delete(t) }
+        if from.family { into.family = true }
+        if remember {
+            for m in fetchAll(CardMerge.self) where m.intoKey == fk { m.intoKey = ik }
+            if let m = fetchAll(CardMerge.self).first(where: { $0.fromKey == fk }) { m.intoKey = ik } else { context.insert(CardMerge(fromKey: fk, intoKey: ik)) }
+        }
+        context.delete(from)
+        dedupeStatements(cardKey: ik)
+        save()
+    }
+
+    /// Merges two cards you say are the same card (from the card's screen).
+    func mergeCards(_ from: Card, into: Card) {
+        merge(from, into: into, remember: true)
+        changed()
+    }
+
+    /// One statement per card and due date: keeps the newest reading of it.
+    private func dedupeStatements(cardKey: String) {
+        let mine = fetchAll(StatementRecord.self).filter { $0.cardKey == cardKey }
+        for (_, same) in Dictionary(grouping: mine, by: \.dueEpochDay) where same.count > 1 {
+            let keep = same.max { a, b in
+                (a.statementEpochDay != nil ? 1 : 0, a.receivedAt) < (b.statementEpochDay != nil ? 1 : 0, b.receivedAt)
+            }
+            for st in same where st !== keep { context.delete(st) }
+        }
+    }
+
+    /// Puts together cards that are really one card, e.g. from before the app knew better:
+    /// - another spelling of a bank's name ("RAK BANK" → "RAKBANK");
+    /// - a copy of a card under "Other bank" (same last 4 digits as a card from a known bank);
+    /// - a card without a number when its bank has exactly one card of that kind.
+    /// Returns how many cards were merged.
+    @discardableResult
+    func tidyCards() -> Int {
+        var merged = 0
+        var gone: Set<String> = []
+        func alive() -> [Card] { fetchAll(Card.self).filter { !gone.contains($0.key) } }
+        // Merges you made (also from a restored backup).
+        for c in alive() {
+            let into = mergedKey(c.key)
+            guard into != c.key, let target = alive().first(where: { $0.key == into }) else { continue }
+            gone.insert(c.key); merge(c, into: target, remember: true); merged += 1
+        }
+        // Bank names: one spelling per bank.
+        for c in alive() {
+            let b = canonicalBank(c.bank)
+            guard b != c.bank, b != Bridge.shared.UNKNOWN_BANK else { continue }
+            let newKey = bridge.cardKey(bank: b, last4: c.last4)
+            if let other = alive().first(where: { $0.key == newKey && $0 !== c }) {
+                gone.insert(c.key); merge(c, into: other, remember: true); merged += 1
+            } else {
+                let oldKey = c.key
+                let fresh = Card(key: newKey, bank: b, last4: c.last4, cardType: c.cardType, counted: c.counted)
+                fresh.order = c.order
+                fresh.createdAt = c.createdAt
+                context.insert(fresh)
+                gone.insert(oldKey); merge(c, into: fresh, remember: true); merged += 1
+            }
+        }
+        // Copies under "Other bank".
+        for c in alive() where isUnknown(c.bank) {
+            guard let l4 = c.last4 else { continue }
+            let known = alive().filter { $0 !== c && $0.last4 == l4 && !isUnknown($0.bank) }
+            guard Set(known.map { canonicalBank($0.bank) }).count == 1, let into = known.first(where: { $0.cardType == c.cardType }) ?? known.first else { continue }
+            gone.insert(c.key); merge(c, into: into, remember: true); merged += 1
+        }
+        // Cards without a number.
+        for c in alive() where c.last4 == nil && !isUnknown(c.bank) {
+            let numbered = alive().filter { $0 !== c && $0.last4 != nil && canonicalBank($0.bank) == canonicalBank(c.bank) && $0.cardType == c.cardType }
+            guard numbered.count == 1 else { continue }
+            gone.insert(c.key); merge(c, into: numbered[0], remember: false); merged += 1
+        }
+        for c in alive() { dedupeStatements(cardKey: c.key) }
+        save()
+        return merged
+    }
+
+    /// Runs once after an update that changes how messages are read: reads every stored message again and tidies the
+    /// cards, so data from earlier versions is corrected too.
+    func upgradeDataIfNeeded() {
+        let current = 2
+        guard Settings.dataVersion < current else { return }
+        if !fetchAll(SmsRecord.self).isEmpty { _ = rereadAll() } else { tidyCards() }
+        Settings.dataVersion = current
+    }
 
     // MARK: - Helpers
 

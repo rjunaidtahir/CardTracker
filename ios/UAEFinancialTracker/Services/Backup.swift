@@ -73,6 +73,7 @@ enum Backup {
             }
         )))
         files.append(("fx_rates.csv", CSV.write(["currency", "rateToAed", "updatedAt"], Settings.rates.sorted { $0.key < $1.key }.map { [$0.key, $0.value, "0"] })))
+        files.append(("card_merges.csv", CSV.write(["fromKey", "intoKey"], engine.fetchAll(CardMerge.self).map { [$0.fromKey, $0.intoKey] })))
         files.append(("bank_senders.csv", CSV.write(["sender", "bankName", "addedAt"], engine.fetchAll(BankSender.self).map { [$0.sender, $0.bank, ms($0.addedAt)] })))
         files.append(("sms_fixes.csv", CSV.write(
             ["dedupKey", "type", "amountMinor", "currency", "merchant", "cardLast4", "cardType", "timestamp"],
@@ -164,6 +165,11 @@ enum Backup {
         for r in files["budgets.csv"] ?? [] {
             guard let cat = l(r, "categoryId"), let lim = l(r, "monthlyLimitMinor") else { continue }
             if let e = budgets.first(where: { $0.categoryId == cat }) { e.limitMinor = lim } else { engine.context.insert(Budget(categoryId: cat, limitMinor: lim)) }
+        }
+        let merges = engine.fetchAll(CardMerge.self)
+        for r in files["card_merges.csv"] ?? [] {
+            guard let f = r["fromKey"], let i = r["intoKey"], f != i else { continue }
+            if let e = merges.first(where: { $0.fromKey == f }) { e.intoKey = i } else { engine.context.insert(CardMerge(fromKey: f, intoKey: i)) }
         }
         let senders = engine.fetchAll(BankSender.self)
         for r in files["bank_senders.csv"] ?? [] {

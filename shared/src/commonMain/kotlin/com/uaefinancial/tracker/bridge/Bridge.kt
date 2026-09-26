@@ -6,6 +6,7 @@ import com.uaefinancial.tracker.core.SmsKey
 import com.uaefinancial.tracker.core.Spending
 import com.uaefinancial.tracker.core.StatementImport
 import com.uaefinancial.tracker.core.StatementReader
+import com.uaefinancial.tracker.parser.BankNames
 import com.uaefinancial.tracker.parser.BankRules
 import com.uaefinancial.tracker.parser.CardType
 import com.uaefinancial.tracker.parser.CategoryRules
@@ -120,13 +121,23 @@ object Bridge {
             if ((r.kind == "transaction" || r.kind == "statement") && !r.auto) return r
             if (fallback == null && r.kind == "ignored") fallback = r
         }
-        val named = BankRules.banks.firstOrNull { b ->
-            Regex("""\b${Regex.escape(b.name)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(body) ||
-                b.senderIds.any { id -> id.length >= 4 && Regex("""\b${Regex.escape(id)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(body) }
-        }
-        val r = reading(SmsParser.parseAsBank(named?.name ?: UNKNOWN_BANK, body, receivedAtMillis), rates)
+        val named = BankNames.namedIn(body)
+        val r = reading(SmsParser.parseAsBank(named ?: UNKNOWN_BANK, body, receivedAtMillis), rates)
         return if (r.kind == "failed" && fallback != null) fallback else r
     }
+
+    /**
+     * Reads a message you said comes from [bank] (e.g. the bank named at the top of a Messages screenshot): that bank's
+     * own formats, then the smart reader under that bank's name.
+     */
+    fun readSmsAsBank(bank: String, body: String, receivedAtMillis: Long, rates: Map<String, String>): SmsReading =
+        reading(SmsParser.parseAsBank(BankNames.canonical(bank) ?: bank, body, receivedAtMillis), rates)
+
+    /** The bank's usual name for any spelling ("RAK BANK", "National Bank of Ras Al Khaimah" → "RAKBANK"), or null. */
+    fun canonicalBank(name: String): String? = BankNames.canonical(name)
+
+    /** The bank named in a text (a message, a screenshot's conversation name, a statement), or null. */
+    fun bankNamedIn(text: String): String? = BankNames.namedIn(text)
 
     /** Bank name used when a message can't be tied to a bank. */
     const val UNKNOWN_BANK = "Other bank"

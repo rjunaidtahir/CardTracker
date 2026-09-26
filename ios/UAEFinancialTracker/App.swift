@@ -87,6 +87,8 @@ final class AppModel {
     let engine = AppData.engine
     var incomingPdf: URL?
     var incomingBackup: URL?
+    /// Screenshots shared to the app, shown on the check screen before anything is added.
+    var incomingScreenshots: [UIImage] = []
     var toast: String?
     var tab: Tab = Tab(rawValue: UserDefaults.standard.string(forKey: "tab") ?? "") ?? .home
     var showOnboarding = DemoData.isOn ? UserDefaults.standard.bool(forKey: "onboarding") : !Settings.onboarded
@@ -106,6 +108,8 @@ final class AppModel {
 
     init() {
         if DemoData.isOn, UserDefaults.standard.bool(forKey: "locked") { locked = true }
+        // After an update: read stored messages again with the new rules and put split cards back together.
+        if !DemoData.isOn { engine.upgradeDataIfNeeded() }
         Notifier.refresh(engine: engine)
         processInbox()
     }
@@ -168,11 +172,7 @@ final class AppModel {
             incomingBackup = file
         case "png", "jpg", "jpeg", "heic", "heif":
             guard let data = try? Data(contentsOf: file), let image = UIImage(data: data) else { return }
-            Task {
-                let r = await MessageFiles.importScreenshots([image], engine: engine)
-                toast = r.summary
-                tab = .activity
-            }
+            incomingScreenshots.append(image)
         default:
             let tally = MessageFiles.importFile(file, engine: engine)
             toast = tally.summary
@@ -213,6 +213,9 @@ struct RootView: View {
         }
         .sheet(item: Binding(get: { model.incomingPdf.map(IdentifiedURL.init) }, set: { model.incomingPdf = $0?.url })) { item in
             NavigationStack { StatementView(url: item.url) }
+        }
+        .sheet(isPresented: Binding(get: { !model.incomingScreenshots.isEmpty }, set: { if !$0 { model.incomingScreenshots = [] } })) {
+            NavigationStack { ScreenshotImportView(preloaded: model.incomingScreenshots) }
         }
         .alert("Restore this backup?", isPresented: Binding(get: { model.incomingBackup != nil }, set: { if !$0 { model.incomingBackup = nil } })) {
             Button("Restore") {

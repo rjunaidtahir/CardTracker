@@ -40,19 +40,32 @@ enum ScreenshotReader {
         }
     }
 
-    static func messages(in image: UIImage, now: Date = Date()) async -> [Message] {
-        messages(from: await lines(in: image), now: now)
+    /// - Parameter bankOf: recognises a bank's name in a line of text (used to find the conversation name at the top).
+    static func messages(in image: UIImage, now: Date = Date(), bankOf: ((String) -> String?)? = nil) async -> [Message] {
+        messages(from: await lines(in: image), now: now, bankOf: bankOf)
     }
 
     // MARK: - Grouping (pure, unit-tested)
 
-    static func messages(from raw: [Line], now: Date = Date()) -> [Message] {
+    static func messages(from raw: [Line], now: Date = Date(), bankOf: ((String) -> String?)? = nil) -> [Message] {
         let lines = raw.sorted { $0.top < $1.top }
-        // The conversation name at the top (the bank's sender name), if any.
-        let header = lines.first { l in
-            l.top < 0.16 && l.top > 0.03 && abs(l.midX - 0.5) < 0.12 && parseTime(l.text, now: now) == nil &&
-                !isChrome(l.text) && l.text.count <= 30 && l.text.rangeOfCharacter(from: .letters) != nil
+        // The conversation name at the top (the bank's sender name). A line the app recognises as a bank wins; otherwise
+        // the short centred line under the status bar.
+        let top = lines.filter { l in
+            l.top < 0.2 && l.top > 0.03 && parseTime(l.text, now: now) == nil && !isChrome(l.text) &&
+                l.text.count <= 40 && l.text.rangeOfCharacter(from: .letters) != nil
         }
+        var headerBank: String?
+        var header: Line?
+        if let bankOf {
+            for l in top where abs(l.midX - 0.5) < 0.3 {
+                if let b = bankOf(l.text) { header = l; headerBank = b; break }
+            }
+        }
+        if header == nil {
+            header = top.first { abs($0.midX - 0.5) < 0.12 && $0.text.count <= 30 }
+        }
+        let senderName = headerBank ?? header.map { cleanHeader($0.text) }
         var out: [Message] = []
         var current: [Line] = []
         var currentDate: Date?
@@ -60,7 +73,7 @@ enum ScreenshotReader {
         func flush() {
             guard !current.isEmpty else { return }
             let body = current.map(\.text).joined(separator: " ").trimmingCharacters(in: .whitespaces)
-            if body.count >= 12 { out.append(Message(body: body, date: sawDate ? currentDate : nil, sender: header?.text)) }
+            if body.count >= 12 { out.append(Message(body: body, date: sawDate ? currentDate : nil, sender: senderName)) }
             current = []
         }
         for l in lines {
@@ -83,6 +96,11 @@ enum ScreenshotReader {
         }
         flush()
         return out
+    }
+
+    /// "RAKBANK >" → "RAKBANK" (the conversation name has a chevron in newer iOS).
+    static func cleanHeader(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: ">›〉<‹ "))
     }
 
     /// Screen furniture that isn't part of a message.

@@ -1,4 +1,5 @@
 import SwiftUI
+import Shared
 import SwiftData
 import UIKit
 import PhotosUI
@@ -20,7 +21,7 @@ struct MoreView: View {
         NavigationStack {
             List {
                 Section("Add bank messages") {
-                    NavigationLink { AutomationGuideView() } label: { Label("Automatic import (Shortcuts)", systemImage: "wand.and.stars") }
+                    NavigationLink { AutomationGuideView() } label: { Label("Automatic import", systemImage: "wand.and.stars") }
                     NavigationLink { PasteView() } label: { Label("Paste messages", systemImage: "doc.on.clipboard") }
                     NavigationLink { ScreenshotImportView() } label: { Label("Screenshots of messages", systemImage: "photo.on.rectangle") }
                     Button { pickTypes = [.xml, .plainText, .text, .commaSeparatedText]; picking = true } label: {
@@ -112,12 +113,22 @@ struct PasteView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var result: Engine.Tally?
+    /// "" = let Fils work out the bank from each message.
+    @State private var bank = ""
 
     var body: some View {
         Form {
             if let result {
                 ImportResultSection(tally: result, note: nil, addMoreTitle: "Paste more messages") { self.result = nil }
             } else {
+                Section {
+                    Picker("From", selection: $bank) {
+                        Text("Work it out from the messages").tag("")
+                        ForEach(BankList.names.filter { $0 != Bridge.shared.UNKNOWN_BANK }, id: \.self) { Text($0).tag($0) }
+                    }
+                } footer: {
+                    Text("Choosing the bank helps when its messages don't mention the bank's name.")
+                }
                 Section {
                     TextEditor(text: $text)
                         .frame(minHeight: 200)
@@ -128,7 +139,7 @@ struct PasteView: View {
                         } label: { Label("Paste from clipboard", systemImage: "doc.on.clipboard") }
                     } else {
                         Button {
-                            result = MessageFiles.importPaste(text, engine: model.engine)
+                            result = MessageFiles.importPaste(text, engine: model.engine, bankHint: bank.isEmpty ? nil : bank)
                             text = ""
                         } label: {
                             Text("Add messages").font(.headline).frame(maxWidth: .infinity)
@@ -211,16 +222,28 @@ struct ImportResultSection: View {
     }
 }
 
+/// Screenshots of Messages → check which bank and card they belong to → add. Nothing is saved until you tap Add.
 struct ScreenshotImportView: View {
+    /// Screenshots shared to the app (Share → Fils), read straight away.
+    var preloaded: [UIImage] = []
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var items: [PhotosPickerItem] = []
-    @State private var working = false
+    @State private var stage: Stage = .pick
+    @State private var groups: [MessageFiles.ScreenshotGroup] = []
+    /// The bank chosen for each group; "" = not chosen yet, [notSure] = let the app work it out per message.
+    @State private var banks: [UUID: String] = [:]
     @State private var result: MessageFiles.ScreenshotResult?
+    @State private var startedPreloaded = false
+
+    enum Stage { case pick, reading, check, done }
+    private static let notSure = "__auto__"
 
     var body: some View {
         Form {
-            if working {
+            switch stage {
+            case .pick: pickSections
+            case .reading:
                 Section {
                     HStack(spacing: 12) {
                         ProgressView()
@@ -228,119 +251,444 @@ struct ScreenshotImportView: View {
                     }
                     .padding(.vertical, 6)
                 }
-            } else if let result {
-                if result.found == 0 {
-                    Section {
-                        Label("No bank messages found", systemImage: "exclamationmark.triangle.fill")
-                            .font(.headline).foregroundStyle(Palette.amber)
-                        Text("Use screenshots of a bank's conversation in Messages, with the message bubbles clearly visible.")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }
-                    Section { picker(title: "Try other screenshots") }
-                } else {
-                    ImportResultSection(
-                        tally: result.tally,
-                        note: result.undated > 0
-                            ? "\(result.undated) message\(result.undated == 1 ? " had" : "s had") no time on the screenshot, so the date inside the message (or today) was used."
-                            : nil,
-                        addMoreTitle: "Add more screenshots"
-                    ) { self.result = nil }
-                }
-            } else {
-                Section {
-                    picker(title: "Choose screenshots")
-                } footer: {
-                    Text("Take screenshots of a bank's conversation in Messages (scroll so the time labels, like \"Yesterday 21:05\", are visible). Choose them here, then tap Add at the top of the photo picker. The text is read on your iPhone.")
-                }
-                Section("Tips") {
-                    Label("One bank per screenshot works best.", systemImage: "1.circle")
-                    Label("Messages without a visible time use the date inside the message, or today.", systemImage: "clock.badge.questionmark")
-                    Label("Messages already in the app are skipped, so it's fine to include old ones.", systemImage: "checkmark.circle")
-                    Label("You can also share screenshots from Photos straight to \(AppInfo.name).", systemImage: "square.and.arrow.up")
-                }
-                .font(.subheadline)
+            case .check: checkSections
+            case .done: doneSections
             }
         }
         .themedScreen()
-        .navigationTitle("Screenshots")
+        .navigationTitle(stage == .check ? "Check before adding" : "Screenshots")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                if stage == .check { Button("Cancel") { reset() } }
+            }
             ToolbarItem(placement: .confirmationAction) {
-                if result != nil && !working { Button("Done") { dismiss() }.fontWeight(.semibold) }
+                if stage == .done { Button("Done") { dismiss() }.fontWeight(.semibold) }
             }
         }
         .onChange(of: items) { _, picked in
             guard !picked.isEmpty else { return }
-            working = true
-            result = nil
             Task {
+                stage = .reading
                 var images: [UIImage] = []
                 for item in picked {
                     if let data = try? await item.loadTransferable(type: Data.self), let img = UIImage(data: data) { images.append(img) }
                 }
-                result = await MessageFiles.importScreenshots(images, engine: model.engine)
-                working = false
                 items = []
+                await read(images)
+            }
+        }
+        .task {
+            guard !preloaded.isEmpty, !startedPreloaded else { return }
+            startedPreloaded = true
+            stage = .reading
+            await read(preloaded)
+        }
+    }
+
+    // MARK: Pick
+
+    @ViewBuilder
+    private var pickSections: some View {
+        Section {
+            picker(title: "Choose screenshots")
+        } footer: {
+            Text("Open the bank's conversation in Messages and take screenshots as you scroll. Choose them here and tap Add in the photo picker. You'll see what Fils found before anything is saved.")
+        }
+        Section("Tips") {
+            Label("Include the bank's name at the top of the screen.", systemImage: "text.below.photo")
+            Label("One bank's conversation at a time works best.", systemImage: "1.circle")
+            Label("Old messages are fine: anything already in Fils is skipped.", systemImage: "checkmark.circle")
+            Label("You can also share screenshots from Photos to \(AppInfo.name).", systemImage: "square.and.arrow.up")
+        }
+        .font(.subheadline)
+    }
+
+    private func picker(title: String) -> some View {
+        PhotosPicker(selection: $items, maxSelectionCount: 30, matching: .screenshots) {
+            Label(title, systemImage: "photo.on.rectangle.angled").font(.headline)
+        }
+    }
+
+    private func read(_ images: [UIImage]) async {
+        let found = await MessageFiles.readScreenshots(images, engine: model.engine)
+        groups = found
+        banks = [:]
+        for g in found { banks[g.id] = g.suggestedBank ?? "" }
+        stage = found.isEmpty ? .done : .check
+        result = found.isEmpty ? MessageFiles.ScreenshotResult() : nil
+    }
+
+    private func reset() {
+        groups = []
+        banks = [:]
+        result = nil
+        stage = .pick
+    }
+
+    // MARK: Check
+
+    private var total: Int { groups.reduce(0) { $0 + $1.messages.count } }
+    private var allChosen: Bool { groups.allSatisfy { !(banks[$0.id] ?? "").isEmpty } }
+
+    @ViewBuilder
+    private var checkSections: some View {
+        Section {
+            Text("Fils found \(total) message\(total == 1 ? "" : "s"). Check the bank, so every message goes to the right card.")
+                .font(.subheadline)
+        }
+        ForEach(groups) { g in
+            groupSection(g)
+        }
+        Section {
+            Button {
+                var chosen: [UUID: String] = [:]
+                for g in groups { if let b = banks[g.id], !b.isEmpty, b != Self.notSure { chosen[g.id] = b } }
+                result = MessageFiles.add(groups, banks: chosen, engine: model.engine)
+                stage = .done
+            } label: {
+                Text("Add \(total) message\(total == 1 ? "" : "s")").font(.headline).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(!allChosen)
+            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            if !allChosen {
+                Text("Choose the bank above first.").font(.footnote).foregroundStyle(Palette.amber)
             }
         }
     }
 
-    private func picker(title: String) -> some View {
-        PhotosPicker(selection: $items, maxSelectionCount: 20, matching: .screenshots) {
-            Label(title, systemImage: "photo.on.rectangle.angled").font(.headline)
+    @ViewBuilder
+    private func groupSection(_ g: MessageFiles.ScreenshotGroup) -> some View {
+        let choice = banks[g.id] ?? ""
+        let hint = choice.isEmpty || choice == Self.notSure ? nil : choice
+        let preview = model.engine.preview(g.messages.map(\.body), bankHint: hint)
+        Section {
+            Picker("From", selection: Binding(get: { banks[g.id] ?? "" }, set: { banks[g.id] = $0 })) {
+                if choice.isEmpty { Text("Choose the bank…").tag("") }
+                ForEach(BankList.names.filter { $0 != Bridge.shared.UNKNOWN_BANK }, id: \.self) { Text($0).tag($0) }
+                Text("Not sure – let Fils work it out").tag(Self.notSure)
+            }
+            if let b = g.bankFromHeader, b == choice {
+                Label("Read from the top of the screenshot", systemImage: "checkmark.circle.fill")
+                    .font(.footnote).foregroundStyle(Palette.green)
+            } else if let b = g.guessedBank, b == choice {
+                Label("Fils's best guess from the messages. Please check it.", systemImage: "questionmark.circle.fill")
+                    .font(.footnote).foregroundStyle(Palette.amber)
+            } else if choice.isEmpty {
+                Label("Fils couldn't tell which bank these are from.", systemImage: "exclamationmark.circle.fill")
+                    .font(.footnote).foregroundStyle(Palette.amber)
+            }
+            ForEach(preview.lines) { line in
+                HStack(spacing: 10) {
+                    Image(systemName: line.isNew ? "plus.circle.fill" : (line.id == "none" ? "questionmark.circle" : "creditcard.fill"))
+                        .foregroundStyle(line.isNew ? Palette.amber : Color.accentColor)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(line.label).font(.subheadline)
+                        if line.isNew { Text("A new card will be added").font(.caption).foregroundStyle(.secondary) }
+                    }
+                    Spacer()
+                    Text("\(line.count)").font(.subheadline.monospacedDigit().weight(.semibold))
+                }
+            }
+            if preview.review > 0 {
+                Label("\(preview.review) to check by hand afterwards", systemImage: "exclamationmark.bubble").font(.subheadline)
+            }
+            if preview.skipped > 0 {
+                Label("\(preview.skipped) not needed (OTPs, adverts, other notices)", systemImage: "minus.circle")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            DisclosureGroup("Show the messages") {
+                ForEach(Array(g.messages.enumerated()), id: \.offset) { item in
+                    VStack(alignment: .leading, spacing: 2) {
+                        if let d = item.element.date {
+                            Text(Dates.day.string(from: d) + " " + Dates.time.string(from: d)).font(.caption2).foregroundStyle(.secondary)
+                        } else {
+                            Text("No time on the screenshot").font(.caption2).foregroundStyle(Palette.amber)
+                        }
+                        Text(item.element.body).font(.caption)
+                    }
+                }
+            }
+            .font(.subheadline)
+        } header: {
+            Text("\(g.messages.count) message\(g.messages.count == 1 ? "" : "s") · \(g.images) screenshot\(g.images == 1 ? "" : "s")")
+        } footer: {
+            if g.undated > 0 {
+                Text("\(g.undated) message\(g.undated == 1 ? " has" : "s have") no time on the screenshot: the date in the message is used, or today.")
+            }
+        }
+    }
+
+    // MARK: Done
+
+    @ViewBuilder
+    private var doneSections: some View {
+        if let result, result.found > 0 {
+            ImportResultSection(tally: result.tally, note: nil, addMoreTitle: "Add more screenshots") { reset() }
+        } else {
+            Section {
+                Label("No bank messages found", systemImage: "exclamationmark.triangle.fill")
+                    .font(.headline).foregroundStyle(Palette.amber)
+                Text("Use screenshots of a bank's conversation in Messages, with the message bubbles clearly visible.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+            }
+            Section {
+                Button("Try other screenshots") { reset() }
+                Button("Done") { dismiss() }
+            }
         }
     }
 }
 
+/// Automatic import: the Shortcuts automation that hands each new bank SMS to the app. On iOS 27 it's one ready-made
+/// shortcut (three taps); older iOS needs the steps by hand.
 struct AutomationGuideView: View {
-    private let steps: [(String, String)] = [
-        ("Open Shortcuts", "Open Apple's Shortcuts app and tap Automation at the bottom."),
-        ("New automation", "Tap + (or New Automation), then choose Message."),
-        ("Which messages", "Tap Message Contains and type AED. Leave Sender empty so every bank is included. Choose Run Immediately, then Next."),
-        ("Add this app's action", "Tap New Blank Automation → Add Action, search for \(AppInfo.name) and pick Add Bank Message."),
-        ("Pass the message", "Tap Message in the action and choose Shortcut Input. Then tap Sender, choose Shortcut Input again and pick Sender."),
-        ("Done", "Tap Done. From now on each bank SMS that mentions AED is added in the background. Messages from friends are ignored, and OTPs are never stored."),
-    ]
+    @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var status = AutomationStatus.current
+    @State private var showManual = false
 
     var body: some View {
         List {
-            Section {
-                Text("iPhone apps can't read your SMS themselves. A Shortcuts automation hands each new bank SMS to the app instead. It takes about a minute to set up, once.")
-                    .font(.callout)
-            }
-            Section("Steps") {
-                ForEach(Array(steps.enumerated()), id: \.offset) { item in
-                    HStack(alignment: .top, spacing: 12) {
-                        Text("\(item.offset + 1)")
-                            .font(.headline)
-                            .frame(width: 28, height: 28)
-                            .background(Color.accentColor.opacity(0.15), in: Circle())
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(item.element.0).font(.subheadline.weight(.semibold))
-                            Text(item.element.1).font(.subheadline).foregroundStyle(.secondary)
-                        }
+            Section { AutomationStatusCard(status: status) }
+            if AppInfo.canInstallSharedAutomation {
+                oneTapSection
+                Section {
+                    DisclosureGroup("Set it up by hand instead", isExpanded: $showManual) {
+                        ManualSteps(steps: ManualSteps.ios27)
                     }
-                    .padding(.vertical, 2)
                 }
-                Button {
-                    if let url = URL(string: "shortcuts://") { UIApplication.shared.open(url) }
-                } label: {
-                    Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+            } else {
+                Section {
+                    Text("Your iPhone's iOS can't add a ready-made automation, so it's set up by hand once. It takes about two minutes.")
+                        .font(.subheadline)
+                }
+                Section("Steps") { ManualSteps(steps: ManualSteps.ios17) }
+                Section {
+                    Button { if let u = URL(string: "shortcuts://") { openURL(u) } } label: {
+                        Label("Open Shortcuts", systemImage: "arrow.up.forward.app")
+                    }
                 }
             }
-            Section {
-                Text("Some banks write amounts as \"Dhs\" or only in another currency. Add a second automation with that word (for example Dhs, USD or card) if some messages are missed.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            Section("If messages don't arrive") {
+                Label("In Shortcuts, open Automations and check the Fils one is switched on.", systemImage: "switch.2")
+                Label("It reacts to messages containing \"AED\". If your bank writes \"Dhs\" instead, make a copy of the shortcut with Dhs.", systemImage: "textformat")
+                Label("Messages from friends are ignored and one-time passwords are never stored.", systemImage: "lock.shield")
             }
-            Section("Older messages") {
-                NavigationLink { PasteView() } label: { Label("Paste messages you already have", systemImage: "doc.on.clipboard") }
+            .font(.subheadline)
+            Section("Messages you already have") {
                 NavigationLink { ScreenshotImportView() } label: { Label("Add screenshots of them", systemImage: "photo.on.rectangle") }
+                NavigationLink { PasteView() } label: { Label("Paste them", systemImage: "doc.on.clipboard") }
             }
         }
         .themedScreen()
         .navigationTitle("Automatic import")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: scenePhase) { _, phase in if phase == .active { status = AutomationStatus.current } }
+        .onAppear { status = AutomationStatus.current }
+    }
+
+    @ViewBuilder
+    private var oneTapSection: some View {
+        Section {
+            Button {
+                Settings.automationLinkOpenedAt = Date()
+                status = AutomationStatus.current
+                openURL(AppInfo.automationShortcut)
+            } label: {
+                Label(status == .off ? "Turn on automatic import" : "Open the automation again", systemImage: "wand.and.stars")
+                    .font(.headline).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            StepRow(number: 1, title: "Tap \"Add Shortcut\"", text: "The Shortcuts app opens with the Fils automation ready.") {
+                ShortcutsMock.addButton
+            }
+            StepRow(number: 2, title: "Switch it on", text: "iPhone adds shared automations switched off. Flip the switch at the top, like this:") {
+                ShortcutsMock.automationCard
+            }
+            StepRow(number: 3, title: "Come back to Fils", text: "That's all. Each new bank SMS is now added by itself, even when Fils is closed.") { EmptyView() }
+        } header: {
+            Text("Three taps")
+        } footer: {
+            Text("iPhone apps can't read SMS themselves. This Shortcuts automation hands each new message containing \"AED\" to Fils, which keeps only bank messages.")
+        }
+    }
+}
+
+/// Automatic import at a glance: off, waiting for the first message, or on (with the last message's time).
+struct AutomationStatusCard: View {
+    let status: AutomationStatus
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(color)
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.headline)
+                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var icon: String {
+        switch status {
+        case .off: return "bolt.slash.circle.fill"
+        case .waiting: return "hourglass.circle.fill"
+        case .on: return "checkmark.circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch status {
+        case .off: return .secondary
+        case .waiting: return Palette.amber
+        case .on: return Palette.green
+        }
+    }
+
+    private var title: String {
+        switch status {
+        case .off: return "Automatic import is off"
+        case .waiting: return "Waiting for your first bank message"
+        case .on: return "Automatic import is on"
+        }
+    }
+
+    private var detail: String {
+        switch status {
+        case .off: return "Turn it on once, and every new bank SMS is added by itself."
+        case .waiting: return "When the next bank SMS arrives, it's added and this turns green. If it doesn't, check step 2 below."
+        case .on(let last):
+            let f = RelativeDateTimeFormatter()
+            f.unitsStyle = .full
+            return "Last message passed to Fils \(f.localizedString(for: last, relativeTo: Date()))."
+        }
+    }
+}
+
+private struct StepRow<Picture: View>: View {
+    let number: Int
+    let title: String
+    let text: String
+    @ViewBuilder var picture: () -> Picture
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Text("\(number)")
+                    .font(.headline)
+                    .frame(width: 28, height: 28)
+                    .background(Color.accentColor.opacity(0.15), in: Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.subheadline.weight(.semibold))
+                    Text(text).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            picture().frame(maxWidth: .infinity)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+/// Small drawings of what the Shortcuts app shows, so it's easy to recognise.
+enum ShortcutsMock {
+    static var addButton: some View {
+        Text("Add Shortcut")
+            .font(.headline)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 40).padding(.vertical, 12)
+            .background(Color.blue, in: Capsule())
+            .overlay(alignment: .trailing) {
+                Image(systemName: "hand.point.up.left.fill")
+                    .font(.title2).foregroundStyle(.white)
+                    .shadow(radius: 2)
+                    .offset(x: 18, y: 16)
+            }
+            .padding(.vertical, 6)
+    }
+
+    static var automationCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "message.fill").foregroundStyle(.green)
+                Text("When I receive a message").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
+                Spacer()
+                Toggle("", isOn: .constant(true)).labelsHidden().tint(.green).allowsHitTesting(false)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20).stroke(Palette.amber, lineWidth: 3).padding(-5)
+                    )
+            }
+            HStack(spacing: 4) {
+                Text("Message").foregroundStyle(.blue)
+                Text("contains").foregroundStyle(.white)
+                Text("AED").foregroundStyle(.blue)
+            }
+            .font(.subheadline)
+            HStack(spacing: 4) {
+                Text("Add").foregroundStyle(.white)
+                Text("Message").foregroundStyle(.blue)
+                Text("to Fils").foregroundStyle(.white)
+            }
+            .font(.footnote)
+            .padding(8)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        }
+        .padding(14)
+        .background(Color(white: 0.16), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(alignment: .topTrailing) {
+            Text("Switch on").font(.caption2.weight(.bold)).foregroundStyle(.black)
+                .padding(.horizontal, 6).padding(.vertical, 2)
+                .background(Palette.amber, in: Capsule())
+                .offset(x: -6, y: -12)
+        }
+        .environment(\.colorScheme, .dark)
+        .padding(.top, 8)
+    }
+}
+
+/// The automation built by hand, step by step.
+struct ManualSteps: View {
+    let steps: [(String, String)]
+
+    /// iOS 27: automations are built inside a shortcut.
+    static let ios27: [(String, String)] = [
+        ("Open Shortcuts, tap +", "A new, empty shortcut opens."),
+        ("Add the trigger", "In the search bar at the bottom, type message and choose \"When I receive a message\"."),
+        ("Message contains AED", "Tap the word after \"contains\" and type AED. If a \"Sender is Sender\" row appears, remove it with the ⊖ at its right, or the automation stays off."),
+        ("Add Fils", "In the search bar at the bottom, type Fils and tap Add Bank Message."),
+        ("Connect the message", "In the Fils action, tap the blue word Message and choose Message from the trigger (the green speech bubble)."),
+        ("Done", "Go back with < at the top left. Check the automation's switch is on."),
+    ]
+
+    /// iOS 17–26: the Automation tab.
+    static let ios17: [(String, String)] = [
+        ("Open Shortcuts", "Tap Automation at the bottom, then + (or New Automation)."),
+        ("Choose Message", "Tap Message Contains and type AED. Don't pick a sender. Choose Run Immediately, then Next."),
+        ("Add Fils", "Tap New Blank Automation → Add Action, search Fils and tap Add Bank Message."),
+        ("Connect the message", "Tap the blue word Message in the action and choose Shortcut Input."),
+        ("Done", "Tap Done. Each bank SMS that mentions AED is now added by itself."),
+    ]
+
+    var body: some View {
+        ForEach(Array(steps.enumerated()), id: \.offset) { item in
+            HStack(alignment: .top, spacing: 12) {
+                Text("\(item.offset + 1)")
+                    .font(.subheadline.weight(.bold))
+                    .frame(width: 24, height: 24)
+                    .background(Color.accentColor.opacity(0.15), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.element.0).font(.subheadline.weight(.semibold))
+                    Text(item.element.1).font(.subheadline).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 2)
+        }
     }
 }
 
