@@ -9,7 +9,7 @@ Both apps use one shared engine written in Kotlin Multiplatform.
 
 ## Fils for iPhone 1.0 (ready for TestFlight)
 
-The iPhone app is called **Fils - Cards & Expense Tracker** (home-screen name: Fils). It does everything the Android app does, on the shared engine (`shared/`, Kotlin Multiplatform). Only its screens are SwiftUI.
+The iPhone app is called **Fils - Cards & Spend Tracker** (home-screen name: Fils). It does everything the Android app does, on the shared engine (`shared/`, Kotlin Multiplatform). Only its screens are SwiftUI.
 
 - **Getting messages in.** iOS doesn't let apps read SMS, so there are several routes:
   - the Shortcuts action "Add Bank Message", fed by a Message automation, with the steps in the app

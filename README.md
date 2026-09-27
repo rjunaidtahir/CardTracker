@@ -1,4 +1,4 @@
-# Fils - Cards & Expense Tracker
+# Fils - Cards & Spend Tracker
 
 An Android and iPhone app that turns the SMS your UAE banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
@@ -19,9 +19,9 @@ The app is called **Fils** on the phone (package `com.uaefinancial.tracker`). It
 
 Updates install over the old version and keep your data. Sideloaded builds are signed with `app/debug.keystore`; a Play Store release uses a separate upload key (see below).
 
-### iPhone: Fils - Cards & Expense Tracker
+### iPhone: Fils - Cards & Spend Tracker
 
-On the iPhone the app is called **Fils** on the home screen (full/store name "Fils - Cards & Expense Tracker"). The code is in `ios/`. It does everything the Android app does. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
+On the iPhone the app is called **Fils** on the home screen (full/store name "Fils - Cards & Spend Tracker"). The code is in `ios/`. It does everything the Android app does. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
 
 iPhone apps can't read SMS, so bank messages come in these ways:
 
@@ -116,7 +116,7 @@ To build Android locally, open the folder in Android Studio and use **Build → 
 ### Android release
 
 1. Create a [Google Play Developer account](https://play.google.com/console/signup) (one-time $25 fee, plus identity verification that can take a day or two).
-2. In Play Console, create the app: title **Fils - Cards & Expense Tracker** (exactly 30 characters — Play's app-title field caps at 30, so this is as far as it fits), package `com.uaefinancial.tracker`. The icon, feature graphic, screenshots, descriptions, and draft answers for the content rating and Data Safety forms are all in [`store/`](store/) — see [`store/README.md`](store/README.md) and [`store/listing.md`](store/listing.md). Turn on GitHub Pages ([`store/README.md`](store/README.md) has the two settings clicks) to get a public URL for [`docs/privacy-policy.html`](docs/privacy-policy.html), and paste that into the privacy policy field.
+2. In Play Console, create the app: title **Fils - Cards & Spend Tracker** (28 characters — comfortably under Play's 30-character app-title cap), package `com.uaefinancial.tracker`. The icon, feature graphic, screenshots, descriptions, and draft answers for the content rating and Data Safety forms are all in [`store/`](store/) — see [`store/README.md`](store/README.md) and [`store/listing.md`](store/listing.md). Turn on GitHub Pages ([`store/README.md`](store/README.md) has the two settings clicks) to get a public URL for [`docs/privacy-policy.html`](docs/privacy-policy.html), and paste that into the privacy policy field.
 3. **SMS permission declaration (the step most likely to cause a rejection).** Google restricts `READ_SMS`/`RECEIVE_SMS` to a short list of approved use cases; "SMS-based money management" is one of them, but it's a manual Play review, not automatic. Under **App content → Permissions declaration**, declare the SMS permissions, pick the financial/budget-tracking use case, and record a short screen-recording showing Fils reading a bank SMS and turning it into a transaction. Keep the reading scoped to bank senders only (already true, see [How messages are read](#how-messages-are-read)) — Play explicitly disallows harvesting personal/non-financial SMS. Expect this review to take longer than the rest of the listing and to sometimes need a resubmission with clearer justification.
 4. An upload keystore (`fils-upload-key.jks`) already exists for this repo — ask Junaid for the file and its password rather than making a new one, so future updates use the same signing identity. Turn on **Play App Signing** when Play Console asks, and upload this keystore as the *upload* key.
 5. Add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 fils-upload-key.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`fils-upload`), `ANDROID_KEY_PASSWORD`.

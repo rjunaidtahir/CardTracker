@@ -1,4 +1,4 @@
-# iPhone app project (Fils - Cards & Expense Tracker). Generate the Xcode project with:  cd ios && xcodegen generate
+# iPhone app project (Fils - Cards & Spend Tracker). Generate the Xcode project with:  cd ios && xcodegen generate
 # The shared engine (../shared, Kotlin Multiplatform) is built by Gradle from the "Build the shared engine" step.
 name: UAEFinancialTracker
 options:
