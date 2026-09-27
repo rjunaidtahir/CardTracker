@@ -14,3 +14,11 @@ ios/*.xcodeproj/
 ios/*/Info.plist
 ios/*/*.entitlements
 *.xcresult
+
+# Play Store signing key. Never commit this — it must only live as the
+# ANDROID_KEYSTORE_BASE64 GitHub secret (see android-release.yml). Losing it
+# means losing the ability to publish updates to the same Play Store listing.
+*.jks
+*.keystore
+!app/debug.keystore
+keystore-password.txt
