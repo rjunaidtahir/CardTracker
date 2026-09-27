@@ -308,7 +308,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 title = {
                     Text(
                         when (route) {
-                            is Route.Home -> if (route.tab == Tab.HOME) "Financial Tracker" else route.tab.label
+                            is Route.Home -> if (route.tab == Tab.HOME) "Fils" else route.tab.label
                             is Route.CardDetail -> "Card"
                             Route.Rates -> "Exchange rates"
                             Route.FixedPayments -> "Fixed payments"
