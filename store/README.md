@@ -20,10 +20,11 @@ are not committed here — ask Junaid.
 
 ## Privacy policy
 
-The privacy policy page is at [`/docs/privacy-policy.html`](../docs/privacy-policy.html) in this repo, meant to be
-served with GitHub Pages:
+**Live at: https://rjunaidtahir.github.io/fils-privacy/** — paste this into Play Console's "Privacy policy" field.
 
-1. Repo **Settings → Pages → Build and deployment → Deploy from a branch**.
-2. Branch: `main` (or `rebuild` until it's merged), folder: `/docs`.
-3. Save. The page will be live at `https://rjunaidtahir.github.io/CardTracker/privacy-policy.html` within a few
-   minutes — paste that URL into Play Console's "Privacy policy" field.
+[`/docs/privacy-policy.html`](../docs/privacy-policy.html) in *this* repo is the source of truth for the wording.
+It's hosted from a separate public repo, `rjunaidtahir/fils-privacy` (its `index.html`), via GitHub Pages —
+CardTracker itself stays private, so it can't serve Pages on the free plan.
+
+**If you ever edit `docs/privacy-policy.html` again, copy it over to `fils-privacy/index.html` and push it there too
+— the two are not linked automatically.**
