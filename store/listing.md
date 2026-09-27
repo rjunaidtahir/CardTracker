@@ -66,8 +66,8 @@ Finance
 - Can users request data deletion? Yes — uninstalling the app deletes all data (nothing is kept anywhere else)
 
 ## Privacy policy URL
-Serve `docs/privacy-policy.html` via GitHub Pages (see `store/README.md`), then paste that URL here:
-`https://rjunaidtahir.github.io/CardTracker/privacy-policy.html`
+Already live (see `store/README.md` for how it's hosted) — paste this into Play Console:
+`https://rjunaidtahir.github.io/fils-privacy/`
 
 ## SMS permissions declaration — demo video script (~45–60 seconds)
 
@@ -81,8 +81,8 @@ Record this on a real phone with the Play-bound build installed (screen recorder
    SMS arriving in the Messages app.
 4. **(10s)** Switch to Fils, tap **Sync**, and show the new transaction appear in **Activity** — same amount,
    merchant and card as the SMS.
-5. **(10s)** Open **More → Your privacy** (or the equivalent screen) to show the on-device-only, no-internet-permission
-   messaging on screen.
+5. **(10s)** Open **More → Help & questions**, tap **"Is my data safe?"** to show the on-device-only,
+   no-internet-permission answer on screen.
 6. **(5s)** End on the **Home** tab showing the updated "Spent this month" total.
 
 Narration (captions or voiceover) to include, matching the declared use case almost word for word: *"Fils reads
