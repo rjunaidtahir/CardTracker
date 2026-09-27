@@ -1,7 +1,9 @@
 # Fils — Play Store listing text
 
 ## App title (max 30 chars)
-Fils
+Fils - Cards & Expense Tracker
+
+(30 characters, exactly at the limit)
 
 ## Short description (max 80 chars)
 Track card spending from bank SMS. On-device only. Any UAE bank.

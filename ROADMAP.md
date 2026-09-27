@@ -1,6 +1,6 @@
 # Roadmap
 
-UAE Financial Tracker turns UAE bank SMS into spending, statements and due dates, with AED as the base currency. It comes in two apps:
+Fils turns UAE bank SMS into spending, statements and due dates, with AED as the base currency. It comes in two apps:
 
 - a sideloaded Android app (Kotlin, Jetpack Compose, Room, WorkManager), with no internet permission
 - an iPhone app (SwiftUI, SwiftData)
@@ -9,7 +9,7 @@ Both apps use one shared engine written in Kotlin Multiplatform.
 
 ## Fils for iPhone 1.0 (ready for TestFlight)
 
-The iPhone app is called **Fils - Cards and Expense tracker** (home-screen name: Fils). It does everything the Android app does, on the shared engine (`shared/`, Kotlin Multiplatform). Only its screens are SwiftUI.
+The iPhone app is called **Fils - Cards & Expense Tracker** (home-screen name: Fils). It does everything the Android app does, on the shared engine (`shared/`, Kotlin Multiplatform). Only its screens are SwiftUI.
 
 - **Getting messages in.** iOS doesn't let apps read SMS, so there are several routes:
   - the Shortcuts action "Add Bank Message", fed by a Message automation, with the steps in the app

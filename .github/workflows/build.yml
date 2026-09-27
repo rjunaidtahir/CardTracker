@@ -72,7 +72,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
-          cp app/build/outputs/apk/debug/app-debug.apk UAE-Financial-Tracker-v${VER}-build${{ github.run_number }}.apk
-          gh release create "build-${{ github.run_number }}" UAE-Financial-Tracker-v${VER}-build${{ github.run_number }}.apk \
-            --title "UAE Financial Tracker v${VER} (build ${{ github.run_number }})" \
+          cp app/build/outputs/apk/debug/app-debug.apk Fils-v${VER}-build${{ github.run_number }}.apk
+          gh release create "build-${{ github.run_number }}" Fils-v${VER}-build${{ github.run_number }}.apk \
+            --title "Fils v${VER} (build ${{ github.run_number }})" \
             --notes "Built from commit ${{ github.sha }}. Tap the .apk below to download and install."

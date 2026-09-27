@@ -1,12 +1,12 @@
 """Uploads the project to Google Drive after each build: one folder per day with that day's latest files.
 
 Drive layout (created by this script, so it only ever touches its own files):
-    Fils & UAE Financial Tracker – Project/
+    Fils – Project/
         Versions/
             2026-09-26/
                 Android-project-v2.1.zip
                 iPhone-Fils-project-v1.0.zip
-                UAE-Financial-Tracker-v2.1-build27.apk   (builds from main only)
+                Fils-v2.1-build27.apk   (builds from main only)
                 Changes.txt
 
 Files with the same name in the same day's folder are replaced, so each day keeps the day's latest version.
@@ -23,7 +23,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-ROOT_NAME = "Fils & UAE Financial Tracker – Project"
+ROOT_NAME = "Fils – Project"
 VERSIONS_NAME = "Versions"
 FOLDER = "application/vnd.google-apps.folder"
 API = "https://www.googleapis.com/drive/v3"

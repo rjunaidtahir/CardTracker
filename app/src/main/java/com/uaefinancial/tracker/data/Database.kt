@@ -15,7 +15,7 @@ import androidx.room.RoomDatabase
 import kotlinx.coroutines.flow.Flow
 
 /*
- * Schema v1 of UAE Financial Tracker. Every schema change from here on needs a Room Migration in
+ * Schema v1 of Fils. Every schema change from here on needs a Room Migration in
  * Migrations.kt: never a destructive fallback (it would wipe people's history on update).
  */
 

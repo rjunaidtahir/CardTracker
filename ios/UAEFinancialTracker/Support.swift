@@ -5,7 +5,7 @@ import Shared
 /// App name as shown to people.
 enum AppInfo {
     static let name = "Fils"
-    static let fullName = "Fils - Cards and Expense tracker"
+    static let fullName = "Fils - Cards & Expense Tracker"
     /// Shared with the widget and the Share extension.
     static let appGroup = "group.com.uaefinancial.tracker"
     /// The ready-made Shortcuts automation (iOS 27 and later): "When I receive a message containing AED → Add Bank

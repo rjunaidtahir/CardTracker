@@ -14,7 +14,7 @@ enum Backup {
 
     enum Failure: LocalizedError {
         case notABackup
-        var errorDescription: String? { "This isn't a backup from Fils or UAE Financial Tracker (sms.csv is missing)." }
+        var errorDescription: String? { "This isn't a Fils backup (sms.csv is missing)." }
     }
 
     static func fileName(today: Date = Date()) -> String {
