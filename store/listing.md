@@ -64,4 +64,28 @@ Finance
 - Can users request data deletion? Yes — uninstalling the app deletes all data (nothing is kept anywhere else)
 
 ## Privacy policy URL
-(paste the published URL here once you have it — draft page prepared separately)
+Serve `docs/privacy-policy.html` via GitHub Pages (see `store/README.md`), then paste that URL here:
+`https://rjunaidtahir.github.io/CardTracker/privacy-policy.html`
+
+## SMS permissions declaration — demo video script (~45–60 seconds)
+
+Play's Permissions Declaration Form asks for a short screen recording of the feature that needs the permission.
+Record this on a real phone with the Play-bound build installed (screen recorder → Fils → go):
+
+1. **(5s)** Show the phone's home screen, open Fils.
+2. **(10s)** Show **More → Bank senders**, scroll the list — makes clear only known bank senders are read.
+3. **(10s)** Send yourself (or use a saved draft) a realistic bank SMS, e.g. from a saved contact named like a
+   bank sender: `"AED 45.00 spent on your ADCB card ending 4471 at CARREFOUR. Avl limit AED 4,955."` Show the
+   SMS arriving in the Messages app.
+4. **(10s)** Switch to Fils, tap **Sync**, and show the new transaction appear in **Activity** — same amount,
+   merchant and card as the SMS.
+5. **(10s)** Open **More → Your privacy** (or the equivalent screen) to show the on-device-only, no-internet-permission
+   messaging on screen.
+6. **(5s)** End on the **Home** tab showing the updated "Spent this month" total.
+
+Narration (captions or voiceover) to include, matching the declared use case almost word for word: *"Fils reads
+SMS from your bank to automatically log your spending and track your budget. It doesn't read personal messages,
+doesn't store OTPs, has no internet permission, and never sends data anywhere."*
+
+Upload the recording (unlisted YouTube link or direct file, per Play Console's current option) alongside the
+declaration form, and pick **"SMS-based money management — apps that track and manage budget"** as the use case.
