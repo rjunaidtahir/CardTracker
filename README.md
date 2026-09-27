@@ -8,16 +8,16 @@ An Android and iPhone app that turns the SMS your UAE banks already send you int
 
 ## Install
 
-### Android
+### Android: Fils
 
-The app is not on the Play Store. You install the APK file directly.
+The app is called **Fils** on the phone (package `com.uaefinancial.tracker`). It's not on the Play Store yet (see [Android release](#android-release)); for now you install the APK file directly.
 
 1. On the phone, open the **Releases** page of this repository and download the newest `UAE-Financial-Tracker-….apk`.
 2. Open the downloaded file. If Android asks, allow your browser or Files app to **install unknown apps**.
-3. Open **UAE Financial Tracker**. The setup walks you through the rest.
-4. **Android 13 and later:** Android blocks SMS access for apps installed from a file. If the SMS permission is refused or greyed out, go to **Settings → Apps → UAE Financial Tracker → ⋮ (top right) → Allow restricted settings**, then allow SMS in the app. The setup shows the same steps and a button that opens the right screen.
+3. Open **Fils**. The setup walks you through the rest.
+4. **Android 13 and later:** Android blocks SMS access for apps installed from a file. If the SMS permission is refused or greyed out, go to **Settings → Apps → Fils → ⋮ (top right) → Allow restricted settings**, then allow SMS in the app. The setup shows the same steps and a button that opens the right screen.
 
-Updates install over the old version and keep your data. Every build is signed with the same key, `app/debug.keystore`.
+Updates install over the old version and keep your data. Sideloaded builds are signed with `app/debug.keystore`; a Play Store release uses a separate upload key (see below).
 
 ### iPhone: Fils – Card & Spend Tracker
 
@@ -112,6 +112,16 @@ To build Android locally, open the folder in Android Studio and use **Build → 
 2. Create an App Store Connect API key with the Admin role (Users and Access → Integrations → Keys).
 3. Add these repository secrets: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` (the contents of the .p8 file).
 4. Run **Actions → iPhone app to TestFlight**. It signs automatically and uploads the build. Install it on the iPhone with the TestFlight app, then submit it for review from App Store Connect.
+
+### Android release
+
+1. Create a [Google Play Developer account](https://play.google.com/console/signup) (one-time $25 fee, plus identity verification that can take a day or two).
+2. In Play Console, create the app: name **Fils**, package `com.uaefinancial.tracker`. Fill in the store listing (short/full description, screenshots, feature graphic, privacy policy URL), the content rating questionnaire and the data safety form (Fils reads SMS and stores everything on-device only — no data leaves the phone).
+3. An upload keystore (`fils-upload-key.jks`) already exists for this repo — ask Junaid for the file and its password rather than making a new one, so future updates use the same signing identity. Turn on **Play App Signing** when Play Console asks, and upload this keystore as the *upload* key.
+4. Add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 fils-upload-key.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`fils-upload`), `ANDROID_KEY_PASSWORD`.
+5. Optional, to publish straight from GitHub Actions instead of uploading the .aab by hand: in Play Console, add a service account under **Users and permissions** with the **Release manager** role, create a JSON key for it in Google Cloud Console, and add it as the `PLAY_SERVICE_ACCOUNT_JSON` repository secret.
+6. Run **Actions → Android app to Play Store**. It builds a signed `.aab`; with the service account secret set, it also uploads it to the `internal` testing track (change with the workflow's `track` input). Without that secret, download the `.aab` from the workflow's artifacts and upload it by hand in Play Console.
+7. Add internal testers in Play Console, test the release, then promote it to production when ready.
 
 ## Google Drive copies
 
