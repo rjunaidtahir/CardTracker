@@ -20,6 +20,9 @@ on:
         required: false
         default: 'internal'
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -70,6 +73,21 @@ jobs:
         with:
           name: fils-release-aab
           path: app/build/outputs/bundle/release/*.aab
+
+      - name: Publish the signed bundle as a release
+        # Workflow artifacts (the step above) expire and download via a storage host this repo's own
+        # CI can reach fine, but some sandboxed tools can't follow. A release asset is a permanent,
+        # directly downloadable link instead. Note: an .aab is a Play Store upload format, not an APK
+        # — it can't be installed straight onto a phone.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          AAB=$(ls app/build/outputs/bundle/release/*.aab | head -1)
+          cp "$AAB" "Fils-v${VER}-aab-release${{ github.run_number }}.aab"
+          gh release create "aab-release-${{ github.run_number }}" "Fils-v${VER}-aab-release${{ github.run_number }}.aab" \
+            --title "Fils v${VER} — signed .aab (release ${{ github.run_number }})" \
+            --notes "Signed Android App Bundle, built from commit ${{ github.sha }} for Play Console upload. This is NOT an APK — it can't be installed on a phone directly; upload it as-is to Play Console."
 
       - name: Check for a Play Console service account
         id: play
