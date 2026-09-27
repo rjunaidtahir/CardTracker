@@ -223,7 +223,7 @@ fun MoreScreen(
         }
         item {
             Text(
-                "UAE Financial Tracker $versionName · works offline · your data stays on this phone",
+                "Fils $versionName · works offline · your data stays on this phone",
                 style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
@@ -579,7 +579,7 @@ private val helpItems = listOf(
         "Yes. The app has no internet access at all, so nothing can leave your phone. It only reads SMS from bank senders, and never stores one-time passwords (OTPs). " +
         "Backups are files you save yourself.",
     "Android says the SMS permission is restricted" to
-        "Android blocks SMS access for apps installed from a file. Open Settings → Apps → UAE Financial Tracker → ⋮ (top right) → Allow restricted settings, " +
+        "Android blocks SMS access for apps installed from a file. Open Settings → Apps → Fils → ⋮ (top right) → Allow restricted settings, " +
         "then come back and allow SMS.",
     "My bank's messages don't show up" to
         "More → Bank senders → Scan my messages. The app lists senders whose messages look like bank alerts; tap Add. " +

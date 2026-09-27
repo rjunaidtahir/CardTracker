@@ -39,7 +39,7 @@
                 <data android:scheme="file" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
-            <!-- Share → UAE Financial Tracker -->
+            <!-- Share → Fils -->
             <intent-filter android:label="Check statement">
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
