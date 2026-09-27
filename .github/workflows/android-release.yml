@@ -59,6 +59,8 @@ jobs:
           RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Always-increasing, so each upload is accepted as a newer version by Play Console.
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew :app:bundleRelease --no-daemon

@@ -13,7 +13,11 @@ android {
         applicationId = "com.uaefinancial.tracker"
         minSdk = 26
         targetSdk = 35
-        versionCode = 21
+        // versionCode must strictly increase for Android to treat a new APK as an update to an
+        // installed one — otherwise it silently refuses to install and the old app just stays put.
+        // CI passes the run number (always increasing) via ANDROID_VERSION_CODE; local builds fall
+        // back to a fixed placeholder, which is fine since those aren't distributed.
+        versionCode = (System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 21)
         versionName = "2.1"
     }
 
