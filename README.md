@@ -19,9 +19,9 @@ The app is called **Fils** on the phone (package `com.uaefinancial.tracker`). It
 
 Updates install over the old version and keep your data. Sideloaded builds are signed with `app/debug.keystore`; a Play Store release uses a separate upload key (see below).
 
-### iPhone: Fils – Card & Spend Tracker
+### iPhone: Fils - Cards and Expense tracker
 
-On the iPhone the app is called **Fils** (full name "Fils – Card & Spend Tracker"). The code is in `ios/`. It does everything the Android app does. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
+On the iPhone the app is called **Fils** (full name "Fils - Cards and Expense tracker"). The code is in `ios/`. It does everything the Android app does. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
 
 iPhone apps can't read SMS, so bank messages come in these ways:
 
@@ -116,12 +116,13 @@ To build Android locally, open the folder in Android Studio and use **Build → 
 ### Android release
 
 1. Create a [Google Play Developer account](https://play.google.com/console/signup) (one-time $25 fee, plus identity verification that can take a day or two).
-2. In Play Console, create the app: name **Fils**, package `com.uaefinancial.tracker`. Fill in the store listing (short/full description, screenshots, feature graphic, privacy policy URL), the content rating questionnaire and the data safety form (Fils reads SMS and stores everything on-device only — no data leaves the phone).
-3. An upload keystore (`fils-upload-key.jks`) already exists for this repo — ask Junaid for the file and its password rather than making a new one, so future updates use the same signing identity. Turn on **Play App Signing** when Play Console asks, and upload this keystore as the *upload* key.
-4. Add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 fils-upload-key.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`fils-upload`), `ANDROID_KEY_PASSWORD`.
-5. Optional, to publish straight from GitHub Actions instead of uploading the .aab by hand: in Play Console, add a service account under **Users and permissions** with the **Release manager** role, create a JSON key for it in Google Cloud Console, and add it as the `PLAY_SERVICE_ACCOUNT_JSON` repository secret.
-6. Run **Actions → Android app to Play Store**. It builds a signed `.aab`; with the service account secret set, it also uploads it to the `internal` testing track (change with the workflow's `track` input). Without that secret, download the `.aab` from the workflow's artifacts and upload it by hand in Play Console.
-7. Add internal testers in Play Console, test the release, then promote it to production when ready.
+2. In Play Console, create the app: title **Fils** (Play's app-title field is capped at 30 characters, too short for the full name — put "Cards and Expense tracker" in the short description/subtitle instead), package `com.uaefinancial.tracker`. Fill in the store listing (short/full description, screenshots, feature graphic, privacy policy URL), the content rating questionnaire and the data safety form (Fils reads SMS and stores everything on-device only — no data leaves the phone).
+3. **SMS permission declaration (the step most likely to cause a rejection).** Google restricts `READ_SMS`/`RECEIVE_SMS` to a short list of approved use cases; "SMS-based money management" is one of them, but it's a manual Play review, not automatic. Under **App content → Permissions declaration**, declare the SMS permissions, pick the financial/budget-tracking use case, and record a short screen-recording showing Fils reading a bank SMS and turning it into a transaction. Keep the reading scoped to bank senders only (already true, see [How messages are read](#how-messages-are-read)) — Play explicitly disallows harvesting personal/non-financial SMS. Expect this review to take longer than the rest of the listing and to sometimes need a resubmission with clearer justification.
+4. An upload keystore (`fils-upload-key.jks`) already exists for this repo — ask Junaid for the file and its password rather than making a new one, so future updates use the same signing identity. Turn on **Play App Signing** when Play Console asks, and upload this keystore as the *upload* key.
+5. Add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 fils-upload-key.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`fils-upload`), `ANDROID_KEY_PASSWORD`.
+6. Optional, to publish straight from GitHub Actions instead of uploading the .aab by hand: in Play Console, add a service account under **Users and permissions** with the **Release manager** role, create a JSON key for it in Google Cloud Console, and add it as the `PLAY_SERVICE_ACCOUNT_JSON` repository secret.
+7. Run **Actions → Android app to Play Store**. It builds a signed `.aab`; with the service account secret set, it also uploads it to the `internal` testing track (change with the workflow's `track` input). Without that secret, download the `.aab` from the workflow's artifacts and upload it by hand in Play Console.
+8. Add internal testers in Play Console, test the release, then promote it to production when ready.
 
 ## Google Drive copies
 

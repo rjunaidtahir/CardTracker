@@ -40,7 +40,7 @@ struct LaunchView: View {
                         .foregroundStyle(Palette.brand)
                         .opacity(wordmarkVisible ? 1 : 0)
                         .offset(y: wordmarkVisible ? 0 : 8)
-                    Text("Card & Spend Tracker")
+                    Text("Cards and Expense tracker")
                         .font(.system(size: 15, weight: .medium, design: .rounded))
                         .tracking(2.2)
                         .textCase(.uppercase)
