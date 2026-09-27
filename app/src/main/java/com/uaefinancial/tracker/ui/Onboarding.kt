@@ -82,7 +82,7 @@ fun OnboardingFlow(
             StepDots(step, 4)
             when (step) {
                 0 -> {
-                    Text("UAE Financial Tracker", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("Fils", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("See where your money goes, from the SMS your banks already send you.", style = MaterialTheme.typography.bodyLarge, color = Ink.muted)
                     Feature(Icons.Filled.Sms, "Reads your bank SMS", "Card spends, refunds, payments and transfers become a clean list, by category and by card.")
                     Feature(Icons.Filled.CreditCard, "Every UAE bank", "Built-in formats for the main banks, plus a smart reader for any other.")

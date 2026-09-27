@@ -42,8 +42,8 @@ struct OnboardingView: View {
     private var welcome: some View {
         OnboardingPage(
             symbol: "chart.pie.fill",
-            title: "UAE Financial Tracker",
-            text: "Turns the SMS your UAE banks send you into a clear picture of your spending: by category, by card and over time, with statements and due dates.",
+            title: AppInfo.name,
+            text: "Card & spend tracker for the UAE. Turns the SMS your banks send you into a clear picture of your spending: by category, by card and over time, with statements, due dates and budgets.",
             points: [
                 ("building.columns", "Works with any UAE bank"),
                 ("lock.shield", "Private: everything stays on this iPhone, no account, no ads"),
@@ -58,9 +58,9 @@ struct OnboardingView: View {
             title: "Your bank messages",
             text: "iPhone apps can't read SMS on their own, so there are a few easy ways in:",
             points: [
-                ("wand.and.stars", "Automatic: a one-minute Shortcuts automation adds each bank SMS as it arrives"),
-                ("doc.on.clipboard", "Paste messages you already have"),
-                ("square.and.arrow.down", "Import a backup file from an Android phone"),
+                ("wand.and.stars", "Automatic: turn it on once (3 taps) and each bank SMS is added as it arrives"),
+                ("doc.on.clipboard", "Paste messages you already have, or add screenshots of them"),
+                ("square.and.arrow.down", "Moving from Android? Open your backup with the app"),
             ]
         )
     }
@@ -72,9 +72,18 @@ struct OnboardingView: View {
             text: "Open a card statement PDF from Mail or Files with this app. It asks for the password, reads the amounts and every transaction, checks they add up, and adds what's missing.",
             points: [
                 ("checkmark.seal", "Reads statements from any bank"),
-                ("calendar.badge.clock", "Shows what's due and when"),
+                ("calendar.badge.clock", "Shows what's due and when, and reminds you if you like"),
             ]
         )
+        .overlay(alignment: .bottom) {
+            Button {
+                Task {
+                    if await Notifier.requestPermission() { Settings.remindersEnabled = true }
+                }
+            } label: { Label("Remind me before due dates", systemImage: "bell.badge") }
+            .buttonStyle(.bordered)
+            .padding(.bottom, 50)
+        }
     }
 }
 

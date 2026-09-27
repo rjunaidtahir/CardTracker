@@ -90,7 +90,7 @@ class MainActivity : FragmentActivity() {
             },
         )
         val promptInfo = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock UAE Financial Tracker")
+            .setTitle("Unlock Fils")
             .setNegativeButtonText("Use PIN")
             .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
             .build()
@@ -149,7 +149,7 @@ private fun granted(ctx: Context, permission: String) =
     ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED
 
 private const val RESTRICTED_HINT =
-    "If Android says it's restricted: Settings → Apps → UAE Financial Tracker → ⋮ → Allow restricted settings, then try again."
+    "If Android says it's restricted: Settings → Apps → Fils → ⋮ → Allow restricted settings, then try again."
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -431,7 +431,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     scope.launch {
                         val text = vm.reviewExportText()
                         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_SUBJECT, "Bank SMS UAE Financial Tracker couldn't read")
+                            .putExtra(Intent.EXTRA_SUBJECT, "Bank SMS Fils couldn't read")
                             .putExtra(Intent.EXTRA_TEXT, text)
                         ctx.startActivity(Intent.createChooser(send, "Share messages (check them first: they include amounts)"))
                     }
@@ -454,7 +454,7 @@ private fun BatteryTipDialog(onOpenSettings: () -> Unit, onDismiss: () -> Unit) 
             Text(
                 "Some phones put apps to sleep, and then new SMS are missed until you Sync.\n\n" +
                     "Open the app's settings → Battery → Unrestricted.\n\n" +
-                    "On Samsung, also: Settings → Battery → Background usage limits → Never sleeping apps → add UAE Financial Tracker.",
+                    "On Samsung, also: Settings → Battery → Background usage limits → Never sleeping apps → add Fils.",
             )
         },
         confirmButton = { TextButton(onClick = onOpenSettings) { Text("Open app settings") } },

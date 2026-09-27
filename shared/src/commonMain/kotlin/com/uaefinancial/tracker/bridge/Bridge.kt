@@ -6,6 +6,7 @@ import com.uaefinancial.tracker.core.SmsKey
 import com.uaefinancial.tracker.core.Spending
 import com.uaefinancial.tracker.core.StatementImport
 import com.uaefinancial.tracker.core.StatementReader
+import com.uaefinancial.tracker.parser.BankNames
 import com.uaefinancial.tracker.parser.BankRules
 import com.uaefinancial.tracker.parser.CardType
 import com.uaefinancial.tracker.parser.CategoryRules
@@ -75,7 +76,16 @@ data class StatementReading(
 )
 
 /** A transaction already in the app, for checking a statement against it. */
-data class AppTxn(val epochDay: Long, val amountMinor: Long, val isCredit: Boolean, val estimated: Boolean)
+data class AppTxn(val ref: String, val epochDay: Long, val amountMinor: Long, val isCredit: Boolean, val estimated: Boolean)
+
+/** A statement checked against the app: rows matched, rows missing from the app, and app transactions not on it. */
+data class ReconcileResult(
+    val matchedRows: List<StatementRow>,
+    val matchedRefs: List<String>,
+    val missing: List<StatementRow>,
+    /** Refs of app transactions within the statement's dates that aren't on the statement. */
+    val onlyInAppRefs: List<String>,
+)
 
 data class CategoryInfo(val id: Long, val name: String)
 
@@ -111,13 +121,23 @@ object Bridge {
             if ((r.kind == "transaction" || r.kind == "statement") && !r.auto) return r
             if (fallback == null && r.kind == "ignored") fallback = r
         }
-        val named = BankRules.banks.firstOrNull { b ->
-            Regex("""\b${Regex.escape(b.name)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(body) ||
-                b.senderIds.any { id -> id.length >= 4 && Regex("""\b${Regex.escape(id)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(body) }
-        }
-        val r = reading(SmsParser.parseAsBank(named?.name ?: UNKNOWN_BANK, body, receivedAtMillis), rates)
+        val named = BankNames.namedIn(body)
+        val r = reading(SmsParser.parseAsBank(named ?: UNKNOWN_BANK, body, receivedAtMillis), rates)
         return if (r.kind == "failed" && fallback != null) fallback else r
     }
+
+    /**
+     * Reads a message you said comes from [bank] (e.g. the bank named at the top of a Messages screenshot): that bank's
+     * own formats, then the smart reader under that bank's name.
+     */
+    fun readSmsAsBank(bank: String, body: String, receivedAtMillis: Long, rates: Map<String, String>): SmsReading =
+        reading(SmsParser.parseAsBank(BankNames.canonical(bank) ?: bank, body, receivedAtMillis), rates)
+
+    /** The bank's usual name for any spelling ("RAK BANK", "National Bank of Ras Al Khaimah" → "RAKBANK"), or null. */
+    fun canonicalBank(name: String): String? = BankNames.canonical(name)
+
+    /** The bank named in a text (a message, a screenshot's conversation name, a statement), or null. */
+    fun bankNamedIn(text: String): String? = BankNames.namedIn(text)
 
     /** Bank name used when a message can't be tied to a bank. */
     const val UNKNOWN_BANK = "Other bank"
@@ -199,13 +219,22 @@ object Bridge {
     }
 
     /** The statement rows that aren't in the app yet (same amount within 3 days; foreign spends within 3%). */
-    fun missingRows(rows: List<StatementRow>, app: List<AppTxn>): List<StatementRow> {
+    fun missingRows(rows: List<StatementRow>, app: List<AppTxn>): List<StatementRow> = reconcile(rows, app).missing
+
+    /** Checks a statement's rows against the app (same amount within 3 days; foreign spends within 3%). */
+    fun reconcile(rows: List<StatementRow>, app: List<AppTxn>): ReconcileResult {
         val lines = rows.map {
             com.uaefinancial.tracker.core.StatementLine(CalendarDate.ofEpochDay(it.epochDay), it.details, it.amountMinor, it.isCredit, it.details, it.cardLast4)
         }
-        val refs = app.mapIndexed { i, a -> com.uaefinancial.tracker.core.AppTxnRef(i.toLong(), CalendarDate.ofEpochDay(a.epochDay), a.amountMinor, a.isCredit, a.estimated, "") }
-        val missing = StatementImport.reconcile(lines, refs).missing.toSet()
-        return rows.filterIndexed { i, _ -> lines[i] in missing }
+        val refs = app.mapIndexed { i, a -> com.uaefinancial.tracker.core.AppTxnRef(i.toLong(), CalendarDate.ofEpochDay(a.epochDay), a.amountMinor, a.isCredit, a.estimated, a.ref) }
+        val r = StatementImport.reconcile(lines, refs)
+        fun rowOf(l: com.uaefinancial.tracker.core.StatementLine) = rows[lines.indexOf(l)]
+        return ReconcileResult(
+            matchedRows = r.matched.map { rowOf(it.first) },
+            matchedRefs = r.matched.map { app[it.second.id.toInt()].ref },
+            missing = r.missing.map { rowOf(it) },
+            onlyInAppRefs = r.extra.map { app[it.id.toInt()].ref },
+        )
     }
 
     /** "lunch 45", "usd 20 netflix #1234", "refund amazon 50". Null when there's no amount. */
@@ -230,6 +259,21 @@ object Bridge {
     fun countsByDefault(cardType: String): Boolean = Spending.defaultCountInSpending(cardTypeOf(cardType))
 
     fun transferLabel(last4: String): String = SmsParser.transferLabel(last4)
+
+    /** Pairing of two SMS about one transfer (e.g. FAB "Outward Remittance" + "funds transfer processed"). */
+    fun pairGroup(ruleId: String?): String? = BankRules.ruleById(ruleId)?.pairGroup
+
+    /** The rules whose SMS can be the other half of a transfer read by [ruleId] (same group, the other side). */
+    fun pairPartnerRules(ruleId: String?): List<String> {
+        val rule = BankRules.ruleById(ruleId) ?: return emptyList()
+        val group = rule.pairGroup ?: return emptyList()
+        return BankRules.banks.flatMap { it.rules }.filter { it.pairGroup == group && it.namesDestination != rule.namesDestination }.map { it.id }
+    }
+
+    fun namesDestination(ruleId: String?): Boolean = BankRules.ruleById(ruleId)?.namesDestination ?: false
+
+    /** Generic texts (account debits, transfers): a learned category then applies only to the same text and amount. */
+    fun isAmountSpecific(merchant: String, type: String): Boolean = CategoryRules.isAmountSpecific(merchant, txnType(type))
 
     /** Key of a card or account: "Bank ·1234", or "Bank ·????" when the number isn't known (same as Android). */
     fun cardKey(bank: String, last4: String?): String = "$bank ·${last4 ?: "????"}"

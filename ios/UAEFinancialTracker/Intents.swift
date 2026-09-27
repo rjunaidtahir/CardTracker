@@ -5,7 +5,7 @@ import Foundation
 /// in the background without opening the app.
 struct AddBankMessageIntent: AppIntent {
     static var title: LocalizedStringResource = "Add Bank Message"
-    static var description = IntentDescription("Adds a bank SMS to UAE Financial Tracker. Other messages are ignored, and OTPs are never stored.")
+    static var description = IntentDescription("Adds a bank SMS to Fils. Other messages are ignored, and OTPs are never stored.")
     static var openAppWhenRun: Bool = false
 
     @Parameter(title: "Message", description: "The text of the SMS (in an automation: Shortcut Input).")
@@ -20,12 +20,18 @@ struct AddBankMessageIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
-        let outcome = AppData.engine.ingest(
+        let engine = AppData.engine
+        // The automation works: the app shows "Automatic import is on".
+        Settings.automationLastRun = Date()
+        let outcome = engine.ingest(
             body: message, sender: sender, receivedAt: Date(), timeKnown: true, source: "Shortcut", requireBankLike: true
         )
+        Notifier.alerts(for: engine.takeFresh(), engine: engine)
+        Notifier.refresh(engine: engine)
         let text: String
         switch outcome {
         case .transaction: text = "Added a transaction"
+        case .merged: text = "Added (same transfer as an earlier message)"
         case .statement: text = "Added a statement"
         case .failed: text = "Saved to Needs review"
         case .duplicate: text = "Already in the app"

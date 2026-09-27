@@ -25,11 +25,24 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Play Store upload key. Only present when the RELEASE_* env vars are set (the Play release
+        // workflow decodes the keystore from a GitHub secret before every build); local/CI builds
+        // that don't set them still build a release APK/AAB, just unsigned.
+        val releaseStorePath = System.getenv("RELEASE_STORE_FILE")
+        if (releaseStorePath != null) {
+            create("release") {
+                storeFile = file(releaseStorePath)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
     compileOptions {

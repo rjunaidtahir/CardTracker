@@ -1,44 +1,47 @@
 # Roadmap
 
-UAE Financial Tracker turns UAE bank SMS into spending, statements and due dates, with AED as the base currency. It comes in two apps:
+Fils turns UAE bank SMS into spending, statements and due dates, with AED as the base currency. It comes in two apps:
 
 - a sideloaded Android app (Kotlin, Jetpack Compose, Room, WorkManager), with no internet permission
 - an iPhone app (SwiftUI, SwiftData)
 
 Both apps use one shared engine written in Kotlin Multiplatform.
 
-## iPhone app 1.0 (in progress)
+## Fils for iPhone 1.0 (ready for TestFlight)
 
-- **Shared engine** (`shared/`). Message reading, the statement reader, the spending rules and the duplicate key moved out of the Android app into a Kotlin Multiplatform module that uses only the Kotlin standard library. It has its own date, decimal and SHA-256 code, each checked against Java on thousands of cases. Its 103 tests pass on the JVM and on the iPhone simulator. `bridge/Bridge.kt` gives Swift a flat API.
-- **Getting messages in on an iPhone.** iOS doesn't let apps read SMS, so the app offers:
-  - The Shortcuts action "Add Bank Message", fed by a Message automation, with the setup steps in the app. It runs in the background.
-  - Paste, one message or many.
-  - Android "SMS Backup & Restore" XML files.
-  - Statement PDFs opened from other apps, including password-protected ones.
+The iPhone app is called **Fils - Cards & Expense Tracker** (home-screen name: Fils). It does everything the Android app does, on the shared engine (`shared/`, Kotlin Multiplatform). Only its screens are SwiftUI.
 
-  When the sender isn't known (pasted text), the app tries each bank's own formats first, then a bank named in the text, then the smart reader.
-- **Screens:**
-  - Home: spent this period with a comparison, payments due, spending by category, top merchants
-  - Activity: search, detail with the original SMS, category learning, typed spends
-  - Cards: card tiles with limits and statements, and card settings
-  - More: import options, Needs review with Fix, bank senders, exchange rates, re-read, help and first-run setup
-- **Privacy.** Data is not synced to iCloud and there is no network code. There's a privacy manifest, and OTPs are never stored.
+- **Getting messages in.** iOS doesn't let apps read SMS, so there are several routes:
+  - the Shortcuts action "Add Bank Message", fed by a Message automation, with the steps in the app
+  - screenshots of Messages read with text recognition, with iPhone times such as "Yesterday 21:05" and a flag on undated messages
+  - the Share extension (text, images, PDFs, backups)
+  - paste
+  - Android "SMS Backup & Restore" XML files
+  - the Android app's backup
+
+  Two-SMS transfers are merged, as on Android.
+- **Same features as Android:**
+  - periods (Month, 1W to 12M, All, Custom)
+  - category and trend charts, 12-month history, top merchants, by card, foreign currency
+  - budgets, fixed payments (marked paid by SMS automatically), savings goals, recurring payments with "track as fixed payment"
+  - card statements with paid, minimum paid, due and overdue status; since-last-statement spend; available-limit history
+  - card looks and your own pictures, custom categories, category learning, Needs review with Fix
+  - bank senders, exchange rates, re-read
+- **Notifications, security and files:**
+  - due-date reminders for cards and fixed payments, and spending alerts (big spend, low balance, budgets)
+  - app lock with a PIN and Face ID
+  - backups (the same .zip as Android, so they move both ways)
+  - PDF and Excel reports, app themes, and a home-screen widget
+- **Privacy.** There's no network code and no iCloud sync, and the app ships a privacy manifest.
 - **CI.** Every change to `ios/` or `shared/` runs on a Mac runner:
   1. the shared tests on the simulator
-  2. the app's tests, including a PDF drawn, then read back through PDFKit
+  2. 26 app tests
   3. a build for a real iPhone
   4. screenshots with sample data
 
   `ios-release.yml` uploads to TestFlight once the Apple account secrets are added.
 
-**Next for iPhone:**
-
-- Screenshots of the Messages app, read with text recognition (Vision). This includes times like "Yesterday 21:05" and flags messages with no visible date.
-- A Share extension, so a message's text can be shared from any app.
-- Importing the Android app's backup.
-- Budgets, fixed payments, due-date reminders, reports and app lock.
-- Merging two-SMS transfers, as Android does.
-- App Store assets.
+**Next:** App Store listing: check the name is free, write the description, and make screenshots from the CI ones.
 
 ## Android v2.1: statements from any bank
 

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fils — Privacy Policy</title>
+<style>
+  :root{ color-scheme: light dark; }
+  body{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    max-width: 760px; margin: 0 auto; padding: 48px 24px 96px 24px;
+    line-height: 1.6; color: #1a1a1a; background: #fff;
+  }
+  h1{font-size: 30px; margin-bottom: 4px;}
+  .updated{color:#666; font-size:14px; margin-bottom:36px;}
+  h2{font-size:22px; margin-top:40px;}
+  ul{padding-left: 22px;}
+  li{margin-bottom:8px;}
+  .callout{
+    background:#f2f9f5; border:1px solid #cdeee0; border-radius:12px; padding:18px 22px; margin:24px 0;
+  }
+  code{background:#f2f2f2; padding:2px 6px; border-radius:4px; font-size:14px;}
+  a{color:#0e8a4a;}
+  footer{margin-top:56px; font-size:13px; color:#777; border-top:1px solid #eee; padding-top:20px;}
+</style>
+</head>
+<body>
+  <h1>Privacy Policy — Fils</h1>
+  <div class="updated">Last updated: 27 September 2026</div>
+
+  <div class="callout">
+    <strong>In short:</strong> Fils reads your bank's SMS messages, on your phone, to show you your own spending.
+    It has no internet permission, has no account or sign-in, shows no ads, and never sends your data anywhere —
+    to us or to anyone else.
+  </div>
+
+  <h2>Who this policy covers</h2>
+  <p>
+    This policy applies to the Android and iPhone apps called <strong>Fils - Cards &amp; Expense Tracker</strong>,
+    developed by an independent developer based in the United Arab Emirates. If you
+    have questions about this policy or the app, contact <a href="mailto:rjunaidtahir@gmail.com">rjunaidtahir@gmail.com</a>.
+  </p>
+
+  <h2>What Fils reads</h2>
+  <p>On Android, with your permission, Fils reads incoming and existing SMS messages so it can find messages from
+  your bank. Specifically:</p>
+  <ul>
+    <li>Fils only looks at messages from senders it recognises as banks, or senders you have explicitly added as a bank sender.</li>
+    <li>Messages from personal contacts, and messages from senders that are not banks, are never opened or processed.</li>
+    <li>One-time passcodes (OTPs) and verification codes are detected and discarded immediately — they are never stored, displayed in a list, or kept in any database.</li>
+    <li>On iPhone, where apps cannot read SMS, you can instead paste a message, share it from Messages, take a screenshot, open a statement PDF, or use a Shortcuts automation you set up yourself. The same rules apply: only content you provide is processed, and OTPs are discarded the same way.</li>
+  </ul>
+
+  <h2>What Fils does with what it reads</h2>
+  <p>
+    Fils extracts the transaction details it needs to build your spending picture: the amount, the type
+    (spend, refund, transfer or payment), the merchant name where present, the date, and the last 4 digits of
+    the card or account number (used only to tell your cards apart — never the full card or account number).
+  </p>
+  <p>This information, along with anything you enter yourself (cards you add by hand, categories you assign,
+  budgets, savings goals, cash spends you type in), is stored in a database <strong>on your device only</strong>.</p>
+
+  <h2>What Fils never does</h2>
+  <ul>
+    <li><strong>No internet access.</strong> The Android app does not request the internet permission at all, so no data can be transmitted off the device, even if the app wanted to.</li>
+    <li><strong>No account or sign-in.</strong> Fils does not ask for your name, email, phone number, or any other identifying information.</li>
+    <li><strong>No advertising or analytics SDKs.</strong> Fils contains no third-party trackers, ad networks, or analytics services.</li>
+    <li><strong>No sharing or selling of data.</strong> Nothing Fils reads or stores is shared with, sold to, or processed by any third party, including the developer.</li>
+    <li><strong>No access to banking apps, banking credentials, or full card numbers.</strong> Fils only reads the text of SMS messages (or content you explicitly share with it); it never connects to your bank, requests your banking login, or has access to any banking app on your device.</li>
+  </ul>
+
+  <h2>Where your data is stored</h2>
+  <p>
+    All data lives in a local database inside the app's private storage on your phone. If you use the app's backup
+    feature, the backup file is created locally and is only moved off the device if you choose to move it yourself
+    (for example, by saving it to a cloud drive you control, or transferring it to another device). Fils itself
+    never uploads a backup anywhere.
+  </p>
+
+  <h2>App lock</h2>
+  <p>
+    Fils offers an optional app lock using your device's fingerprint or face unlock, provided by your phone's
+    operating system. Fils never receives or stores your biometric data — that is handled entirely by Android's or
+    iOS's own secure hardware.
+  </p>
+
+  <h2>Permissions Fils requests, and why</h2>
+  <table style="width:100%; border-collapse: collapse; margin: 12px 0;">
+    <tr style="text-align:left; border-bottom:1px solid #ddd;"><th style="padding:8px 4px;">Permission</th><th style="padding:8px 4px;">Why</th></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>READ_SMS</code>, <code>RECEIVE_SMS</code></td><td style="padding:8px 4px;">To read bank SMS and turn them into transactions. Fils is an SMS-based money-management tool: this is its core function, and only bank-sender messages are processed.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>POST_NOTIFICATIONS</code></td><td style="padding:8px 4px;">To show due-date reminders and spending alerts you turn on.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>USE_BIOMETRIC</code></td><td style="padding:8px 4px;">To let you lock the app with your fingerprint or face.</td></tr>
+  </table>
+
+  <h2>Deleting your data</h2>
+  <p>
+    Because everything is stored only on your device, uninstalling Fils permanently deletes all of its data. There
+    is no server-side copy to separately request deletion of.
+  </p>
+
+  <h2>Children's privacy</h2>
+  <p>Fils is a personal-finance tool intended for general audiences and is not directed at children. It does not
+  knowingly collect information from children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the updated version will be posted at this same address with a new "last updated"
+  date.</p>
+
+  <footer>
+    Fils — Cards & Expense Tracker · Contact: <a href="mailto:rjunaidtahir@gmail.com">rjunaidtahir@gmail.com</a>
+  </footer>
+</body>
+</html>

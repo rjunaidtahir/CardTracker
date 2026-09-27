@@ -1,7 +1,7 @@
 name: Copy to Google Drive
 
 # After every Android or iPhone build on main or rebuild, puts that day's project files into Google Drive:
-# "Fils & UAE Financial Tracker – Project / Versions / <date>". Needs the three GDRIVE_* secrets (README → Google Drive
+# "Fils – Project / Versions / <date>". Needs the three GDRIVE_* secrets (README → Google Drive
 # copies); without them it does nothing.
 on:
   workflow_run:
@@ -51,14 +51,14 @@ jobs:
           IVER=$(grep -oP 'MARKETING_VERSION: "\K[^"]+' ios/project.yml | head -1)
           mkdir -p out
           COMMON="shared gradle gradlew gradlew.bat build.gradle.kts settings.gradle.kts gradle.properties .github README.md ROADMAP.md .gitignore"
-          git archive --format=zip --prefix=UAE-Financial-Tracker-Android/ -o "out/Android-project-v$AVER.zip" HEAD app $COMMON
+          git archive --format=zip --prefix=Fils-Android/ -o "out/Android-project-v$AVER.zip" HEAD app $COMMON
           git archive --format=zip --prefix=Fils-iPhone/ -o "out/iPhone-Fils-project-v$IVER.zip" HEAD ios $COMMON
           # The APK built from main (published as a release by the Android build).
           if [ "$WORKFLOW" = "Build APK" ] && [ "$BRANCH" = "main" ] && [ -n "$RUN_NUMBER" ]; then
             gh release download "build-$RUN_NUMBER" --pattern '*.apk' --dir out || echo "No APK release for build $RUN_NUMBER"
           fi
           {
-            echo "Fils & UAE Financial Tracker – project files for $DAY"
+            echo "Fils – project files for $DAY"
             echo "Branch: $BRANCH   Commit: $(git rev-parse --short HEAD)"
             echo "Android app: v$AVER   iPhone app (Fils): v$IVER"
             echo

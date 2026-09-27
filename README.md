@@ -1,4 +1,4 @@
-# UAE Financial Tracker
+# Fils - Cards & Expense Tracker
 
 An Android and iPhone app that turns the SMS your UAE banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
@@ -8,29 +8,31 @@ An Android and iPhone app that turns the SMS your UAE banks already send you int
 
 ## Install
 
-### Android
+### Android: Fils
 
-The app is not on the Play Store. You install the APK file directly.
+The app is called **Fils** on the phone (package `com.uaefinancial.tracker`). It's not on the Play Store yet (see [Android release](#android-release)); for now you install the APK file directly.
 
-1. On the phone, open the **Releases** page of this repository and download the newest `UAE-Financial-Tracker-….apk`.
+1. On the phone, open the **Releases** page of this repository and download the newest `Fils-….apk`.
 2. Open the downloaded file. If Android asks, allow your browser or Files app to **install unknown apps**.
-3. Open **UAE Financial Tracker**. The setup walks you through the rest.
-4. **Android 13 and later:** Android blocks SMS access for apps installed from a file. If the SMS permission is refused or greyed out, go to **Settings → Apps → UAE Financial Tracker → ⋮ (top right) → Allow restricted settings**, then allow SMS in the app. The setup shows the same steps and a button that opens the right screen.
+3. Open **Fils**. The setup walks you through the rest.
+4. **Android 13 and later:** Android blocks SMS access for apps installed from a file. If the SMS permission is refused or greyed out, go to **Settings → Apps → Fils → ⋮ (top right) → Allow restricted settings**, then allow SMS in the app. The setup shows the same steps and a button that opens the right screen.
 
-Updates install over the old version and keep your data. Every build is signed with the same key, `app/debug.keystore`.
+Updates install over the old version and keep your data. Sideloaded builds are signed with `app/debug.keystore`; a Play Store release uses a separate upload key (see below).
 
-### iPhone
+### iPhone: Fils - Cards & Expense Tracker
 
-The iPhone app (`ios/`) is built and tested on every change. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
+On the iPhone the app is called **Fils** on the home screen (full/store name "Fils - Cards & Expense Tracker"). The code is in `ios/`. It does everything the Android app does. It goes to TestFlight and then the App Store once the Apple Developer account is set up (see [iPhone release](#iphone-release)).
 
 iPhone apps can't read SMS, so bank messages come in these ways:
 
-- **Automatic (Shortcuts).** A one-minute "Message" automation in Apple's Shortcuts app passes each bank SMS to the app's **Add Bank Message** action, which runs in the background. The app shows the steps in **More → Automatic import**.
-- **Paste.** Copy one or more messages in Messages and paste them in **More → Paste messages**, with an empty line between messages.
-- **Files.** An Android "SMS Backup & Restore" XML file, opened with the app or picked in **More → Import a messages file**.
-- **Statement PDFs.** From Mail or Files, Share → UAE Financial Tracker, or **More → Check a statement PDF**. The same statement reader as Android, including password-protected PDFs.
+- **Automatic (Shortcuts).** A one-minute "Message" automation in Apple's Shortcuts app passes each bank SMS to Fils's **Add Bank Message** action, which runs in the background. The setup steps are in **More → Automatic import (Shortcuts)**.
+- **Screenshots.** Screenshots of the Messages app are read with text recognition, including times like "Yesterday 21:05". Messages with no visible date are flagged.
+- **Share → Fils** from Mail, WhatsApp, Files or Photos: message text, screenshots, statement PDFs and backups.
+- **Paste** one or more messages.
+- **Files.** An Android "SMS Backup & Restore" XML file, or a backup from the Android app. Backups move either way between the two apps.
+- **Statement PDFs**, including password-protected ones. The same statement reader as Android.
 
-Messages from people are ignored, OTPs are never stored, and a message added twice (for example by the automation and again by a paste) is only kept once.
+Like Android, Fils has budgets, fixed payments, savings goals and recurring-payment detection. It has statements with paid and due status, due-date reminders and spending alerts. It has an app lock (PIN with Face ID), backup and restore, PDF and Excel reports, and themes, card looks and your own card pictures. There is also a home-screen widget. Data isn't synced to iCloud. OTPs and messages from people are never stored, and a message added twice is kept once.
 
 ## First run
 
@@ -110,6 +112,43 @@ To build Android locally, open the folder in Android Studio and use **Build → 
 2. Create an App Store Connect API key with the Admin role (Users and Access → Integrations → Keys).
 3. Add these repository secrets: `APPLE_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID` and `ASC_KEY_P8` (the contents of the .p8 file).
 4. Run **Actions → iPhone app to TestFlight**. It signs automatically and uploads the build. Install it on the iPhone with the TestFlight app, then submit it for review from App Store Connect.
+
+### Android release
+
+1. Create a [Google Play Developer account](https://play.google.com/console/signup) (one-time $25 fee, plus identity verification that can take a day or two).
+2. In Play Console, create the app: title **Fils - Cards & Expense Tracker** (exactly 30 characters — Play's app-title field caps at 30, so this is as far as it fits), package `com.uaefinancial.tracker`. The icon, feature graphic, screenshots, descriptions, and draft answers for the content rating and Data Safety forms are all in [`store/`](store/) — see [`store/README.md`](store/README.md) and [`store/listing.md`](store/listing.md). Turn on GitHub Pages ([`store/README.md`](store/README.md) has the two settings clicks) to get a public URL for [`docs/privacy-policy.html`](docs/privacy-policy.html), and paste that into the privacy policy field.
+3. **SMS permission declaration (the step most likely to cause a rejection).** Google restricts `READ_SMS`/`RECEIVE_SMS` to a short list of approved use cases; "SMS-based money management" is one of them, but it's a manual Play review, not automatic. Under **App content → Permissions declaration**, declare the SMS permissions, pick the financial/budget-tracking use case, and record a short screen-recording showing Fils reading a bank SMS and turning it into a transaction. Keep the reading scoped to bank senders only (already true, see [How messages are read](#how-messages-are-read)) — Play explicitly disallows harvesting personal/non-financial SMS. Expect this review to take longer than the rest of the listing and to sometimes need a resubmission with clearer justification.
+4. An upload keystore (`fils-upload-key.jks`) already exists for this repo — ask Junaid for the file and its password rather than making a new one, so future updates use the same signing identity. Turn on **Play App Signing** when Play Console asks, and upload this keystore as the *upload* key.
+5. Add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 fils-upload-key.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`fils-upload`), `ANDROID_KEY_PASSWORD`.
+6. Optional, to publish straight from GitHub Actions instead of uploading the .aab by hand: in Play Console, add a service account under **Users and permissions** with the **Release manager** role, create a JSON key for it in Google Cloud Console, and add it as the `PLAY_SERVICE_ACCOUNT_JSON` repository secret.
+7. Run **Actions → Android app to Play Store**. It builds a signed `.aab`; with the service account secret set, it also uploads it to the `internal` testing track (change with the workflow's `track` input). Without that secret, download the `.aab` from the workflow's artifacts and upload it by hand in Play Console.
+8. Add internal testers in Play Console, test the release, then promote it to production when ready.
+
+## Google Drive copies
+
+After every build on `main` or `rebuild`, GitHub copies the project into Google Drive: **Fils – Project → Versions → <date>**. Each date folder holds that day's latest:
+- `Android-project-v….zip`: the Android app with the shared engine
+- `iPhone-Fils-project-v….zip`: the iPhone app with the shared engine
+- the APK, for builds from `main`
+- `Changes.txt`: what changed that day
+
+One-time setup (about 10 minutes):
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project (e.g. "Fils uploads").
+2. **APIs & Services → Library → Google Drive API → Enable.**
+3. **Google Auth Platform → Branding** (the OAuth consent screen):
+   - Choose External and enter the app name and your email.
+   - Then, under **Audience**, tap **Publish app**, so access doesn't expire after 7 days.
+4. **Clients → Create client → Web application.**
+   - Add the redirect URI `https://developers.google.com/oauthplayground`.
+   - Copy the Client ID and Client secret.
+5. In the [OAuth Playground](https://developers.google.com/oauthplayground):
+   - Open the ⚙ gear, tick **Use your own OAuth credentials**, and paste the ID and secret.
+   - In "Input your own scopes", type `https://www.googleapis.com/auth/drive.file` and tap **Authorize APIs**.
+   - Sign in and allow. If there's a warning, tap Advanced → Go to …
+   - Tap **Exchange authorization code for tokens** and copy the **Refresh token**.
+6. In the GitHub repo, go to **Settings → Secrets and variables → Actions** and add three secrets: `GDRIVE_CLIENT_ID`, `GDRIVE_CLIENT_SECRET` and `GDRIVE_REFRESH_TOKEN`.
+
+The `drive.file` permission only lets GitHub see the files it creates itself, nothing else in your Drive.
 
 ## Adding or fixing a bank format
 

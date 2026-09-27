@@ -77,6 +77,23 @@ enum DemoData {
             sender: "EmiratesNBD", receivedAt: ago(2, 14), timeKnown: true, source: "Demo"
         )
         _ = engine.addTyped("lunch 45", date: ago(1, 13))
+        // A monthly subscription (shows under Recurring payments)
+        for back in [72, 42, 12] {
+            limit -= 21.99
+            engine.ingest(
+                body: String(format: "Purchase of AED 21.99 with Credit Card ending 3944 at SPOTIFY P2F3C1, STOCKHOLM. Avl Cr. Limit is AED %.2f", limit),
+                sender: "EmiratesNBD", receivedAt: ago(back, 6), timeKnown: true, source: "Demo"
+            )
+        }
+        engine.setBudgets([1: 150_000, 2: 60_000, 5: 100_000])
+        let rent = FixedPayment(name: "Rent", amountMinor: 650_000, dayOfMonth: 1)
+        rent.categoryId = 4
+        rent.lastPaidYm = Dates.ym(Dates.today())
+        engine.addFixedPayment(rent)
+        let school = FixedPayment(name: "School fees", amountMinor: 220_000, dayOfMonth: min(28, cal.component(.day, from: now) + 4))
+        school.categoryId = 10
+        engine.addFixedPayment(school)
+        engine.addGoal(name: "Summer holiday", targetMinor: 1_000_000, savedMinor: 320_000, targetDay: Dates.plusMonths(Dates.today(), 8))
 
         for c in engine.fetchAll(Card.self) where c.last4 == "3944" {
             c.creditLimitMinor = 2_000_000

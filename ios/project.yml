@@ -1,4 +1,4 @@
-# iPhone app project. Generate the Xcode project with:  cd ios && xcodegen generate
+# iPhone app project (Fils - Cards & Expense Tracker). Generate the Xcode project with:  cd ios && xcodegen generate
 # The shared engine (../shared, Kotlin Multiplatform) is built by Gradle from the "Build the shared engine" step.
 name: UAEFinancialTracker
 options:
@@ -19,15 +19,25 @@ targets:
     platform: iOS
     sources:
       - path: UAEFinancialTracker
+    dependencies:
+      - target: FilsWidget
+      - target: FilsShare
+    entitlements:
+      path: UAEFinancialTracker/UAEFinancialTracker.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.uaefinancial.tracker]
     info:
       path: UAEFinancialTracker/Info.plist
       properties:
-        CFBundleDisplayName: UAE Financial Tracker
+        CFBundleDisplayName: Fils
+        CFBundleName: Fils
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.finance
         ITSAppUsesNonExemptEncryption: false
-        UILaunchScreen: {}
+        NSFaceIDUsageDescription: Unlock Fils with Face ID instead of your PIN.
+        UILaunchScreen:
+          UIColorName: LaunchBackground
         UIApplicationSupportsIndirectInputEvents: true
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         LSSupportsOpeningDocumentsInPlace: false
@@ -36,10 +46,18 @@ targets:
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [com.adobe.pdf]
-          - CFBundleTypeName: Messages backup
+          - CFBundleTypeName: Backup
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.zip-archive]
+          - CFBundleTypeName: Messages file
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
             LSItemContentTypes: [public.xml, public.plain-text]
+          - CFBundleTypeName: Screenshot
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.png, public.jpeg, public.heic]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.uaefinancial.tracker
@@ -55,7 +73,61 @@ targets:
         basedOnDependencyAnalysis: false
         script: |
           cd "$SRCROOT/.."
+          # Xcode doesn't pass your shell's Java: use Java 17 when it's installed.
+          if [ -z "$JAVA_HOME" ] && /usr/libexec/java_home -v 17 >/dev/null 2>&1; then export JAVA_HOME="$(/usr/libexec/java_home -v 17)"; fi
           bash ./gradlew :shared:embedAndSignAppleFrameworkForXcode --no-daemon
+  FilsWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FilsWidget
+    entitlements:
+      path: FilsWidget/FilsWidget.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.uaefinancial.tracker]
+    info:
+      path: FilsWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Fils
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.uaefinancial.tracker.widget
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
+  FilsShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: FilsShare
+    entitlements:
+      path: FilsShare/FilsShare.entitlements
+      properties:
+        com.apple.security.application-groups: [group.com.uaefinancial.tracker]
+    info:
+      path: FilsShare/Info.plist
+      properties:
+        CFBundleDisplayName: Fils
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsImageWithMaxCount: 20
+              NSExtensionActivationSupportsFileWithMaxCount: 5
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.uaefinancial.tracker.share
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   UAEFinancialTrackerTests:
     type: bundle.unit-test
     platform: iOS

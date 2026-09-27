@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">UAE Financial Tracker</string>
+    <string name="app_name">Fils</string>
     <string name="widget_description">This month\'s spending and the next card payment due</string>
     <string name="widget_title_default">Spent this month</string>
     <string name="widget_amount_default">AED 0.00</string>

@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
 
       - uses: actions/setup-java@v5
         with:
@@ -39,6 +41,10 @@ jobs:
         continue-on-error: true
         run: |
           chmod +x gradlew
+          # Only when the shared engine changed (its tests also run on Android for every push).
+          if [ "${{ github.event_name }}" = "push" ] && ! git diff --name-only HEAD~1 HEAD | grep -q '^shared/'; then
+            echo "Shared engine unchanged: skipped"; exit 0
+          fi
           ./gradlew :shared:iosSimulatorArm64Test --no-daemon --continue 2>&1 | tee ios-shared.log
           exit ${PIPESTATUS[0]}
 
@@ -63,6 +69,8 @@ jobs:
           ")
           echo "Simulator: $DEST"
           echo "$DEST" > sim.txt
+          # Build like a Mac that has only Xcode (no Android SDK).
+          unset ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
           cd ios
           set +e
           xcodebuild test -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker \
@@ -76,12 +84,42 @@ jobs:
         if: steps.xcode.outcome == 'success'
         continue-on-error: true
         run: |
+          unset ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
           cd ios
           set +e
           xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Release \
             -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO > ../device.log 2>&1
           rc=$?
           grep -E "error:|\*\* BUILD" ../device.log
+          exit $rc
+
+      - name: Build with Xcode 16.2 (the newest Xcode for macOS Sonoma / Intel Macs)
+        id: xcode162
+        if: steps.xcode.outcome == 'success'
+        continue-on-error: true
+        run: |
+          ls -d /Applications/Xcode_16.2*.app || { echo "::warning title=Xcode 16.2::Not on this runner"; exit 0; }
+          export DEVELOPER_DIR=/Applications/Xcode_16.2.app/Contents/Developer
+          unset ANDROID_HOME ANDROID_SDK_ROOT ANDROID_NDK_HOME
+          rm -rf shared/build/xcode-frameworks shared/build/bin
+          cd ios
+          set +e
+          build162() {
+            xcodebuild build -project UAEFinancialTracker.xcodeproj -scheme UAEFinancialTracker -configuration Debug \
+              -sdk iphoneos -arch arm64 -derivedDataPath ../dd162 CODE_SIGNING_ALLOWED=NO > ../xcode162.log 2>&1
+          }
+          # Xcode 16.2 needs its own iOS 18.2 platform (the runner only has newer ones); asset catalogs need it too.
+          xcodebuild -downloadPlatform iOS -buildVersion 18.2 > ../download162.log 2>&1 || true
+          echo "::notice title=Xcode 16.2 platform::$(tail -2 ../download162.log | tr '\n' ' ')"
+          build162
+          rc=$?
+          if [ $rc -ne 0 ] && grep -q "Unable to find a destination\|is not installed" ../xcode162.log; then
+            echo "Downloading the iOS platform for Xcode 16.2"
+            xcodebuild -downloadPlatform iOS 2>&1 | tail -3
+            build162
+            rc=$?
+          fi
+          grep -E "error:|\*\* BUILD" ../xcode162.log | sed 's/^/[Xcode 16.2] /'
           exit $rc
 
       - name: Screenshots with sample data
@@ -103,16 +141,22 @@ jobs:
             sleep 7
             xcrun simctl io "$DEST" screenshot "shots/$name.png" > /dev/null
           }
-          shot 1-home -tab home
-          shot 2-activity -tab activity
-          shot 3-cards -tab cards
-          shot 4-more -tab more
-          shot 5-review -tab home -screen review
-          shot 6-automation -tab more -screen automation
-          shot 7-welcome -onboarding YES
+          shot 01-home -tab home
+          shot 02-activity -tab activity
+          shot 03-cards -tab cards
+          shot 04-more -tab more
+          shot 05-card-detail -tab cards -screen card
+          shot 06-fixed -tab home -screen fixed
+          shot 07-review -tab home -screen review
+          shot 08-automation -tab more -screen automation -sharedAutomation YES
+          shot 08b-automation-older-ios -tab more -screen automation
+          shot 09-statement -tab more -screen statement
+          shot 10-notifications -tab more -screen notifications
+          shot 11-welcome -onboarding YES
+          shot 12-locked -locked YES
           xcrun simctl ui "$DEST" appearance dark
-          shot 8-home-dark -tab home
-          shot 9-cards-dark -tab cards
+          shot 13-home-dark -tab home
+          shot 14-cards-dark -tab cards
           ls -la shots
 
       - name: Publish screenshots (branch ios-screenshots)
@@ -140,5 +184,5 @@ jobs:
             shared/build/reports/tests/
 
       - name: Fail if anything failed
-        if: steps.shared.outcome != 'success' || steps.xcode.outcome != 'success' || steps.device.outcome == 'failure'
+        if: steps.shared.outcome != 'success' || steps.xcode.outcome != 'success' || steps.device.outcome == 'failure' || steps.xcode162.outcome == 'failure'
         run: exit 1
