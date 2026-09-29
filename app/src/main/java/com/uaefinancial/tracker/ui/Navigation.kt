@@ -20,7 +20,7 @@ sealed interface Route {
     data class Home(val tab: Tab) : Route
     /** Card profile: limit, statement/due day, reminders, utilisation, statement status, payments. */
     data class CardDetail(val cardKey: String) : Route
-    /** Editable AED exchange rates. */
+    /** Editable exchange rates (in your home currency). */
     data object Rates : Route
     /** Fixed monthly payments you add by hand. */
     data object FixedPayments : Route

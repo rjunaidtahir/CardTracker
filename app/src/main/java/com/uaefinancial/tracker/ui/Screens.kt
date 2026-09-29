@@ -108,10 +108,23 @@ import java.util.Locale
 
 // DecimalFormat isn't thread-safe and fmtMoney is also used by the widget and reminder worker.
 private val moneyFmt = ThreadLocal.withInitial { DecimalFormat("#,##0.00", DecimalFormatSymbols(Locale.ENGLISH)) }
-fun fmtMoney(minor: Long, currency: String = "AED") = "$currency ${moneyFmt.get()!!.format(Money.fromMinor(minor).toJava())}"
+private val wholeFmt = ThreadLocal.withInitial { DecimalFormat("#,##0", DecimalFormatSymbols(Locale.ENGLISH)) }
 
-/** 1,234.56 without a currency. */
-fun fmtAmount(minor: Long): String = moneyFmt.get()!!.format(Money.fromMinor(minor).toJava())
+/**
+ * Your home currency, as the screens see it: every amount is totalled and shown in it. Reading it in a screen redraws
+ * the screen when you change it (More → Home currency).
+ */
+object Home {
+    var code: String by androidx.compose.runtime.mutableStateOf(com.uaefinancial.tracker.parser.SmsParser.homeCurrency)
+}
+
+fun fmtMoney(minor: Long, currency: String = Home.code) = "$currency ${fmtAmount(minor, currency)}"
+
+/** 1,234.56 without a currency (whole numbers for currencies without cents, like JPY or IDR). */
+fun fmtAmount(minor: Long, currency: String = Home.code): String {
+    val f = if (currency in com.uaefinancial.tracker.parser.Currencies.noDecimals) wholeFmt else moneyFmt
+    return f.get()!!.format(Money.fromMinor(minor).toJava())
+}
 
 private val dateTimeFmt = DateTimeFormatter.ofPattern("d MMM, HH:mm", Locale.ENGLISH)
 val dateFmt: DateTimeFormatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH)
@@ -444,11 +457,11 @@ private fun TransactionRow(
                     out -> Ink.text
                     else -> Ink.green
                 }
-                // AED amounts without the "AED" prefix (everything is AED unless shown), so the row stays on one line.
-                val amountText = if (t.currency == "AED") fmtAmount(t.amountMinor) else fmtMoney(t.amountMinor, t.currency)
+                // Home-currency amounts without the currency (everything is in it unless shown), so the row stays on one line.
+                val amountText = if (t.currency == Home.code) fmtAmount(t.amountMinor) else fmtMoney(t.amountMinor, t.currency)
                 Text((if (out) "−" else "+") + amountText, color = amtColor, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
                 Text(
-                    if (t.currency != "AED") (t.amountAedMinor?.let { "≈ " + fmtMoney(it) } ?: "no AED rate")
+                    if (t.currency != Home.code) (t.amountAedMinor?.let { "≈ " + fmtMoney(it) } ?: "no rate")
                     else Instant.ofEpochMilli(t.timestamp).atZone(ZoneId.systemDefault()).format(timeFmt),
                     style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp),
                     color = Ink.faint,
@@ -1027,7 +1040,7 @@ fun CardDetailScreen(
                 OutlinedTextField(nickname, { nickname = it }, label = { Text("Nickname (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 if (c.cardType == CardTypes.CREDIT) {
                     OutlinedTextField(
-                        limit, { limit = it }, label = { Text("Credit limit (AED)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        limit, { limit = it }, label = { Text("Credit limit (${Home.code})") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

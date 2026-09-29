@@ -123,6 +123,17 @@ class Prefs(context: Context) {
         get() = sp.getInt("engine_version", 0)
         set(v) { sp.edit { putInt("engine_version", v) } }
 
+    // --- home currency and region
+    /** Your home currency (ISO code) if chosen or set once; null = not set yet (taken from the phone's region). */
+    var homeCurrency: String?
+        get() = sp.getString("home_currency", null)
+        set(v) { sp.edit { if (v == null) remove("home_currency") else putString("home_currency", v) } }
+
+    /** The country (ISO 3166 alpha-2) whose date style the app reads ("US" writes the month first); null = not set yet. */
+    var dateRegion: String?
+        get() = sp.getString("date_region", null)
+        set(v) { sp.edit { if (v == null) remove("date_region") else putString("date_region", v) } }
+
     private companion object {
         const val KEY_LAST_SYNC = "last_sync_at"
         const val KEY_LIVE = "live_listening"

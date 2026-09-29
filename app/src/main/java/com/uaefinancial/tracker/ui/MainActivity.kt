@@ -424,7 +424,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     },
                     onDelete = { vm.deleteCard(route.cardKey) { nav.back() } },
                 )
-                Route.Rates -> RatesScreen(rates, onSave = { c, r -> vm.setRate(c, r) })
+                Route.Rates -> RatesScreen(rates, inHome = { vm.rateInHome(it) }, onSave = { c, r -> vm.setRate(c, r) })
                 Route.FixedPayments -> FixedPaymentsScreen(vm)
                 is Route.StatementCheck -> StatementCheckScreen(vm)
                 Route.Review -> ReviewScreen(vm, onShare = {

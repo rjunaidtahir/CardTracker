@@ -29,7 +29,9 @@ class TrackerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         com.uaefinancial.tracker.ui.AppThemes.current = com.uaefinancial.tracker.ui.AppThemes.byId(prefs.themeId)
-        // Senders you added must be known before any SMS is looked at (the receiver can start the app cold).
+        // Home currency, date style and time zone, and the senders you added, must be known before any SMS is looked at
+        // (the receiver can start the app cold).
+        com.uaefinancial.tracker.data.Region.apply(this, prefs)
         SmsParser.setCustomSenders(prefs.senderCache)
         SmsParser.setExcludedBanks(prefs.excludedBanks)
         repo.onSendersChanged = { prefs.senderCache = it }

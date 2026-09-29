@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountBalance
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.CurrencyExchange
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EventRepeat
 import androidx.compose.material.icons.filled.ExpandLess
@@ -102,7 +104,9 @@ fun MoreScreen(
     var settingPin by remember { mutableStateOf(false) }
     var confirmImport by remember { mutableStateOf(false) }
     var confirmReparse by remember { mutableStateOf(false) }
+    var pickHome by remember { mutableStateOf(false) }
 
+    if (pickHome) HomeCurrencyDialog(current = Home.code, onPick = { pickHome = false; if (it != Home.code) vm.setHomeCurrency(it) }, onDismiss = { pickHome = false })
     if (settingPin) SetPinDialog(onSet = { pin -> if (vm.enableLock(pin)) settingPin = false }, onDismiss = { settingPin = false })
     if (confirmImport) {
         AlertDialog(
@@ -134,7 +138,8 @@ fun MoreScreen(
                 MenuRow(Icons.Filled.EventRepeat, "Fixed payments", "Rent, fees, loans without SMS: reminders and totals") { onOpen(Route.FixedPayments) }
                 MenuRow(Icons.Filled.PictureAsPdf, "Check a statement PDF", "Compare a bank statement with what the app recorded") { onOpen(Route.StatementCheck(null)) }
                 MenuRow(Icons.Filled.IosShare, "Export report", "PDF or Excel (CSV) for the selected period", onClick = onExportReport)
-                MenuRow(Icons.Filled.CurrencyExchange, "Exchange rates", "Rates used to show foreign spends in AED") { onOpen(Route.Rates) }
+                MenuRow(Icons.Filled.CurrencyExchange, "Exchange rates", "Rates used to show foreign spends in ${Home.code}") { onOpen(Route.Rates) }
+                MenuRow(Icons.Filled.Payments, "Home currency", "${Home.code}: totals, budgets and reports are in it") { pickHome = true }
             }
         }
         // ---- messages
@@ -336,7 +341,7 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
     var loaded by remember { mutableStateOf(false) }
     var type by remember { mutableStateOf(TxnType.PURCHASE) }
     var amount by remember { mutableStateOf("") }
-    var currency by remember { mutableStateOf("AED") }
+    var currency by remember { mutableStateOf(Home.code) }
     var merchant by remember { mutableStateOf("") }
     var last4 by remember { mutableStateOf("") }
     var cardType by remember { mutableStateOf(CardType.CREDIT) }
@@ -654,7 +659,8 @@ private val helpItems = listOf(
         "Purchases, minus refunds and cashback. Paying off a card, transfers between your accounts and money coming in never count. " +
         "Each card has a \"Show & count\" switch: debit cards and bank accounts are off by default, so money isn't counted twice when you pay a card from your account.",
     "Foreign currency" to
-        "Spends in other currencies are shown in AED with approximate rates (marked ≈). Set your own rates in More → Exchange rates.",
+        "Spends in other currencies are also shown in your home currency with approximate rates (marked ≈). Set your own rates in " +
+            "More → Exchange rates, and your home currency in More → Home currency.",
     "Card due dates and statements" to
         "When your bank sends a statement SMS, the card shows the amount due and due date, and whether it's paid. You can also check a statement PDF " +
         "(More → Check a statement PDF) to compare it with what the app recorded and add anything missing.",
@@ -678,4 +684,49 @@ fun HelpScreen() {
             }
         }
     }
+}
+
+/** Pick your home currency: every amount is totalled and shown in it. */
+@Composable
+fun HomeCurrencyDialog(current: String, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val all = remember {
+        com.uaefinancial.tracker.parser.Currencies.rateToAed.keys.sorted().map { code ->
+            code to (runCatching { java.util.Currency.getInstance(code).getDisplayName(java.util.Locale.ENGLISH) }.getOrNull() ?: code)
+        }
+    }
+    val shown = remember(query) {
+        val q = query.trim()
+        if (q.isEmpty()) all else all.filter { (c, n) -> c.contains(q, ignoreCase = true) || n.contains(q, ignoreCase = true) }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Ink.surface,
+        title = { Text("Home currency") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Totals, budgets, alerts and reports are in this currency; other currencies are converted with the rates in " +
+                        "More → Exchange rates. Changing it reads your messages again (a \"$\" or \"Rs\" then means your currency). " +
+                        "Budgets and alert amounts keep their numbers.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 320.dp)) {
+                    items(shown, key = { it.first }) { (code, name) ->
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onPick(code) }.padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(code, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(56.dp))
+                            Text(name, modifier = Modifier.weight(1f), maxLines = 1)
+                            if (code == current) Text("✓", color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }

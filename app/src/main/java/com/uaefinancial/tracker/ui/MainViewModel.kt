@@ -384,7 +384,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun saveBudgets(texts: Map<Long, String>) = viewModelScope.launch {
-        val parsed = texts.mapValues { (_, t) -> t.replace(",", "").trim().toDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) } }
+        val parsed = texts.mapValues { (_, t) -> SmsParser.parseTyped(t)?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) } }
         repo.setBudgets(parsed)
         message.value = "Budgets saved"
     }
@@ -628,7 +628,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** kind: "big", "account", "card". Empty or 0 turns that alert off. */
     fun setAlertAmount(kind: String, text: String) {
-        val minor = text.replace(",", "").trim().ifEmpty { "0" }.toDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
+        val minor = SmsParser.parseTyped(text.ifBlank { "0" })?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
         if (minor == null || minor < 0) { message.value = "Enter an amount like 1000"; return }
         when (kind) {
             "big" -> { prefs.bigSpendMinor = minor; bigSpendMinor.value = minor }
@@ -749,7 +749,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveCardProfile(key: String, nickname: String, limitAed: String, statementDay: String, dueDay: String, reminders: Boolean) =
         viewModelScope.launch {
-            val limit = limitAed.replace(",", "").trim().toDecimalOrNull()?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
+            val limit = SmsParser.parseTyped(limitAed)?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) }
             val sd = statementDay.trim().toIntOrNull()?.takeIf { it in 1..31 }
             val dd = dueDay.trim().toIntOrNull()?.takeIf { it in 1..31 }
             repo.updateCardProfile(key, nickname, limit, sd, dd, reminders)
@@ -773,15 +773,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun deleteGoal(id: Long) = viewModelScope.launch { repo.deleteGoal(id) }
 
     // ------------------------------------------------------------------ rates
+    /** [rateText]: 1 [currency] in your home currency. */
     fun setRate(currency: String, rateText: String) = viewModelScope.launch {
-        val r = rateText.trim().toDecimalOrNull()
+        val t = rateText.trim().let { if (!it.contains('.') && it.count { c -> c == ',' } == 1) it.replace(',', '.') else it.replace(",", "") }
+        val r = runCatching { java.math.BigDecimal(t) }.getOrNull()
         if (r == null || r.signum() <= 0) {
             message.value = "Enter a rate like 3.6725"
             return@launch
         }
-        repo.setRate(currency, r)
-        message.value = "$currency rate saved; AED amounts updated"
+        val ok = runCatching { withContext(Dispatchers.IO) { repo.setRateInHome(currency, r) } }.isSuccess
+        message.value = if (ok) "$currency rate saved; ${SmsParser.homeCurrency} amounts updated" else "Couldn't save that rate"
         refreshWidget()
+    }
+
+    fun rateInHome(currency: String): String? = repo.rateInHome(currency)?.toPlainString()
+
+    /** Changes your home currency (More → Home currency): messages are read again and every amount recalculated. */
+    fun setHomeCurrency(code: String) = viewModelScope.launch {
+        busy.value = true
+        try {
+            withContext(Dispatchers.IO) { repo.setHomeCurrency(code) }
+            Home.code = SmsParser.homeCurrency
+            message.value = "Home currency: ${SmsParser.homeCurrency}. Budgets and alert amounts kept their numbers."
+            refreshWidget()
+        } catch (e: Exception) {
+            message.value = "Couldn't change the home currency: ${e.message}"
+        } finally {
+            busy.value = false
+        }
     }
 
     // ------------------------------------------------------------------ backup
@@ -904,7 +923,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Whether "apply to similar messages" can work for this reading (the Fix form enables the option then). */
     fun canLearn(sms: SmsEntity, type: TxnType?, amountText: String, merchant: String, cardLast4: String, cardType: CardType): Boolean {
-        val amount = amountText.replace(",", "").trim().toDecimalOrNull()
+        val amount = SmsParser.parseTyped(amountText)
         val minor = amount?.takeIf { it.signum() > 0 }?.let { runCatching { com.uaefinancial.tracker.parser.Money.toMinor(it) }.getOrNull() } ?: 0L
         if (type != null && minor <= 0L) return false
         return repo.canLearn(sms, type, minor, merchant, cardLast4.trim().ifEmpty { null }, cardType)
@@ -917,10 +936,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         sms: SmsEntity, type: TxnType, amountText: String, currency: String, merchant: String, cardLast4: String, cardType: CardType,
         applyToSimilar: Boolean = false,
     ) = viewModelScope.launch {
-        val amount = amountText.replace(",", "").trim().toDecimalOrNull()
+        val cur = currency.trim().uppercase().ifEmpty { SmsParser.homeCurrency }
+        if (!Regex("[A-Z]{3}").matches(cur)) { message.value = "Currency is a 3-letter code, e.g. ${SmsParser.homeCurrency} or USD"; return@launch }
+        val amount = SmsParser.parseTyped(amountText, cur)
         if (amount == null || amount.signum() <= 0) { message.value = "Enter the amount, e.g. 120.50"; return@launch }
-        val cur = currency.trim().uppercase().ifEmpty { "AED" }
-        if (!Regex("[A-Z]{3}").matches(cur)) { message.value = "Currency is a 3-letter code, e.g. AED or USD"; return@launch }
         val last4 = cardLast4.trim()
         if (last4.isNotEmpty() && !Regex("""\d{3,4}""").matches(last4)) { message.value = "Card / account: the last 4 digits, or leave it empty"; return@launch }
         val r = repo.saveFix(

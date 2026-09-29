@@ -28,7 +28,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     /** Called with sender -> bank name whenever the added senders change (the app caches them for the SMS receiver). */
     var onSendersChanged: ((Map<String, String>) -> Unit)? = null
 
-    /** Current AED rates (from the fx_rates table; defaults from BankRules.fxToAed). */
+    /** Current rates, "1 unit = x AED" (from the fx_rates table; defaults from BankRules.fxToAed). */
     @Volatile
     var rates: Map<String, Decimal> = BankRules.fxToAed
         private set
@@ -140,7 +140,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         LearnedFormats.canLearn(
             LearnedFormats.Source(
                 key = sms.dedupKey, bank = sms.bank ?: sms.sender, body = sms.body, type = type,
-                amount = if (amountMinor > 0) Money.fromMinor(amountMinor) else null, currency = "AED",
+                amount = if (amountMinor > 0) Money.fromMinor(amountMinor) else null, currency = SmsParser.homeCurrency,
                 merchant = merchant, cardLast4 = cardLast4, cardType = cardType,
             ),
         )
@@ -303,7 +303,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             )
         dao.insertTxn(entity)
         if (!reparsing) synchronized(fresh) { fresh += entity }
-        val note = if (aed == null) "No AED rate for ${t.currency}: add one in More → Exchange rates" else null
+        val note = if (aed == null) "No exchange rate for ${t.currency}: add one in More → Exchange rates" else null
         dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, note)
         return IngestOutcome.TRANSACTION
     }
@@ -506,16 +506,71 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
 
     // -------------------------------------------------------------- rates
 
-    /** Saves a rate and recalculates the AED amount of every transaction in that currency. */
+    /**
+     * Saves a rate ("1 [currency] = [rate] AED", AED being the pivot) and recalculates the home-currency amount of every
+     * transaction (a change to your home currency's own rate moves every foreign amount).
+     */
     suspend fun setRate(currency: String, rate: Decimal) = lock.withLock {
         db.withTransaction {
             dao.upsertRates(listOf(FxRateEntity(currency.uppercase(), rate.toPlainString(), System.currentTimeMillis())))
             loadRates()
-            for (t in dao.foreignTxns().filter { it.currency.equals(currency, true) }) {
-                val aed = Money.toAedMinor(Money.fromMinor(t.amountMinor), t.currency, rates)
-                dao.setAed(t.id, aed?.first)
+            recomputeHomeAmountsLocked()
+        }
+    }
+
+    /** 1 [currency] in your home currency, from the stored rates; null if either has no rate. */
+    fun rateInHome(currency: String): java.math.BigDecimal? {
+        val home = SmsParser.homeCurrency
+        fun toAed(c: String): java.math.BigDecimal? =
+            if (c == com.uaefinancial.tracker.parser.Currencies.PIVOT) java.math.BigDecimal.ONE else rates[c]?.let { java.math.BigDecimal(it.toPlainString()) }
+        val c = toAed(currency.uppercase()) ?: return null
+        val h = toAed(home)?.takeIf { it.signum() > 0 } ?: return null
+        return c.divide(h, 6, java.math.RoundingMode.HALF_UP).stripTrailingZeros()
+    }
+
+    /**
+     * Saves "1 [currency] = [perHome] in your home currency". Stored against AED: for AED itself (when your home
+     * currency isn't AED) that means your home currency's rate.
+     */
+    suspend fun setRateInHome(currency: String, perHome: java.math.BigDecimal) {
+        val home = SmsParser.homeCurrency
+        val pivot = com.uaefinancial.tracker.parser.Currencies.PIVOT
+        val c = currency.uppercase()
+        require(perHome.signum() > 0 && c != home)
+        val (code, toAed) = when {
+            home == pivot -> c to perHome
+            c == pivot -> home to java.math.BigDecimal.ONE.divide(perHome, 10, java.math.RoundingMode.HALF_UP)
+            else -> {
+                val h = rates[home]?.let { java.math.BigDecimal(it.toPlainString()) } ?: throw IllegalStateException("No rate for $home")
+                c to perHome.multiply(h)
             }
-            Unit
+        }
+        val text = toAed.setScale(10, java.math.RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
+        setRate(code, text.toDecimalOrNull() ?: throw IllegalArgumentException(text))
+    }
+
+    /**
+     * Changes your home currency: messages are read again (a "$" or "Rs" means your currency) and every amount is
+     * recalculated in it. Budgets, goals and alert amounts keep their numbers.
+     */
+    suspend fun setHomeCurrency(code: String) {
+        val c = code.trim().uppercase()
+        require(com.uaefinancial.tracker.parser.Currencies.isCode(c)) { "Unknown currency $c" }
+        prefs?.homeCurrency = c
+        SmsParser.setHomeCurrency(c)
+        reparseAll()
+        recomputeHomeAmounts()
+    }
+
+    /** Recalculates every transaction's amount in your home currency (after it or a rate changes, or a restore). */
+    suspend fun recomputeHomeAmounts() = lock.withLock { db.withTransaction { recomputeHomeAmountsLocked() } }
+
+    private suspend fun recomputeHomeAmountsLocked() {
+        for (t in dao.allTxns()) {
+            val home = runCatching { Money.toAedMinor(Money.fromMinor(t.amountMinor), t.currency, rates) }.getOrNull()
+            if (home?.first != t.amountAedMinor || (home?.second ?: false) != t.fxEstimated) {
+                dao.setHomeAmount(t.id, home?.first, home?.second ?: false)
+            }
         }
     }
 

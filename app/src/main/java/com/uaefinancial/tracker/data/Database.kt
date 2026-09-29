@@ -80,7 +80,10 @@ data class TransactionEntity(
     /** Original amount in minor units of [currency]. */
     val amountMinor: Long,
     val currency: String,
-    /** AED equivalent in fils. Null if the currency has no rate in BankRules.fxToAed. */
+    /**
+     * The amount in your home currency, in minor units (the column keeps its original name; the app was UAE-only).
+     * Null if the currency has no rate.
+     */
     val amountAedMinor: Long?,
     val fxEstimated: Boolean,
     /** PURCHASE / REFUND / PAYMENT */
@@ -133,7 +136,10 @@ data class GoalEntity(
     val createdAt: Long,
 )
 
-/** Editable AED rates (seeded from BankRules.fxToAed). Stored as text to keep BigDecimal precision. */
+/**
+ * Editable exchange rates, as "1 unit = x AED" (AED is the pivot whatever your home currency is; seeded from
+ * BankRules.fxToAed). Stored as text to keep BigDecimal precision.
+ */
 @Entity(tableName = "fx_rates")
 data class FxRateEntity(
     @PrimaryKey val currency: String,
@@ -507,11 +513,9 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertRates(r: List<FxRateEntity>)
 
-    @Query("SELECT * FROM transactions WHERE currency != 'AED'")
-    suspend fun foreignTxns(): List<TransactionEntity>
-
-    @Query("UPDATE transactions SET amountAedMinor = :aedMinor, fxEstimated = 1 WHERE id = :id")
-    suspend fun setAed(id: Long, aedMinor: Long?)
+    /** Sets a transaction's amount in your home currency (and whether it is an estimate from a rate). */
+    @Query("UPDATE transactions SET amountAedMinor = :homeMinor, fxEstimated = :estimated WHERE id = :id")
+    suspend fun setHomeAmount(id: Long, homeMinor: Long?, estimated: Boolean)
 
     // --- backup
     @Query("SELECT * FROM sms ORDER BY receivedAt")

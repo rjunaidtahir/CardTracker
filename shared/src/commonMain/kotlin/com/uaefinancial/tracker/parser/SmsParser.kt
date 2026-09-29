@@ -390,6 +390,19 @@ object SmsParser {
      * decimal point ("1.234,56", "45,00", "1,234.56"). A single separator followed by exactly 3 digits is a thousands
      * separator ("1,500", "1.500"), except in 3-decimal currencies ("KWD 12.500") or after a zero ("0.500").
      */
+    /**
+     * An amount you typed ("1,234.50", "1.234,50", "45,5", "-200"), read the way [currency] writes amounts
+     * (your home currency by default). Null when it isn't an amount.
+     */
+    fun parseTyped(text: String, currency: String? = homeCurrency): Decimal? {
+        var t = text.trim().replace(" ", "").replace("\u00A0", "")
+        val negative = t.startsWith("-")
+        t = t.removePrefix("-").removePrefix("+")
+        if (t.isEmpty() || t.none { it.isDigit() } || !t.all { it.isDigit() || it == '.' || it == ',' || it == '\'' }) return null
+        val v = runCatching { parseAmount(t, currency) }.getOrNull() ?: return null
+        return if (negative) -v else v
+    }
+
     fun parseAmount(s: String, currency: String? = null): Decimal {
         var t = s.replace(" ", "").replace("\u00A0", "").replace("\u202F", "").replace("'", "").trimEnd('.')
         val lastDot = t.lastIndexOf('.')

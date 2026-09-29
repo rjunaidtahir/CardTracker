@@ -229,6 +229,8 @@ class Backup(private val db: AppDatabase, private val repo: Repository, private 
         repo.ensureDefaults()
         repo.loadLearned()
         repo.reparseAll()
+        // Typed entries keep the amount from the backup: recalculate them in this phone's home currency.
+        repo.recomputeHomeAmounts()
         return Result(sms, manual, cards)
     }
 }

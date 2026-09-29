@@ -1,6 +1,7 @@
 package com.uaefinancial.tracker.ui
 
 import com.uaefinancial.tracker.core.toDecimalOrNull
+import com.uaefinancial.tracker.parser.SmsParser
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -416,7 +417,7 @@ fun OverviewScreen(
         if (o.byCurrency.isNotEmpty()) {
             item {
                 Panel(Modifier.padding(horizontal = 16.dp)) {
-                    Text("Foreign currency (in AED)", style = MaterialTheme.typography.titleMedium)
+                    Text("Foreign currency (in ${Home.code})", style = MaterialTheme.typography.titleMedium)
                     o.byCurrency.forEach { c ->
                         Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
                             Text("${fmtMoney(c.originalMinor, c.currency)} · ${c.count} txns", modifier = Modifier.weight(1f), color = Ink.muted)
@@ -433,7 +434,8 @@ fun OverviewScreen(
 }
 
 /** AED 12.3K style for tight spaces (full amounts elsewhere). */
-fun fmtCompactMoney(minor: Long): String = if (kotlin.math.abs(minor) < 100_000_00) fmtMoney(minor).substringBeforeLast('.') else "AED " + fmtCompact(minor)
+fun fmtCompactMoney(minor: Long): String =
+    if (kotlin.math.abs(minor) < 100_000_00) fmtMoney(minor).substringBeforeLast('.') else Home.code + " " + fmtCompact(minor)
 
 @Composable
 private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Ink.text) {
@@ -559,16 +561,16 @@ private fun GoalDialog(existing: GoalEntity?, onSave: (GoalEntity) -> Unit, onDi
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true)
-                OutlinedTextField(target, { target = it }, label = { Text("Target (AED)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
-                OutlinedTextField(saved, { saved = it }, label = { Text("Saved so far (AED)") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                OutlinedTextField(target, { target = it }, label = { Text("Target (${Home.code})") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+                OutlinedTextField(saved, { saved = it }, label = { Text("Saved so far (${Home.code})") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                 OutlinedTextField(date, { date = it }, label = { Text("Target date (YYYY-MM-DD, optional)") }, singleLine = true)
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
             TextButton(onClick = {
-                val t = target.replace(",", "").toDecimalOrNull()
-                val s = saved.replace(",", "").ifBlank { "0" }.toDecimalOrNull()
+                val t = SmsParser.parseTyped(target)
+                val s = SmsParser.parseTyped(saved.ifBlank { "0" })
                 val d = date.trim().takeIf { it.isNotEmpty() }?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 when {
                     name.isBlank() -> error = "Give it a name"
@@ -594,12 +596,12 @@ private fun AmountDialog(title: String, onDone: (Long) -> Unit, onDismiss: () ->
         title = { Text(title) },
         text = {
             OutlinedTextField(
-                text, { text = it }, label = { Text("Amount (AED, use - to take out)") }, singleLine = true,
+                text, { text = it }, label = { Text("Amount (${Home.code}, use - to take out)") }, singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
             )
         },
         confirmButton = {
-            TextButton(onClick = { text.replace(",", "").trim().toDecimalOrNull()?.let { onDone(Money.toMinor(it)) } }) { Text("Add") }
+            TextButton(onClick = { SmsParser.parseTyped(text)?.let { onDone(Money.toMinor(it)) } }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
@@ -658,27 +660,37 @@ fun CategoryPickerDialog(
 
 // ================================================================ exchange rates (Phase 4)
 
+/**
+ * Exchange rates as "1 unit = x in your home currency". [inHome] turns a currency into that rate (the stored rates are
+ * against AED, which stays the app's pivot); [onSave] takes a rate in the home currency.
+ */
 @Composable
-fun RatesScreen(rates: List<FxRateEntity>, onSave: (String, String) -> Unit) {
+fun RatesScreen(rates: List<FxRateEntity>, inHome: (String) -> String?, onSave: (String, String) -> Unit) {
     var newCur by rememberSaveable { mutableStateOf("") }
     var newRate by rememberSaveable { mutableStateOf("") }
+    val home = Home.code
+    // AED is listed too when your home currency isn't AED (it's the pivot, so it has no row of its own in the table).
+    val codes = remember(rates, home) {
+        (rates.map { it.currency } + com.uaefinancial.tracker.parser.Currencies.PIVOT).distinct().filter { it != home }.sorted()
+    }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Text(
-                "1 unit of each currency in AED. Changing a rate recalculates the AED amount of every past transaction in that currency.",
+                "1 unit of each currency in $home. Changing a rate recalculates the $home amount of every past transaction.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        items(rates.filter { it.currency != "AED" }, key = { it.currency }) { r ->
-            var text by rememberSaveable(r.currency, r.rateToAed) { mutableStateOf(r.rateToAed) }
+        items(codes, key = { it }) { code ->
+            val current = remember(rates, home, code) { inHome(code) ?: "" }
+            var text by rememberSaveable(code, current) { mutableStateOf(current) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(r.currency, modifier = Modifier.width(56.dp), fontWeight = FontWeight.Medium)
+                Text(code, modifier = Modifier.width(56.dp), fontWeight = FontWeight.Medium)
                 OutlinedTextField(
                     text, { text = it }, singleLine = true, modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
-                TextButton(onClick = { onSave(r.currency, text) }, enabled = text != r.rateToAed) { Text("Save") }
+                TextButton(onClick = { onSave(code, text) }, enabled = text != current) { Text("Save") }
             }
         }
         item {
@@ -687,7 +699,7 @@ fun RatesScreen(rates: List<FxRateEntity>, onSave: (String, String) -> Unit) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(newCur, { newCur = it.uppercase().take(3) }, label = { Text("Code") }, singleLine = true, modifier = Modifier.width(96.dp))
                 OutlinedTextField(
-                    newRate, { newRate = it }, label = { Text("AED per unit") }, singleLine = true, modifier = Modifier.weight(1f),
+                    newRate, { newRate = it }, label = { Text("$home per unit") }, singleLine = true, modifier = Modifier.weight(1f),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 )
                 TextButton(onClick = { if (newCur.length == 3) { onSave(newCur, newRate); newCur = ""; newRate = "" } }) { Text("Add") }

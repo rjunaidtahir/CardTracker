@@ -757,5 +757,5 @@ object StatementReader {
         RegexOption.IGNORE_CASE,
     )
 
-    private fun fmt(minor: Long) = "AED " + Decimal.valueOf(minor, 2).toPlainString()
+    private fun fmt(minor: Long) = com.uaefinancial.tracker.parser.SmsParser.homeCurrency + " " + Decimal.valueOf(minor, 2).toPlainString()
 }

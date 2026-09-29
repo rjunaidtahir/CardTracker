@@ -117,7 +117,7 @@ fun BudgetDialog(categories: List<CategoryEntity>, limits: Map<Long, Long>, onSa
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Ink.surface,
-        title = { Text("Monthly budgets (AED)") },
+        title = { Text("Monthly budgets (${Home.code})") },
         text = {
             LazyColumn(Modifier.heightIn(max = 460.dp)) {
                 item { Text("Leave empty for no budget.", style = MaterialTheme.typography.bodySmall, color = Ink.muted) }
@@ -291,7 +291,7 @@ private fun FixedPaymentDialog(
                 item { OutlinedTextField(name, { name = it }, label = { Text("Name (e.g. Rent)") }, singleLine = true, modifier = Modifier.fillMaxWidth()) }
                 item {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(amount, { amount = it }, label = { Text("Amount (AED)") }, singleLine = true, modifier = Modifier.weight(1f),
+                        OutlinedTextField(amount, { amount = it }, label = { Text("Amount (${Home.code})") }, singleLine = true, modifier = Modifier.weight(1f),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
                         OutlinedTextField(day, { day = it.filter(Char::isDigit).take(2) }, label = { Text("Day") }, singleLine = true, modifier = Modifier.width(80.dp),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
@@ -328,7 +328,7 @@ private fun FixedPaymentDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                val a = amount.replace(",", "").trim().toDecimalOrNull()
+                val a = com.uaefinancial.tracker.parser.SmsParser.parseTyped(amount)
                 val d = day.toIntOrNull()
                 when {
                     name.isBlank() -> error = "Give it a name"
@@ -406,9 +406,9 @@ fun AlertsSettings(vm: MainViewModel, onToggle: (Boolean) -> Unit) {
             Switch(on, onToggle)
         }
         if (on) {
-            AmountSetting("Big spend at or above (AED)", big) { vm.setAlertAmount("big", it) }
-            AmountSetting("Account balance below (AED)", acc) { vm.setAlertAmount("account", it) }
-            AmountSetting("Card available limit below (AED)", card) { vm.setAlertAmount("card", it) }
+            AmountSetting("Big spend at or above (${Home.code})", big) { vm.setAlertAmount("big", it) }
+            AmountSetting("Account balance below (${Home.code})", acc) { vm.setAlertAmount("account", it) }
+            AmountSetting("Card available limit below (${Home.code})", card) { vm.setAlertAmount("card", it) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Budget warnings (80% and 100%)", modifier = Modifier.weight(1f))
                 Switch(budgets, vm::setBudgetAlerts)

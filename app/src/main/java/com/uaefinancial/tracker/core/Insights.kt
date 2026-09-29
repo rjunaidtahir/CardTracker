@@ -63,9 +63,9 @@ object Insights {
         return (0 until months).map { i -> start.plusMonths(i.toLong()).let { MonthTotal(it, sums[it] ?: 0L) } }
     }
 
-    /** Purchases in each non-AED currency: original total and AED equivalent. */
-    fun byCurrency(txns: List<InsightTxn>, excluded: Set<String>): List<CurrencyTotal> =
-        txns.filter { counted(it, excluded) && it.type == TxnType.PURCHASE && it.currency != "AED" }
+    /** Purchases in each currency other than [home]: original total and the [home] equivalent. */
+    fun byCurrency(txns: List<InsightTxn>, excluded: Set<String>, home: String = com.uaefinancial.tracker.parser.SmsParser.homeCurrency): List<CurrencyTotal> =
+        txns.filter { counted(it, excluded) && it.type == TxnType.PURCHASE && it.currency != home }
             .groupBy { it.currency }
             .map { (c, l) -> CurrencyTotal(c, l.sumOf { it.amountMinor }, l.sumOf { it.amountAedMinor ?: 0L }, l.size) }
             .sortedByDescending { it.aedMinor }

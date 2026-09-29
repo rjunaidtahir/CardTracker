@@ -100,23 +100,24 @@ object ReportBuilder {
         val sb = StringBuilder()
         fun row(vararg v: String?) { sb.append(v.joinToString(",") { Csv.escape(it) }).append("\r\n") }
         fun aed(m: Long) = Money.fromMinor(m).toPlainString()
+        val home = com.uaefinancial.tracker.parser.SmsParser.homeCurrency
         row(d.title); row("Period", d.periodLabel); row("Generated", d.generated)
-        row("Total spent (AED)", aed(d.spentMinor))
+        row("Total spent ($home)", aed(d.spentMinor))
         d.previousLabel?.let { row("Previous period", it, aed(d.previousMinor)) }
-        row("Money in (AED)", aed(d.moneyInMinor)); row("Spends", d.txnCount.toString()); row("Average per day (AED)", aed(d.avgPerDayMinor))
+        row("Money in ($home)", aed(d.moneyInMinor)); row("Spends", d.txnCount.toString()); row("Average per day ($home)", aed(d.avgPerDayMinor))
         row()
-        row("Category", "Amount (AED)", "Share %")
+        row("Category", "Amount ($home)", "Share %")
         d.categories.forEach { row(it.label, aed(it.amountMinor), it.share.toString()) }
         row()
         if (d.budgets.isNotEmpty()) {
-            row("Budget (this month)", "Spent (AED)", "Limit (AED)", "Used %")
+            row("Budget (this month)", "Spent ($home)", "Limit ($home)", "Used %")
             d.budgets.forEach { (n, b) -> row(n, aed(b.spentMinor), aed(b.limitMinor), b.percent.toString()) }
             row()
         }
-        row("Card", "Spent (AED)")
+        row("Card", "Spent ($home)")
         d.cards.forEach { row(it.label, aed(it.amountMinor)) }
         row()
-        row("Date", "Merchant", "Category", "Card", "Type", "Amount", "Amount (AED)")
+        row("Date", "Merchant", "Category", "Card", "Type", "Amount", "Amount ($home)")
         d.txns.forEach { row(it.date, it.merchant, it.category, it.card, it.type, it.amount, it.aedMinor?.let { a -> aed(a) }) }
         return sb.toString()
     }
