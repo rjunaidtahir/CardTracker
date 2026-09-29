@@ -692,6 +692,7 @@ object BankRules {
     val globalIgnore: List<IgnoreRule> = listOf(
         IgnoreRule("OTP", """\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN\s+is)\b""", store = false),
         IgnoreRule("Declined transaction", """\b(declined|unsuccessful|was not successful|could not be completed|has failed|have failed)\b"""),
+        IgnoreRule("Declined transaction", SmartParser.NOT_DONE_INTL), // rechazada, recusada, refusée, abgelehnt, مرفوضة …
         IgnoreRule("Approval request", """\btap to approve\b|\bSecurePass\b|\bapprove it\b"""),
         IgnoreRule("Payment reminder", """Payment for .{0,40}card ending \d{4} is due"""),
         IgnoreRule(
