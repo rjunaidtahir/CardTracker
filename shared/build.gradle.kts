@@ -40,7 +40,7 @@ kotlin {
 if (withAndroid) {
     extensions.configure<com.android.build.gradle.LibraryExtension>("android") {
         namespace = "com.uaefinancial.tracker.shared"
-        compileSdk = 35
+        compileSdk = 36
         defaultConfig { minSdk = 26 }
         compileOptions {
             sourceCompatibility = JavaVersion.VERSION_17

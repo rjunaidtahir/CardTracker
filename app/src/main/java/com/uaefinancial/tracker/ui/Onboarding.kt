@@ -102,9 +102,10 @@ fun OnboardingFlow(
                         Panel(Modifier.fillMaxWidth()) {
                             Text("Android didn't allow it", style = MaterialTheme.typography.titleSmall)
                             Text(
-                                "For apps installed from a file, Android 13 and later block SMS access until you allow it:\n\n" +
-                                    "1. Tap Open app settings below.\n2. Tap ⋮ (top right) → Allow restricted settings.\n" +
-                                    "3. Come back here and tap Allow SMS again.",
+                                "1. Tap Open app settings below.\n2. Tap Permissions → SMS → Allow.\n" +
+                                    "3. Come back here and tap Allow SMS again.\n\n" +
+                                    "If SMS is greyed out or marked restricted (Android 13 and later do this for apps installed from a file), " +
+                                    "first tap ⋮ (top right) → Allow restricted settings.",
                                 style = MaterialTheme.typography.bodyMedium, color = Ink.muted, modifier = Modifier.padding(top = 6.dp),
                             )
                             OutlinedButton(

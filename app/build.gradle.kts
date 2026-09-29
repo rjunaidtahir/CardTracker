@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.uaefinancial.tracker"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         // Deliberately different from `namespace` above: this is the Play Store / installed-app
@@ -17,7 +17,7 @@ android {
         // renaming it would mean touching the entire source tree for zero user-facing benefit.
         applicationId = "com.filsspend.tracker"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         // versionCode must strictly increase for Android to treat a new APK as an update to an
         // installed one — otherwise it silently refuses to install and the old app just stays put.
         // CI passes the run number (always increasing) via ANDROID_VERSION_CODE; local builds fall

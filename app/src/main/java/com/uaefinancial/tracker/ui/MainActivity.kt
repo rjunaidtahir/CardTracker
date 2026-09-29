@@ -402,7 +402,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onShowBatteryTip = { showBatteryTip = true },
                         onRemindersToggle = onRemindersToggle,
                         onAlertsToggle = onAlertsToggle,
-                        onExportBackup = { exportLauncher.launch("financial-tracker-backup-${java.time.LocalDate.now()}.zip") },
+                        onExportBackup = { exportLauncher.launch("fils-backup-${java.time.LocalDate.now()}.zip") },
                         onImportBackup = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
                         onExportReport = { showReport = true },
                     )
