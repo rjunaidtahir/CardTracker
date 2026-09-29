@@ -26,7 +26,7 @@
 </head>
 <body>
   <h1>Privacy Policy — Fils</h1>
-  <div class="updated">Last updated: 27 September 2026</div>
+  <div class="updated">Last updated: 29 September 2026</div>
 
   <div class="callout">
     <strong>In short:</strong> Fils reads your bank's SMS messages, on your phone, to show you your own spending.
@@ -76,6 +76,11 @@
     (for example, by saving it to a cloud drive you control, or transferring it to another device). Fils itself
     never uploads a backup anywhere.
   </p>
+  <p>
+    The same applies to everything else that can leave the app: PDF and Excel reports you export, and the "share"
+    buttons (for example, sharing a statement's extracted text, or a bank message the app couldn't read). These only
+    happen when you tap them, and the content goes only to the app you pick in your phone's share menu.
+  </p>
 
   <h2>App lock</h2>
   <p>
@@ -89,7 +94,8 @@
     <tr style="text-align:left; border-bottom:1px solid #ddd;"><th style="padding:8px 4px;">Permission</th><th style="padding:8px 4px;">Why</th></tr>
     <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>READ_SMS</code>, <code>RECEIVE_SMS</code></td><td style="padding:8px 4px;">To read bank SMS and turn them into transactions. Fils is an SMS-based money-management tool: this is its core function, and only bank-sender messages are processed.</td></tr>
     <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>POST_NOTIFICATIONS</code></td><td style="padding:8px 4px;">To show due-date reminders and spending alerts you turn on.</td></tr>
-    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>USE_BIOMETRIC</code></td><td style="padding:8px 4px;">To let you lock the app with your fingerprint or face.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>USE_BIOMETRIC</code> (<code>USE_FINGERPRINT</code> on older Android versions)</td><td style="padding:8px 4px;">To let you lock the app with your fingerprint or face.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>RECEIVE_BOOT_COMPLETED</code>, <code>WAKE_LOCK</code>, <code>FOREGROUND_SERVICE</code>, <code>ACCESS_NETWORK_STATE</code></td><td style="padding:8px 4px;">Added automatically by Android's standard background-task library (WorkManager) so scheduled work such as due-date reminders keeps running, including after the phone restarts. <code>ACCESS_NETWORK_STATE</code> only lets the system check whether the phone is online — it does not let Fils use the internet.</td></tr>
   </table>
 
   <h2>Deleting your data</h2>

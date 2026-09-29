@@ -51,19 +51,31 @@ Fils is a personal finance tool for people who want to understand their spending
 ## Category
 Finance
 
-## Content rating questionnaire — answers to have ready
-- Does the app share user data with third parties? No
-- Does the app collect user data? Yes — financial info (transaction amounts, merchant names, last 4 digits of card numbers), processed and stored locally only, never transmitted
-- Violence / sexual content / gambling etc: None — answer "No" throughout
-- Target audience: not designed for children; select an adult/general audience
+## App content declarations (Play Console → Policy → App content)
 
-## Data Safety form — key answers
-- Does your app collect or share any of the required user data types? Collects, does not share
-- Financial info: Purchase history / other financial info — collected, NOT shared, NOT required, processed on-device only, deleted by uninstalling the app (there's no separate cloud copy to worry about)
-- Personal info (name, email, etc.): Not collected
-- Location: Not collected
-- Is data encrypted in transit? N/A — no data leaves the device
-- Can users request data deletion? Yes — uninstalling the app deletes all data (nothing is kept anywhere else)
+Every one of these must be completed before any release (including testing tracks) can go out. Answers below
+were checked against Google's own definitions on 29 September 2026.
+
+- **Privacy policy:** `https://rjunaidtahir.github.io/fils-privacy/`
+- **Ads:** No, the app does not contain ads.
+- **App access:** All functionality is available without special access (no account, no login).
+- **Content rating (IARC questionnaire):** category "All other app types" (utility/productivity). Answer **No** to
+  every content question — violence, fear, sexuality, language, controlled substances, gambling, crude humour —
+  and **No** to user-to-user interaction, sharing the user's location, digital purchases, and unrestricted web access.
+- **Target audience and content:** 18 and over only. Not designed to appeal to children.
+- **Data safety:** "Does your app collect or share any of the required user data types?" → **No.**
+  Why this is correct (Google's definitions, Play Console Help answer 10787469):
+  - *"'Collect' means transmitting data from your app off a user's device."* Fils never does — it has no internet permission.
+  - *"User data accessed by your app that is only processed locally on the user's device and not sent off device
+    does not need to be disclosed."*
+  - Backups, PDF/Excel reports and the "share text" buttons only leave the phone when the user taps them and picks
+    the destination app — Google exempts *"a specific user-initiated action, where the user reasonably expects the data to be shared."*
+  - The store listing will then show "No data collected · No data shared".
+- **Financial features:** "My app doesn't provide any financial features." Fils offers no loans, payments, banking,
+  trading, insurance, credit reporting or financial advice — it only shows the user's own bank SMS, on the device.
+- **Advertising ID:** No — the app doesn't use it (no `AD_ID` permission in the built APK, verified).
+- **Government app / Health app / News app:** No / none / No.
+- **Sensitive permissions → SMS and Call Log:** see the declaration section below.
 
 ## Privacy policy URL
 Already live (see `store/README.md` for how it's hosted) — paste this into Play Console:
