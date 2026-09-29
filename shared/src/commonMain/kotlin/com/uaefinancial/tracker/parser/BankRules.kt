@@ -663,54 +663,10 @@ object BankRules {
         IgnoreRule("Limit change", """\blimit\b.*\b(has been|was)\s+(changed|updated|increased|decreased|set)\b|\blimit change\b"""),
     )
 
-    /**
-     * Approximate AED rates for foreign-currency SMS (bank SMS rarely include the AED
-     * equivalent). Conversions using these are flagged as estimates. Edit freely.
-     */
-    val fxToAed: Map<String, Decimal> = mapOf(
-        "AED" to "1",
-        "USD" to "3.6725",
-        "EUR" to "4.00",
-        "GBP" to "4.70",
-        "SAR" to "0.979",
-        "QAR" to "1.009",
-        "OMR" to "9.54",
-        "BHD" to "9.74",
-        "KWD" to "12.00",
-        "INR" to "0.042",
-        "PKR" to "0.013",
-        "TRY" to "0.09",
-        "THB" to "0.11",
-        "JPY" to "0.024",
-        "CHF" to "4.30",
-        "CAD" to "2.65",
-        "AUD" to "2.40",
-        "EGP" to "0.075",
-        "AZN" to "2.16",
-        "LKR" to "0.012",
-        "BDT" to "0.030",
-        "NPR" to "0.027",
-        "PHP" to "0.064",
-        "IDR" to "0.00022",
-        "MYR" to "0.87",
-        "SGD" to "2.85",
-        "HKD" to "0.47",
-        "CNY" to "0.51",
-        "KRW" to "0.0026",
-        "ZAR" to "0.20",
-        "NZD" to "2.15",
-        "SEK" to "0.38",
-        "NOK" to "0.35",
-        "DKK" to "0.57",
-        "JOD" to "5.18",
-        "LBP" to "0.000041",
-        "MAD" to "0.39",
-        "GEL" to "1.35",
-        "RUB" to "0.040",
-        "MXN" to "0.19",
-        "BRL" to "0.66",
-    ).mapValues { Decimal(it.value) }
+    /** Approximate rates, "1 unit = x AED", for every currency the app knows (see Currencies.kt). Edit freely in the app. */
+    val fxToAed: Map<String, Decimal> get() = Currencies.rateToAed
 
+    /** Internal pivot of the rate table. Amounts are shown in your home currency (SmsParser.homeCurrency). */
     const val BASE_CURRENCY = "AED"
 
     /** Other ways UAE banks write dirhams in SMS ("Dhs 120.00", "DH 45"). Treated as AED. */

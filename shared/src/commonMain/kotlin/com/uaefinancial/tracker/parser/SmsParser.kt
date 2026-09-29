@@ -27,8 +27,19 @@ object SmsParser {
     internal const val WEEKDAY = """(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+)?"""
     internal const val TIME = """\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]\.?M\b)?"""
     private const val WORDDATE = """[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}[A-Za-z]{3}\d{2,4}"""
-    /** 1,234.56 / 90.90 / 4300 / .07 */
-    internal const val AMT = """(?:\d[\d,]*(?:\.\d+)?|\.\d+)"""
+    /**
+     * An amount as banks around the world write it (the value is worked out by [parseAmount]):
+     * 1,234.56 · 12,34,567.89 (India) · 1.234,56 (Europe) · 1'234.50 (Switzerland) · 1 234,56 (France, Poland) ·
+     * 12.500 (Kuwait, 3 decimals) · 4300 · 90.90 · 45,00 · .07
+     */
+    internal const val AMT =
+        """(?:\d{1,3}(?:,\d{2,3})*,\d{3}(?:\.\d{1,3})?""" +          // 1,234 / 1,234.56 / 12,34,567.89
+            """|\d{1,3}(?:\.\d{3})+(?:,\d{1,3})?""" +                  // 1.234 / 1.234,56 / 12.500 (KWD)
+            """|\d{1,3}(?:'\d{3})+(?:\.\d{1,2})?""" +                  // 1'234.50
+            """|\d{1,3}(?:[\u00A0\u202F]\d{3})+(?:,\d{1,2})?""" +      // 1 234,56 with a non-breaking space
+            """|\d{1,3}(?: \d{3})+,\d{2}""" +                           // 1 234,56 with a plain space (needs the decimals)
+            """|\d+(?:\.\d{1,4}|,\d{1,3})?""" +                        // 4300 / 90.90 / 45,00 / 12.500
+            """|\.\d+)"""
     /** Balances and statement totals can be negative (credit balance): AED -61.38 */
     private const val SAMT = """(?:-\s?)?$AMT"""
 
@@ -96,6 +107,19 @@ object SmsParser {
 
     fun isExcluded(bankName: String): Boolean = bankName.trim().lowercase() in excluded
 
+    /**
+     * Your home currency (ISO code): amounts are shown and totalled in it, and shared symbols ("\$", "Rs", "kr", "¥")
+     * mean it when it's one of theirs. Set by the apps from the phone's region (changeable in settings).
+     */
+    @kotlin.concurrent.Volatile
+    var homeCurrency: String = BankRules.BASE_CURRENCY
+        private set
+
+    fun setHomeCurrency(code: String) {
+        val c = code.trim().uppercase()
+        homeCurrency = if (Currencies.isCode(c)) c else BankRules.BASE_CURRENCY
+    }
+
     fun setCustomSenders(senderToBank: Map<String, String>) {
         custom = senderToBank.entries.associate { (sender, bankName) ->
             val known = compiled.firstOrNull { it.bank.name.equals(bankName, ignoreCase = true) }
@@ -143,25 +167,40 @@ object SmsParser {
         body.replace(' ', ' ').replace(Regex("""[ \t]*\r?\n[ \t]*"""), " ").trim()
 
     /**
-     * Currency codes the app understands, plus the "Dhs" ways of writing AED. Codes must be upper case (so words
-     * like "try 2 times" aren't Turkish lira); the dirham spellings match in any case.
+     * Every way of writing a currency the app understands (Currencies.kt): ISO codes, letter abbreviations and symbols.
+     * Codes must be upper case (so words like "try 2 times" aren't Turkish lira); the dirham and rupee spellings match
+     * in any case.
      */
-    internal val currencyAlternation: String by lazy {
-        BankRules.fxToAed.keys.sortedByDescending { it.length }.joinToString("|") + "|(?i:dirhams?|dhs?)"
+    internal val currencyAlternation: String by lazy { "$currencyWordAlternation|$currencySymbolAlternation" }
+
+    /** Codes and letter abbreviations (AED, USD, SR, KD, Rs, Dhs…): matched as whole words. */
+    internal val currencyWordAlternation: String by lazy {
+        val letters = Currencies.symbols.filter { t -> t.all { it in 'A'..'Z' || it in 'a'..'z' || it == '.' } }
+        (Currencies.rateToAed.keys + letters).sortedByDescending { it.length }.joinToString("|") { esc(it) } + "|(?i:dirhams?|dhs?|rs)"
     }
 
-    /** "Contains an amount": a known currency code next to a number (card masks like XXX3538 don't count). */
+    /** Symbols ($, €, £, ₹, US$, zł, د.إ …): not letters, so no word boundaries around them. */
+    internal val currencySymbolAlternation: String by lazy {
+        Currencies.symbols.filterNot { t -> t.all { it in 'A'..'Z' || it in 'a'..'z' || it == '.' } }
+            .sortedByDescending { it.length }.joinToString("|") { esc(it) }
+    }
+
+    private fun esc(t: String): String = buildString { for (c in t) { if (c in "\\^$.|?*+()[]{}") append('\\'); append(c) } }
+
+    /** "Contains an amount": a known currency next to a number (card masks like XXX3538 don't count). */
     private val looksFinancial by lazy {
-        val cur = currencyAlternation
-        Regex("""\b(?:$cur)\s?\.?\s?\d|\d\s?(?:$cur)\b""")
+        val w = currencyWordAlternation
+        val sy = currencySymbolAlternation
+        Regex("""(?:\b(?:$w)|(?:$sy))\s?\.?\s?\d|\d\s?(?:(?:$w)\b|(?:$sy))""")
     }
 
     fun looksFinancial(text: String): Boolean = looksFinancial.containsMatchIn(text)
 
-    /** "Dhs" / "DH" -> AED; anything else upper-cased. */
+    /** The ISO code for a currency as written ("Dhs" → AED, "US$" → USD, "\$" → your dollar or USD); unknown ones upper-cased. */
     fun normalizeCurrency(raw: String?): String {
-        val c = raw?.trim()?.uppercase().orEmpty()
-        return if (c.isEmpty() || c in BankRules.aedAliases) BankRules.BASE_CURRENCY else c
+        val c = raw?.trim().orEmpty()
+        if (c.isEmpty() || c.uppercase() in BankRules.aedAliases) return BankRules.BASE_CURRENCY
+        return Currencies.codeFor(c, homeCurrency) ?: c.uppercase()
     }
 
     fun parse(sender: String?, body: String, receivedAt: Long, zone: Int = UAE_ZONE): ParseResult {
@@ -215,8 +254,8 @@ object SmsParser {
         try { groups[name]?.value?.trim()?.takeIf { it.isNotEmpty() } } catch (_: IllegalArgumentException) { null }
 
     private fun buildTxn(bank: Bank, rule: Rule, m: MatchResult, receivedAt: Long, zone: Int): ParsedTransaction {
-        val amount = parseAmount(m.g("amount") ?: error("no amount"))
         val currency = normalizeCurrency(m.g("currency"))
+        val amount = parseAmount(m.g("amount") ?: error("no amount"), currency)
         val toLast4 = m.g("to")
         val merchant = rule.fixedMerchant
             ?: m.g("merchant")?.let { cleanMerchant(it) }
@@ -244,7 +283,7 @@ object SmsParser {
             type = rule.type,
             timestamp = ts,
             dateFromSms = dateText != null,
-            availableLimit = m.g("avail")?.let { parseAmount(it) },
+            availableLimit = m.g("avail")?.let { parseAmount(it, currency) },
             toLast4 = toLast4,
             accountNotNamed = m.g("card") == null && rule.accountNotNamed,
         )
@@ -273,7 +312,34 @@ object SmsParser {
         )
     }
 
-    fun parseAmount(s: String): Decimal = Decimal(s.replace(",", "").replace(" ", "").trimEnd('.'))
+    /**
+     * The value of an amount written in any of the ways [AMT] accepts. The last separator followed by 1-2 digits is the
+     * decimal point ("1.234,56", "45,00", "1,234.56"). A single separator followed by exactly 3 digits is a thousands
+     * separator ("1,500", "1.500"), except in 3-decimal currencies ("KWD 12.500") or after a zero ("0.500").
+     */
+    fun parseAmount(s: String, currency: String? = null): Decimal {
+        var t = s.replace(" ", "").replace("\u00A0", "").replace("\u202F", "").replace("'", "").trimEnd('.')
+        val lastDot = t.lastIndexOf('.')
+        val lastComma = t.lastIndexOf(',')
+        val threeDecimals = currency?.uppercase() in Currencies.threeDecimals
+        fun fraction(i: Int) = t.length - i - 1
+        t = when {
+            lastDot >= 0 && lastComma >= 0 ->
+                if (lastComma > lastDot) t.replace(".", "").replace(',', '.') else t.replace(",", "")
+            lastComma >= 0 -> {
+                val single = t.count { it == ',' } == 1
+                // Gulf banks write "KWD 1,250" for one thousand two hundred and fifty: a comma is never their decimal point.
+                if (single && fraction(lastComma) in 1..2) t.replace(',', '.') else t.replace(",", "")
+            }
+            lastDot >= 0 -> {
+                val single = t.count { it == '.' } == 1
+                val thousands = !single || (fraction(lastDot) == 3 && !threeDecimals && !t.startsWith("0") && !t.startsWith("."))
+                if (thousands) t.replace(".", "") else t
+            }
+            else -> t
+        }
+        return Decimal(t)
+    }
 
     private val countrySuffix = Regex("""(?:\s+(?:ARE|AE|UAE))+$""", RegexOption.IGNORE_CASE)
 
@@ -345,9 +411,23 @@ object Money {
     fun fromMinor(minor: Long): Decimal = Decimal.valueOf(minor, 2)
 
     /** Returns (AED minor units, isEstimate). Unknown currency -> null. */
-    fun toAedMinor(amount: Decimal, currency: String, rates: Map<String, Decimal> = BankRules.fxToAed): Pair<Long, Boolean>? {
-        if (currency.equals(BankRules.BASE_CURRENCY, ignoreCase = true)) return toMinor(amount) to false
-        val rate = rates[currency.uppercase()] ?: return null
-        return toMinor(amount * rate) to true
+    fun toAedMinor(amount: Decimal, currency: String, rates: Map<String, Decimal> = BankRules.fxToAed): Pair<Long, Boolean>? =
+        toHomeMinor(amount, currency, rates, SmsParser.homeCurrency)
+
+    /**
+     * [amount] in [home] (minor units) and whether it's an estimate. [rates] are "1 unit = x AED" (AED is the pivot).
+     * Same currency: exact. Home AED: amount × rate, exact decimals (as before). Otherwise through AED: an estimate
+     * anyway, so a floating-point division is fine. Unknown currency or no rate -> null.
+     */
+    fun toHomeMinor(amount: Decimal, currency: String, rates: Map<String, Decimal>, home: String): Pair<Long, Boolean>? {
+        val c = currency.uppercase()
+        val h = home.uppercase()
+        if (c == h) return toMinor(amount) to false
+        val rc = if (c == Currencies.PIVOT) Decimal.ONE else rates[c] ?: return null
+        if (h == Currencies.PIVOT) return toMinor(amount * rc) to true
+        val rh = (if (h == Currencies.PIVOT) Decimal.ONE else rates[h] ?: return null).toDouble()
+        if (rh <= 0.0) return null
+        val v = (amount * rc).toDouble() / rh
+        return kotlin.math.round(v * 100).toLong() to true
     }
 }

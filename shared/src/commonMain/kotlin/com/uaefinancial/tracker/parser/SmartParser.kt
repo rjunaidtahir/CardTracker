@@ -57,7 +57,8 @@ object SmartParser {
     private fun mentions(text: String): List<Mention> = money.findAll(text).mapNotNull { m ->
         val rawAmt = (m.groups["a1"]?.value ?: m.groups["a2"]?.value)?.replace(" ", "") ?: return@mapNotNull null
         val cur = m.groups["c1"]?.value ?: m.groups["c2"]?.value ?: return@mapNotNull null
-        val amount = runCatching { SmsParser.parseAmount(rawAmt) }.getOrNull()?.takeIf { it.abs() < MAX_AMOUNT } ?: return@mapNotNull null
+        val code = SmsParser.normalizeCurrency(cur)
+        val amount = runCatching { SmsParser.parseAmount(rawAmt, code) }.getOrNull()?.takeIf { it.abs() < MAX_AMOUNT } ?: return@mapNotNull null
         val before = text.substring(maxOf(0, m.range.first - 45), m.range.first).lowercase()
         val role = when {
             minLabel.containsMatchIn(before) -> Role.MINIMUM
@@ -66,7 +67,7 @@ object SmartParser {
             feeLabel.containsMatchIn(before) -> Role.FEE
             else -> Role.TXN
         }
-        Mention(m.range.first, m.range.last + 1, amount, SmsParser.normalizeCurrency(cur), role)
+        Mention(m.range.first, m.range.last + 1, amount, code, role)
     }.toList()
 
     // ------------------------------------------------------------ cards/accounts

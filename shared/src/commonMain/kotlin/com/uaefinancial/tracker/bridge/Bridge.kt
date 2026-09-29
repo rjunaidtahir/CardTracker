@@ -107,6 +107,16 @@ object Bridge {
 
     fun setCustomSenders(senderToBank: Map<String, String>) = SmsParser.setCustomSenders(senderToBank)
 
+    /** Your home currency: amounts are shown and totalled in it (aedMinor fields hold amounts in it). */
+    fun setHomeCurrency(code: String) = SmsParser.setHomeCurrency(code)
+    fun homeCurrency(): String = SmsParser.homeCurrency
+
+    /** The usual currency of a country (ISO 3166 code, e.g. "SA" → SAR), or null. */
+    fun currencyForRegion(countryCode: String): String? = com.uaefinancial.tracker.parser.Currencies.forRegion(countryCode)
+
+    /** Every currency code the app knows, sorted. */
+    fun knownCurrencies(): List<String> = com.uaefinancial.tracker.parser.Currencies.rateToAed.keys.sorted()
+
     /** Changes whenever the engine may read stored messages differently: re-read everything once when it changes. */
     fun engineVersion(): Int = SmsParser.ENGINE_VERSION
 

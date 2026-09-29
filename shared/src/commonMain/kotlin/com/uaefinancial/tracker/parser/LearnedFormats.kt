@@ -87,8 +87,9 @@ object LearnedFormats {
         val masked = money.replace(text) { m ->
             val rawAmt = (m.groups["a1"]?.value ?: m.groups["a2"]?.value)?.replace(" ", "")
             val cur = m.groups["c1"]?.value ?: m.groups["c2"]?.value
-            val amount = rawAmt?.let { runCatching { SmsParser.parseAmount(it) }.getOrNull() }
-            if (amount != null && cur != null) found += Money(amount.abs(), SmsParser.normalizeCurrency(cur))
+            val code = cur?.let { SmsParser.normalizeCurrency(it) }
+            val amount = rawAmt?.let { runCatching { SmsParser.parseAmount(it, code) }.getOrNull() }
+            if (amount != null && code != null) found += Money(amount.abs(), code)
             " $MONEY "
         }
         return Tokens(words(masked), found)
