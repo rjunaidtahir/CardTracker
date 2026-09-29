@@ -81,6 +81,8 @@ enum Backup {
                 keyOf[f.smsId].map { [$0, f.type, String(f.amountMinor), f.currency, f.merchant, f.cardLast4, f.cardType, ms(f.timestamp)] }
             }
         )))
+        // Fixes that also apply to similar messages (same file as Android).
+        files.append(("learned_fixes.csv", CSV.write(["dedupKey"], Settings.learnedFixKeys.sorted().map { [$0] })))
         let iso = DateFormatter()
         iso.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         iso.locale = Locale(identifier: "en_US_POSIX")
@@ -103,7 +105,7 @@ enum Backup {
     }
 
     /// The Android-style key of a message (older records get one now).
-    private static func key(for s: SmsRecord) -> String {
+    static func key(for s: SmsRecord) -> String {
         if !s.dedupKey.isEmpty { return s.dedupKey }
         return Bridge.shared.dedupKey(sender: s.sender, sentAtMillis: 0, receivedAtMillis: Engine.millis(s.receivedAt), body: s.body)
     }
@@ -239,6 +241,8 @@ enum Backup {
                 cardLast4: r["cardLast4"], cardType: r["cardType"] ?? "CREDIT", timestamp: date(r, "timestamp") ?? s.receivedAt
             ))
         }
+        let learned = (files["learned_fixes.csv"] ?? []).compactMap { $0["dedupKey"] }.filter { !$0.isEmpty }
+        if !learned.isEmpty { Settings.learnedFixKeys = Settings.learnedFixKeys.union(learned) }
         // Typed entries
         let typed = engine.fetchAll(Txn.self).filter { $0.smsId == nil }
         for r in files["manual_transactions.csv"] ?? [] {
@@ -261,6 +265,7 @@ enum Backup {
         }
         engine.save()
         engine.loadCategories()
+        engine.loadLearned()
         _ = engine.rereadAll()
         return result
     }

@@ -79,6 +79,18 @@ enum Settings {
         set { defaults.set(newValue, forKey: "dataVersion") }
     }
 
+    /// Engine version the stored messages were last read with; a newer engine re-reads everything once.
+    static var engineVersion: Int {
+        get { defaults.integer(forKey: "engineVersion") }
+        set { defaults.set(newValue, forKey: "engineVersion") }
+    }
+
+    /// Fixes (by message key) you asked the app to also apply to similar messages (Needs review → Fix).
+    static var learnedFixKeys: Set<String> {
+        get { Set(defaults.stringArray(forKey: "learnedFixKeys") ?? []) }
+        set { defaults.set(newValue.sorted(), forKey: "learnedFixKeys") }
+    }
+
     static var onboarded: Bool {
         get { defaults.bool(forKey: "onboarded") }
         set { defaults.set(newValue, forKey: "onboarded") }

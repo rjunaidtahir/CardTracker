@@ -753,7 +753,7 @@ struct ReviewView: View {
                 ContentUnavailableView("Nothing to review", systemImage: "checkmark.bubble", description: Text("Bank messages the app couldn't read appear here."))
             } else {
                 Section {
-                    Text("These bank messages mention an amount, but the app couldn't read them for sure. Tap one to say what it was (the app remembers), or swipe left to dismiss it.")
+                    Text("These bank messages mention an amount, but the app couldn't read them for sure. Tap one to say what it was (the app can do the same for similar messages), or swipe left to dismiss it.")
                         .font(.footnote).foregroundStyle(.secondary)
                     Button { sharing = true } label: { Label("Share these messages", systemImage: "square.and.arrow.up") }
                 }
@@ -803,6 +803,22 @@ struct FixView: View {
     @State private var kind = CardKind.credit
     @State private var date = Date()
     @State private var loaded = false
+    /// "Apply to similar messages": on by default; offered only when it can work for this message.
+    @State private var similar = true
+
+    private var canLearn: Bool {
+        guard let minor = MoneyText.parse(amount), minor > 0 else { return false }
+        let l4 = last4.trimmingCharacters(in: .whitespaces)
+        return model.engine.canLearn(sms, type: type, amountMinor: minor, merchant: merchant, cardLast4: l4.isEmpty ? nil : l4, cardType: kind)
+    }
+
+    private var canLearnNotTxn: Bool {
+        model.engine.canLearn(sms, type: nil, amountMinor: 0, merchant: "", cardLast4: nil, cardType: kind)
+    }
+
+    private func report(_ similarCount: Int, _ what: String) {
+        model.toast = similarCount > 0 ? "\(what) Also applied to \(similarCount) similar message\(similarCount == 1 ? "" : "s")." : what
+    }
 
     var body: some View {
         Form {
@@ -825,14 +841,25 @@ struct FixView: View {
                 DatePicker("When", selection: $date)
             }
             Section {
+                Toggle("Apply to similar messages", isOn: $similar).disabled(!canLearn && !canLearnNotTxn)
+            } footer: {
+                Text(canLearn || canLearnNotTxn
+                     ? "Other messages from this bank worded the same way (now and in future) are read like this one, with their own amount."
+                     : "Not available for this message: it's too short, or the amount isn't written in it.")
+            }
+            Section {
                 Button("Save") {
                     guard let minor = MoneyText.parse(amount) else { return }
-                    model.engine.saveFix(sms, type: type, amountMinor: minor, currency: currency, merchant: merchant, cardLast4: last4, cardType: kind, date: date)
+                    let n = model.engine.saveFix(sms, type: type, amountMinor: minor, currency: currency, merchant: merchant, cardLast4: last4, cardType: kind, date: date,
+                                                 applyToSimilar: similar && canLearn)
+                    report(n, "Saved.")
                     dismiss()
                 }
                 .disabled(MoneyText.parse(amount) == nil || currency.trimmingCharacters(in: .whitespaces).count != 3 || !(last4.isEmpty || (3...4).contains(last4.count)))
                 Button("Not a transaction", role: .destructive) {
-                    model.engine.saveFix(sms, type: nil, amountMinor: 0, currency: "AED", merchant: "", cardLast4: nil, cardType: kind, date: date)
+                    let n = model.engine.saveFix(sms, type: nil, amountMinor: 0, currency: "AED", merchant: "", cardLast4: nil, cardType: kind, date: date,
+                                                 applyToSimilar: similar && canLearnNotTxn)
+                    report(n, "Marked as not a transaction.")
                     dismiss()
                 }
             } footer: {

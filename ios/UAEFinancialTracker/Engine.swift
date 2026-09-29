@@ -22,6 +22,7 @@ final class Engine {
         self.context = context
         refreshSenders()
         loadCategories()
+        loadLearned()
     }
 
     enum Outcome: String {
@@ -66,6 +67,30 @@ final class Engine {
         var map: [String: String] = [:]
         for s in fetchAll(BankSender.self) { map[s.sender] = s.bank }
         bridge.setCustomSenders(senderToBank: map)
+    }
+
+    /// Hands the fixes you asked the app to also apply to similar messages (Needs review → Fix) to the engine.
+    func loadLearned() {
+        let keys = Settings.learnedFixKeys
+        guard !keys.isEmpty else { bridge.setLearnedFixes(fixes: []); return }
+        let fixes = Dictionary(fetchAll(SmsFix.self).map { ($0.smsId, $0) }, uniquingKeysWith: { a, _ in a })
+        var list: [LearnedFix] = []
+        for s in fetchAll(SmsRecord.self) where keys.contains(Backup.key(for: s)) {
+            guard let f = fixes[s.id] else { continue }
+            list.append(learnedFix(s, type: f.type, amountMinor: f.amountMinor, merchant: f.merchant, cardLast4: f.cardLast4, cardType: f.cardType))
+        }
+        bridge.setLearnedFixes(fixes: list)
+    }
+
+    private func learnedFix(_ s: SmsRecord, type: String, amountMinor: Int64, merchant: String, cardLast4: String?, cardType: String) -> LearnedFix {
+        LearnedFix(key: Backup.key(for: s), bank: s.bank ?? s.sender, body: s.body, type: type, amountMinor: amountMinor,
+                   currency: "AED", merchant: merchant, cardLast4: cardLast4 ?? "", cardType: cardType)
+    }
+
+    /// Whether "apply to similar messages" can work for this reading (the Fix screen offers it then).
+    func canLearn(_ sms: SmsRecord, type: TxnKind?, amountMinor: Int64, merchant: String, cardLast4: String?, cardType: CardKind) -> Bool {
+        bridge.canLearn(fix: learnedFix(sms, type: type?.rawValue ?? SmsFix.ignore, amountMinor: amountMinor, merchant: merchant,
+                                        cardLast4: cardLast4, cardType: cardType.rawValue))
     }
 
     func loadCategories() {
@@ -509,7 +534,11 @@ final class Engine {
     }
 
     /// Saves your reading of a message (Needs review → Fix) and applies it. [type] nil means "not a transaction".
-    func saveFix(_ sms: SmsRecord, type: TxnKind?, amountMinor: Int64, currency: String, merchant: String, cardLast4: String?, cardType: CardKind, date: Date) {
+    /// With [applyToSimilar], similar messages from the same bank are read the same way, now and later.
+    /// Returns how many other messages in Needs review it also read.
+    @discardableResult
+    func saveFix(_ sms: SmsRecord, type: TxnKind?, amountMinor: Int64, currency: String, merchant: String, cardLast4: String?, cardType: CardKind, date: Date,
+                 applyToSimilar: Bool = false) -> Int {
         let smsId = sms.id
         for old in (try? context.fetch(FetchDescriptor<SmsFix>(predicate: #Predicate { $0.smsId == smsId }))) ?? [] { context.delete(old) }
         let last4 = cardLast4?.trimmingCharacters(in: .whitespaces)
@@ -521,8 +550,22 @@ final class Engine {
         )
         context.insert(fix)
         apply(sms, read(sms))
+        // Remember (or forget) this fix as a template, then read this bank's other unread messages again.
+        let key = Backup.key(for: sms)
+        let wanted = applyToSimilar && canLearn(sms, type: type, amountMinor: amountMinor, merchant: fix.merchant, cardLast4: fix.cardLast4, cardType: cardType)
+        var keys = Settings.learnedFixKeys
+        if wanted { keys.insert(key) } else { keys.remove(key) }
+        Settings.learnedFixKeys = keys
+        loadLearned()
+        var similar = 0
+        if wanted {
+            let bank = sms.bank ?? sms.sender
+            let others = fetchAll(SmsRecord.self).filter { $0.status == SmsStatus.failed && $0.id != smsId && ($0.bank ?? $0.sender) == bank }
+            for o in others where apply(o, read(o)) != .failed { similar += 1 }
+        }
         save()
         changed()
+        return similar
     }
 
     /// What the smart reader makes of a message it couldn't read for sure (pre-fills the Fix form).
@@ -1118,9 +1161,12 @@ final class Engine {
     /// cards, so data from earlier versions is corrected too.
     func upgradeDataIfNeeded() {
         let current = 2
-        guard Settings.dataVersion < current else { return }
+        // A newer reading engine re-reads too, so its fixes reach messages already stored (and stored one-time codes go).
+        let engineVersion = Int(bridge.engineVersion())
+        guard Settings.dataVersion < current || Settings.engineVersion != engineVersion else { return }
         if !fetchAll(SmsRecord.self).isEmpty { _ = rereadAll() } else { tidyCards() }
         Settings.dataVersion = current
+        Settings.engineVersion = engineVersion
     }
 
     // MARK: - Helpers
