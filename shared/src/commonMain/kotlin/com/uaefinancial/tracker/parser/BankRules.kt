@@ -636,6 +636,58 @@ object BankRules {
         store = false,
     )
 
+    /**
+     * One-time codes in other languages (Spanish, Portuguese, French, German, Italian, Dutch, Polish, Turkish,
+     * Indonesian/Malay, Arabic, Hindi/Urdu). Checked BEFORE any rule, on the LOWER-CASED message (so capitals and
+     * accents both match without case-insensitive Unicode matching). Like [otpCodePreCheck] it needs the code itself
+     * next to the code word: "codice di autorizzazione 123456", "Código de referencia 123456" and "Referenz 12345678"
+     * on real purchase alerts don't match.
+     */
+    val otpIntlPreCheck: String = run {
+        val D = "\\d{4,8}(?!\\d)"
+        listOf(
+            // Spanish
+            "\\b(?:tu|su|el)\\s+(?:código|codigo|clave)(?:\\s+(?:de\\s+)?(?:verificación|verificacion|seguridad|acceso|confirmación|confirmacion|dinámica|dinamica|otp))?\\s*(?:es|:)?\\s*$D",
+            "\\b(?:usa|use|utiliza|ingresa|introduce|digita)\\s+(?:el\\s+|la\\s+)?(?:código|codigo|clave)?\\s*:?\\s*$D",
+            "(?<!\\d)$D\\s+es\\s+(?:tu|su)\\s+(?:código|codigo|clave)",
+            // Portuguese
+            "\\b(?:seu|sua|o|a)\\s+(?:código|codigo|senha)(?:\\s+de\\s+(?:verificação|verificacao|segurança|seguranca|acesso|confirmação|confirmacao))?\\s*(?:é|e|:)?\\s*$D",
+            "\\b(?:utilize|digite|insira|informe)\\s+(?:o\\s+|a\\s+)?(?:código|codigo|senha)?\\s*:?\\s*$D",
+            "(?<!\\d)$D\\s+é\\s+(?:o\\s+)?(?:seu|sua)\\s+(?:código|codigo|senha)",
+            // French
+            "\\b(?:votre\\s+code(?:\\s+(?:de\\s+)?(?:vérification|verification|sécurité|securite|confirmation|validation|d'authentification|unique))?|le\\s+code\\s+(?:de\\s+)?(?:vérification|verification|sécurité|securite|confirmation|validation|d'authentification|unique))\\s*(?:est|:)?\\s*$D",
+            "\\b(?:saisissez|entrez|utilisez|tapez|saisir|entrer)\\s+(?:le\\s+)?(?:code\\s+)?:?\\s*$D",
+            "(?<!\\d)$D\\s+est\\s+votre\\s+code",
+            // German
+            "\\b(?:ihr|dein|ihre|deine|der|die)\\s+(?:bestätigungscode|sicherheitscode|freigabecode|verifizierungscode|anmeldecode|code|m?tan|pin)\\s*(?:lautet|ist|:)?\\s*$D",
+            "\\b(?:geben\\s+sie|gib)\\s+(?:den\\s+|die\\s+)?(?:code\\s+|tan\\s+)?$D",
+            "(?<![\\p{L}])m?tan\\s*[:#-]\\s*$D",
+            // Italian
+            "\\b(?:il\\s+tuo|il|la\\s+tua)\\s+(?:codice|password)(?:\\s+(?:di\\s+)?(?:verifica|sicurezza|conferma|accesso|otp))?\\s*(?:è|e|:)?\\s*$D",
+            "\\b(?:inserisci|utilizza|digita)\\s+(?:il\\s+)?(?:codice\\s+)?:?\\s*$D",
+            "(?<!\\d)$D\\s+è\\s+il\\s+tuo\\s+codice",
+            // Dutch
+            "\\b(?:je|uw|de)\\s+(?:verificatie|beveiligings|bevestigings|inlog)?code\\s*(?:is|:)?\\s*$D",
+            "\\b(?:gebruik|voer)\\s+(?:de\\s+)?(?:code\\s+)?$D",
+            "(?<!\\d)$D\\s+is\\s+(?:je|uw)\\s+(?:verificatie)?code",
+            // Polish
+            "\\bkod\\s+(?:weryfikacyjny|sms|autoryzacyjny|potwierdzający|potwierdzajacy|jednorazowy)\\s*(?::|to)?\\s*$D",
+            "(?<!\\d)$D\\s+to\\s+(?:twój|twoj)\\s+kod",
+            "\\bhasło\\s*:?\\s*$D",
+            // Turkish
+            "\\b(?:doğrulama|dogrulama|onay|güvenlik|guvenlik|tek\\s+kullanımlık)\\s+kodu(?:nuz)?\\s*:?\\s*$D",
+            "(?<![\\p{L}])şifre(?:niz)?\\s*:?\\s*$D",
+            // Indonesian / Malay
+            "\\b(?:kode|kod)\\s+(?:verifikasi|rahasia|keselamatan|pengesahan|otp)\\b.{0,20}?$D",
+            "\\b(?:gunakan|masukkan)\\s+(?:kode\\s+|kod\\s+)?$D",
+            // Arabic
+            "(?:رمز\\s+(?:التحقق|التفعيل|الدخول|الأمان|المرور)|الرمز\\s+السري|كلمة\\s+(?:المرور|السر)|الرقم\\s+السري|كود\\s+(?:التحقق|التفعيل))\\D{0,25}$D",
+            "(?<!\\d)$D\\D{0,15}(?:رمز\\s+التحقق|كلمة\\s+المرور)",
+            // Hindi / Urdu
+            "(?:ओटीपी|वन\\s+टाइम\\s+पासवर्ड|او\\s*ٹی\\s*پی)\\D{0,20}$D",
+        ).joinToString("|")
+    }
+
     /** Checked only when no transaction/statement rule matched. Applies to every bank. */
     val globalIgnore: List<IgnoreRule> = listOf(
         IgnoreRule("OTP", """\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN\s+is)\b""", store = false),

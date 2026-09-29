@@ -47,7 +47,8 @@ object InboxReader {
 
     /**
      * Looks through the newest messages in the inbox (up to [limit]) and reports which known banks send you SMS and
-     * which other named senders look like banks. Phone numbers are skipped: banks use named sender IDs.
+     * which other named senders (or short codes) look like banks. Phone numbers are skipped: banks use named sender IDs
+     * or short codes.
      * Nothing is stored.
      */
     fun scanSenders(context: Context, limit: Int = 8000): SenderScan {
@@ -73,10 +74,11 @@ object InboxReader {
                     known[bank.name] = (known[bank.name] ?: 0) + 1
                     continue
                 }
-                if (!addr.any { it.isLetter() }) continue // a phone number, not a named sender
+                // A phone number, not a named sender. Short codes ("24273") are how US, Canadian and UK banks send alerts.
+                if (!addr.any { it.isLetter() } && !SmsParser.isShortCode(addr)) continue
                 val body = c.getString(iBody) ?: continue
                 if (!SmartParser.looksLikeBankAlert(body)) continue
-                val key = SmsParser.normalizeSender(addr)
+                val key = SmsParser.senderKey(addr) // "AX-HDFCBK-S" and "VM-HDFCBK" are one sender
                 names.putIfAbsent(key, addr)
                 alerts[key] = (alerts[key] ?: 0) + 1
                 samples.putIfAbsent(key, body)

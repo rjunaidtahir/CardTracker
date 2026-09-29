@@ -191,7 +191,7 @@ object Currencies {
         "€" to "EUR", "£" to "GBP", "₹" to "INR", "₩" to "KRW", "₺" to "TRY", "₦" to "NGN", "₱" to "PHP", "₫" to "VND",
         "฿" to "THB", "₪" to "ILS", "₴" to "UAH", "₸" to "KZT", "₼" to "AZN", "৳" to "BDT", "zł" to "PLN", "Kč" to "CZK",
         "SR" to "SAR", "S.R." to "SAR", "QR" to "QAR", "Q.R." to "QAR", "KD" to "KWD", "K.D." to "KWD", "BD" to "BHD",
-        "B.D." to "BHD", "RO" to "OMR", "R.O." to "OMR", "RM" to "MYR", "Rp" to "IDR", "Tk" to "BDT",
+        "B.D." to "BHD", "RO" to "OMR", "R.O." to "OMR", "RM" to "MYR", "Rp" to "IDR", "Tk" to "BDT", "TL" to "TRY",
         // Arabic
         "د.إ" to "AED", "درهم" to "AED", "ر.س" to "SAR", "ر.ق" to "QAR", "د.ك" to "KWD", "د.ب" to "BHD", "ر.ع" to "OMR", "ج.م" to "EGP",
     )

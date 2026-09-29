@@ -410,6 +410,6 @@ object SmartParser {
         if (!SmsParser.looksFinancial(text)) return false
         val bankish = refs(text).isNotEmpty() ||
             Regex("""\b(?:debited|credited|available (?:balance|limit)|avl\.? (?:bal|limit)|credit card|debit card|a/c|account)\b""", I).containsMatchIn(text)
-        return bankish && !Regex("""\b(?:OTP|one[\s-]?time\s+pass)""", I).containsMatchIn(text)
+        return bankish && !Regex("""\b(?:OTP|one[\s-]?time\s+pass)""", I).containsMatchIn(text) && !SmsParser.isOtp(text)
     }
 }

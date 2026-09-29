@@ -116,11 +116,35 @@ object SmsParser {
 
     private val otpRegex by lazy { Regex(BankRules.otpPreCheck.pattern, RegexOption.IGNORE_CASE) }
     private val otpCodeRegex by lazy { Regex(BankRules.otpCodePreCheck.pattern, RegexOption.IGNORE_CASE) }
+    private val otpIntlRegex by lazy { Regex(BankRules.otpIntlPreCheck) }
+
+    /** One-time code check on an already-normalized message (English, then other languages on the lower-cased text). */
+    private fun otpIn(text: String): Boolean =
+        otpRegex.containsMatchIn(text) || otpCodeRegex.containsMatchIn(text) || otpIntlRegex.containsMatchIn(text.lowercase())
 
     /** True when the message is a one-time code (never stored). */
-    fun isOtp(body: String): Boolean = normalizeBody(body).let { otpRegex.containsMatchIn(it) || otpCodeRegex.containsMatchIn(it) }
+    fun isOtp(body: String): Boolean = otpIn(normalizeBody(body))
 
     fun normalizeSender(s: String) = s.uppercase().filter { it.isLetterOrDigit() }
+
+    /** Indian DLT sender IDs: operator/region prefix + 6-character header + optional type ("AX-HDFCBK-S", "VM-HDFCBK"). */
+    private val dltSender = Regex("""^[A-Za-z]{2}-([A-Za-z0-9]{6})(?:-[SsPpTtGg])?$""")
+
+    /**
+     * The part of a sender ID that names the sender: "AX-HDFCBK-S", "VM-HDFCBK" and "JD-HDFCBK-T" are all "HDFCBK".
+     * Other IDs are just normalized ("AD-FAB" -> "ADFAB").
+     */
+    fun senderKey(sender: String): String {
+        val t = sender.trim()
+        dltSender.matchEntire(t)?.let { return it.groupValues[1].uppercase() }
+        return normalizeSender(t)
+    }
+
+    /** A short code (3 to 6 digits, e.g. "24273"): how banks in the US, Canada and the UK send alerts. Not a phone number. */
+    fun isShortCode(sender: String): Boolean {
+        val t = sender.trim()
+        return t.length in 3..6 && t.all { it in '0'..'9' }
+    }
 
     /**
      * Senders the user added in the app: normalized sender ID -> bank name. A name that matches a built-in bank
@@ -155,7 +179,7 @@ object SmsParser {
     fun setCustomSenders(senderToBank: Map<String, String>) {
         custom = senderToBank.entries.associate { (sender, bankName) ->
             val known = compiled.firstOrNull { it.bank.name.equals(bankName, ignoreCase = true) }
-            normalizeSender(sender) to (known ?: CompiledBank(Bank(bankName, listOf(sender), emptyList()), emptyList(), globalIgnore))
+            senderKey(sender) to (known ?: CompiledBank(Bank(bankName, listOf(sender), emptyList()), emptyList(), globalIgnore))
         }
     }
 
@@ -167,9 +191,10 @@ object SmsParser {
      * short IDs (3 letters or fewer, like "FAB" or "DIB") only match exactly or with a known operator prefix.
      */
     fun senderMatches(sender: String, id: String): Boolean {
-        val s = normalizeSender(sender)
         val n = normalizeSender(id)
         if (n.isEmpty()) return false
+        if (senderKey(sender) == n) return true
+        val s = normalizeSender(sender)
         if (s == n) return true
         if (!s.endsWith(n)) return false
         val prefix = s.dropLast(n.length)
@@ -188,7 +213,7 @@ object SmsParser {
 
     private fun compiledBankFor(sender: String?, includeExcluded: Boolean = false): CompiledBank? {
         if (sender.isNullOrBlank()) return null
-        val cb = custom[normalizeSender(sender)]
+        val cb = custom[senderKey(sender)] ?: custom[normalizeSender(sender)]
             ?: compiled.firstOrNull { c -> c.bank.senderIds.any { id -> senderMatches(sender, id) } }
             ?: return null
         return if (!includeExcluded && isExcluded(cb.bank.name)) null else cb
@@ -196,7 +221,23 @@ object SmsParser {
 
     /** Line breaks become single spaces; runs of spaces inside a line are kept (they separate merchant and city). */
     fun normalizeBody(body: String): String =
-        body.replace(' ', ' ').replace(Regex("""[ \t]*\r?\n[ \t]*"""), " ").trim()
+        westernDigits(body).replace('\u00A0', ' ').replace(Regex("""[ \t]*\r?\n[ \t]*"""), " ").trim()
+
+    /** Arabic-Indic (٠-٩) and Persian/Urdu (۰-۹) digits become 0-9; the Arabic decimal and thousands marks become "." and ",". */
+    internal fun westernDigits(s: String): String {
+        if (s.none { it in '\u0660'..'\u066C' || it in '\u06F0'..'\u06F9' }) return s
+        return buildString(s.length) {
+            for (c in s) append(
+                when (c) {
+                    in '\u0660'..'\u0669' -> '0' + (c - '\u0660')
+                    in '\u06F0'..'\u06F9' -> '0' + (c - '\u06F0')
+                    '\u066B' -> '.'
+                    '\u066C' -> ','
+                    else -> c
+                },
+            )
+        }
+    }
 
     /**
      * Every way of writing a currency the app understands (Currencies.kt): ISO codes, letter abbreviations and symbols.
@@ -252,7 +293,7 @@ object SmsParser {
 
     private fun parseWith(cb: CompiledBank, body: String, receivedAt: Long, zone: Int): ParseResult {
         val text = normalizeBody(body)
-        if (otpRegex.containsMatchIn(text) || otpCodeRegex.containsMatchIn(text)) {
+        if (otpIn(text)) {
             return ParseResult.Ignored(cb.bank.name, BankRules.otpPreCheck.label, store = false)
         }
         val errors = mutableListOf<String>()
