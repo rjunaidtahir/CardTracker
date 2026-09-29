@@ -15,9 +15,7 @@
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<!-- App-only settings (standard UserDefaults) -->
-				<string>CA92.1</string>
-				<!-- Data shared with the widget through the App Group suite -->
+				<!-- Reads the spending snapshot the app writes to the shared App Group suite -->
 				<string>1C8F.1</string>
 			</array>
 		</dict>

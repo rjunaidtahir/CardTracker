@@ -79,6 +79,20 @@ jobs:
           grep -E "error:|Test Case .* (passed|failed)|\*\* (BUILD|TEST)" ../xcode.log
           exit $rc
 
+      - name: Check the privacy manifests are inside the app and widget
+        id: privacy
+        if: steps.xcode.outcome == 'success'
+        continue-on-error: true
+        # App Store Connect rejects uploads whose bundles use required-reason APIs (UserDefaults, ...) without
+        # a PrivacyInfo.xcprivacy inside that same bundle — the widget is its own executable, so it needs one too.
+        run: |
+          APP=dd/Build/Products/Debug-iphonesimulator/UAEFinancialTracker.app
+          missing=""
+          for f in "$APP/PrivacyInfo.xcprivacy" "$APP/PlugIns/FilsWidget.appex/PrivacyInfo.xcprivacy"; do
+            if [ -f "$f" ] && plutil -lint "$f" > /dev/null; then echo "OK: $f"; else missing="$missing $f"; fi
+          done
+          if [ -n "$missing" ]; then echo "::error title=Privacy manifest::Missing or invalid:$missing"; exit 1; fi
+
       - name: Build for a real iPhone (no signing)
         id: device
         if: steps.xcode.outcome == 'success'
@@ -184,5 +198,5 @@ jobs:
             shared/build/reports/tests/
 
       - name: Fail if anything failed
-        if: steps.shared.outcome != 'success' || steps.xcode.outcome != 'success' || steps.device.outcome == 'failure' || steps.xcode162.outcome == 'failure'
+        if: steps.shared.outcome != 'success' || steps.xcode.outcome != 'success' || steps.device.outcome == 'failure' || steps.xcode162.outcome == 'failure' || steps.privacy.outcome == 'failure'
         run: exit 1

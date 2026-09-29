@@ -92,7 +92,7 @@ final class ShareViewController: UIViewController {
             p.loadItem(forTypeIdentifier: UTType.plainText.identifier) { item, _ in
                 if let s = item as? String { cont.resume(returning: s) }
                 else if let d = item as? Data { cont.resume(returning: String(data: d, encoding: .utf8)) }
-                else if let u = item as? URL, let s = try? String(contentsOf: u) { cont.resume(returning: s) }
+                else if let u = item as? URL, u.isFileURL, let s = try? String(contentsOf: u) { cont.resume(returning: s) }
                 else { cont.resume(returning: nil) }
             }
         }

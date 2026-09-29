@@ -170,7 +170,7 @@ enum Inbox {
     }
 
     static func pending() -> [URL] {
-        guard let f = folder, let list = try? FileManager.default.contentsOfDirectory(at: f, includingPropertiesForKeys: [.creationDateKey]) else { return [] }
+        guard let f = folder, let list = try? FileManager.default.contentsOfDirectory(at: f, includingPropertiesForKeys: []) else { return [] }
         return list.filter { !$0.lastPathComponent.hasPrefix(".") }.sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 }
