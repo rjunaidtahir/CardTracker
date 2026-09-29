@@ -117,6 +117,13 @@ object Bridge {
     /** Every currency code the app knows, sorted. */
     fun knownCurrencies(): List<String> = com.uaefinancial.tracker.parser.Currencies.rateToAed.keys.sorted()
 
+    /** The phone's current offset from UTC in minutes, for dates written in messages. */
+    fun setZoneMinutes(minutes: Int) = SmsParser.setZoneMinutes(minutes)
+
+    /** Whether numeric dates are read month first (the phone's region writes 09/28/2026). */
+    fun setMonthFirstDates(value: Boolean) = SmsParser.setMonthFirstDates(value)
+    fun isMonthFirstRegion(countryCode: String): Boolean = SmsParser.isMonthFirstRegion(countryCode)
+
     /** Changes whenever the engine may read stored messages differently: re-read everything once when it changes. */
     fun engineVersion(): Int = SmsParser.ENGINE_VERSION
 

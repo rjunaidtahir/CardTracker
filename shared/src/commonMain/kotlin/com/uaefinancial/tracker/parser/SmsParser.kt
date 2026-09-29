@@ -21,12 +21,44 @@ object SmsParser {
     /** UAE time: UTC+4 all year. Zones are passed as minutes ahead of UTC. */
     const val UAE_ZONE: Int = UAE_OFFSET_MINUTES
 
-    internal const val NUMDATE = """\d{1,2}[/-]\d{1,2}[/-]\d{2,4}"""
-    /** 08-SEP-2026 / 25/Mar/2026 / 7 July 2026 / May 25 2026 */
-    internal const val WORDDATE_T = """\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}"""
+    /**
+     * Minutes ahead of UTC at a moment, for dates written in messages without a zone. The apps set this from the
+     * phone's time zone (with daylight saving); tests and the default use UAE time.
+     */
+    @kotlin.concurrent.Volatile
+    var zoneAt: (Long) -> Int = { UAE_OFFSET_MINUTES }
+        private set
+
+    fun setZoneProvider(provider: (Long) -> Int) { zoneAt = provider }
+
+    /** A fixed offset (e.g. from an app that only knows the current one). */
+    fun setZoneMinutes(minutes: Int) { zoneAt = { minutes } }
+
+    /**
+     * True where numeric dates are written month first (09/28/2026 in the United States). Unambiguous dates are read
+     * correctly either way (13/09 is always day first, 09/13 always month first). Set by the apps from the region.
+     */
+    @kotlin.concurrent.Volatile
+    var monthFirstDates: Boolean = false
+        private set
+
+    fun setMonthFirstDates(value: Boolean) { monthFirstDates = value }
+
+    /** Regions that write dates month first. */
+    fun isMonthFirstRegion(countryCode: String): Boolean =
+        countryCode.uppercase() in setOf("US", "PR", "GU", "AS", "VI", "UM", "MP", "FM", "MH", "PW", "PH", "BZ", "KY")
+
+    /** 13/09/2026 · 09-13-26 · 28.09.2026 · 2026-09-28 */
+    internal const val NUMDATE = """(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4})"""
+    /** Month names in English, German, French, Spanish, Portuguese, Italian and Dutch (with accents). */
+    private const val MON = """[A-Za-zÀ-ÿ]{3,10}\.?"""
+    /** 08-SEP-2026 / 25/Mar/2026 / 7 July 2026 / May 25 2026 / 28. September 2026 / 28 de septiembre de 2026 */
+    internal const val WORDDATE_T =
+        """\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}\.?\s+(?:de\s+)?$MON,?\s+(?:de\s+)?\d{4}|[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}"""
     internal const val WEEKDAY = """(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,?\s+)?"""
     internal const val TIME = """\d{1,2}:\d{2}(?::\d{2})?(?:\s*[AP]\.?M\b)?"""
-    private const val WORDDATE = """[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s+\d{4}|\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}[A-Za-z]{3}\d{2,4}"""
+    private const val WORDDATE =
+        """[A-Za-z]{3,9}\.?\s+\d{1,2},?\s+\d{4}|\d{1,2}\.?\s+(?:de\s+)?$MON,?\s+(?:de\s+)?\d{4}|\d{1,2}[/-][A-Za-z]{3,9}[/-]\d{2,4}|\d{1,2}[A-Za-z]{3}\d{2,4}"""
     /**
      * An amount as banks around the world write it (the value is worked out by [parseAmount]):
      * 1,234.56 · 12,34,567.89 (India) · 1.234,56 (Europe) · 1'234.50 (Switzerland) · 1 234,56 (France, Poland) ·
@@ -203,7 +235,7 @@ object SmsParser {
         return Currencies.codeFor(c, homeCurrency) ?: c.uppercase()
     }
 
-    fun parse(sender: String?, body: String, receivedAt: Long, zone: Int = UAE_ZONE): ParseResult {
+    fun parse(sender: String?, body: String, receivedAt: Long, zone: Int = zoneAt(receivedAt)): ParseResult {
         val cb = compiledBankFor(sender) ?: return ParseResult.NotBank
         return parseWith(cb, body, receivedAt, zone)
     }
@@ -212,7 +244,7 @@ object SmsParser {
      * Reads a message as coming from [bankName] (when the sender isn't known, e.g. pasted text). A built-in bank uses
      * its rules; any other name is read by the smart reader only.
      */
-    fun parseAsBank(bankName: String, body: String, receivedAt: Long, zone: Int = UAE_ZONE): ParseResult {
+    fun parseAsBank(bankName: String, body: String, receivedAt: Long, zone: Int = zoneAt(receivedAt)): ParseResult {
         val cb = compiled.firstOrNull { it.bank.name.equals(bankName, ignoreCase = true) }
             ?: CompiledBank(Bank(bankName, emptyList(), emptyList()), emptyList(), globalIgnore)
         return parseWith(cb, body, receivedAt, zone)
@@ -351,11 +383,21 @@ object SmsParser {
 
     private val splitTime = Regex("""^(.*?)(?:,?\s+(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp])\.?[Mm]\.?)?)?$""")
     private val weekdayPrefix = Regex("""^(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*,?\s+""", RegexOption.IGNORE_CASE)
-    private val numericDate = Regex("""^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$""")
-    private val monthFirst = Regex("""^([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})$""")
-    private val dayFirst = Regex("""^(\d{1,2})(?:\s+|[/-])([A-Za-z]{3,9}),?(?:\s+|[/-])(\d{2,4})$""")
+    private val numericDate = Regex("""^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$""")
+    private val isoDate = Regex("""^(\d{4})-(\d{1,2})-(\d{1,2})$""")
+    private val monthFirst = Regex("""^([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})$""")
+    private val dayFirst = Regex("""^(\d{1,2})\.?(?:\s+|[/-])(?:de\s+)?([A-Za-zÀ-ÿ]{3,10})\.?,?(?:\s+|[/-])(?:de\s+)?(\d{2,4})$""", RegexOption.IGNORE_CASE)
     private val compact = Regex("""^(\d{1,2})([A-Za-z]{3})(\d{2}|\d{4})$""") // 11Jun25, 07Jul2025
-    private val months = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+    /** Month name beginnings (longest match wins) in English, German, French, Spanish, Portuguese, Italian and Dutch. */
+    private val monthNames: List<Pair<String, Int>> = listOf(
+        "jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "may" to 5, "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "oct" to 10, "nov" to 11, "dec" to 12,
+        "mär" to 3, "mrz" to 3, "mai" to 5, "okt" to 10, "dez" to 12, // German
+        "janv" to 1, "févr" to 2, "fevr" to 2, "fév" to 2, "avr" to 4, "juin" to 6, "juil" to 7, "août" to 8, "aout" to 8, "déc" to 12, // French
+        "ene" to 1, "abr" to 4, "ago" to 8, "dic" to 12, "sept" to 9, // Spanish
+        "fev" to 2, "set" to 9, "out" to 10, // Portuguese
+        "gen" to 1, "mag" to 5, "giu" to 6, "lug" to 7, "ott" to 10, // Italian
+        "mrt" to 3, "mei" to 5, // Dutch
+    )
 
     private fun year(raw: String) = raw.toInt().let { if (it < 100) 2000 + it else it }
 
@@ -364,7 +406,9 @@ object SmsParser {
      * 13/09/2026 11:58:47 · 08-SEP-2026, 07:42:23 AM · Tuesday, 7 July 2026, 3:16 pm · May 25 2026 11:02AM · 25/Mar/2026 01:40.
      * Returns the date-time and whether a time was present.
      */
-    fun parseDateTime(raw: String): Pair<DateTime, Boolean>? {
+    fun parseDateTime(raw: String): Pair<DateTime, Boolean>? = runCatching { parseDateTimeOrThrow(raw) }.getOrNull()
+
+    private fun parseDateTimeOrThrow(raw: String): Pair<DateTime, Boolean>? {
         val s = raw.trim().replace(Regex("""\s+"""), " ")
         val tm = splitTime.matchEntire(s) ?: return null
         val datePart = tm.groupValues[1].trim().trimEnd(',').replace(weekdayPrefix, "")
@@ -379,10 +423,25 @@ object SmsParser {
         return date.atTime(hour, tm.groupValues[3].toInt(), tm.groupValues[4].ifEmpty { "0" }.toInt()) to true
     }
 
-    private fun parseDate(s: String): CalendarDate? {
+    private fun parseDate(s: String): CalendarDate? = runCatching { parseDateOrThrow(s) }.getOrNull()
+
+    private fun parseDateOrThrow(s: String): CalendarDate? {
+        isoDate.matchEntire(s)?.let { m ->
+            val (y, mo, d) = m.destructured
+            return CalendarDate.of(y.toInt(), mo.toInt(), d.toInt())
+        }
         numericDate.matchEntire(s)?.let { m ->
-            val (d, mo, y) = m.destructured
-            return CalendarDate.of(year(y), mo.toInt(), d.toInt())
+            val (a, b, y) = m.destructured
+            val first = a.toInt()
+            val second = b.toInt()
+            // Unambiguous dates read the same everywhere; otherwise the region's usual order.
+            val (d, mo) = when {
+                first > 12 -> first to second
+                second > 12 -> second to first
+                monthFirstDates -> second to first
+                else -> first to second
+            }
+            return CalendarDate.of(year(y), mo, d)
         }
         monthFirst.matchEntire(s)?.let { m ->
             val mo = monthIndex(m.groupValues[1]) ?: return null
@@ -399,8 +458,10 @@ object SmsParser {
         return null
     }
 
-    private fun monthIndex(name: String): Int? =
-        months.indexOf(name.take(3).lowercase()).takeIf { it >= 0 }?.plus(1)
+    private fun monthIndex(name: String): Int? {
+        val n = name.lowercase().trimEnd('.')
+        return monthNames.filter { n.startsWith(it.first) }.maxByOrNull { it.first.length }?.second
+    }
 }
 
 /** Money helpers shared by the app. Amounts are stored as minor units (fils/cents). */

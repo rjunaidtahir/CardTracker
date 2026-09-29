@@ -102,7 +102,8 @@ object SmartParser {
     // ------------------------------------------------------------------ dates
 
     private val dateRegex: Regex by lazy {
-        val d = "(?<![\\d/])(?:${SmsParser.NUMDATE}|${SmsParser.WORDDATE_T}|\\d{1,2}[A-Za-z]{3}\\d{2,4})(?![\\d/])"
+        // Not inside an amount like 1.234.567 (a dot before, or a dot and digit after).
+        val d = "(?<![\\d/.])(?:${SmsParser.NUMDATE}|${SmsParser.WORDDATE_T}|\\d{1,2}[A-Za-z]{3}\\d{2,4})(?![\\d/]|\\.\\d)"
         Regex("""${SmsParser.WEEKDAY}$d(?:,?\s+(?:at\s+)?${SmsParser.TIME})?""", I)
     }
     private val timeThenDate: Regex by lazy {
@@ -216,7 +217,7 @@ object SmartParser {
     // ------------------------------------------------------------------ read
 
     /** Returns a transaction or statement, or null when the message isn't clearly one. [text] is already normalized. */
-    fun read(bank: String, text: String, receivedAt: Long, zone: Int = SmsParser.UAE_ZONE): ParseResult? {
+    fun read(bank: String, text: String, receivedAt: Long, zone: Int = SmsParser.zoneAt(receivedAt)): ParseResult? {
         val all = mentions(text)
         if (all.isEmpty()) return null
         // Only balances / limits (e.g. a balance update): nothing to record.
