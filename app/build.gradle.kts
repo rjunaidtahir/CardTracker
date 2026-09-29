@@ -1,3 +1,17 @@
+import org.gradle.api.artifacts.transform.InputArtifact
+import org.gradle.api.artifacts.transform.TransformAction
+import org.gradle.api.artifacts.transform.TransformOutputs
+import org.gradle.api.artifacts.transform.TransformParameters
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+import org.gradle.api.attributes.Attribute
+import org.gradle.api.file.FileSystemLocation
+import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -105,4 +119,62 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Strip BouncyCastle's EST package from the app.
+//
+// pdfbox-android (statement PDFs, incl. password-protected ones) depends on bcpkix. bcpkix also contains an EST
+// client (org.bouncycastle.est: certificate enrolment over the network) with a trust-all X509TrustManager
+// (JcaJceUtils). Nothing in this app or in PDFBox uses EST, and the app has no internet permission, but Google Play's
+// security scan flags any trust-all TrustManager in the shipped code — including library code — and can block the
+// app after a deadline. So the EST package is removed from the bcpkix jar before it is dexed. EST is a leaf package:
+// nothing outside it refers to it, so PDF decryption and everything else is unaffected.
+// ---------------------------------------------------------------------------------------------------------------
+val bcEstStripped: Attribute<Boolean> = Attribute.of("fils.bcEstStripped", Boolean::class.javaObjectType)
+
+abstract class StripBouncyCastleEst : TransformAction<TransformParameters.None> {
+    @get:InputArtifact
+    @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val inputArtifact: Provider<FileSystemLocation>
+
+    override fun transform(outputs: TransformOutputs) {
+        val input = inputArtifact.get().asFile
+        if (!input.name.startsWith("bcpkix-")) {
+            outputs.file(input)
+            return
+        }
+        val output = outputs.file(input.nameWithoutExtension + "-no-est.jar")
+        ZipInputStream(input.inputStream().buffered()).use { zin ->
+            ZipOutputStream(output.outputStream().buffered()).use { zout ->
+                while (true) {
+                    val entry = zin.nextEntry ?: break
+                    val name = entry.name
+                    val isEst = name.startsWith("org/bouncycastle/est/")
+                    // The jar's signature no longer matches once classes are removed; Android never checks it.
+                    val isJarSignature = name.startsWith("META-INF/") &&
+                        (name.endsWith(".SF") || name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC"))
+                    if (isEst || isJarSignature) continue
+                    zout.putNextEntry(ZipEntry(name))
+                    zin.copyTo(zout)
+                    zout.closeEntry()
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    attributesSchema { attribute(bcEstStripped) }
+    artifactTypes.maybeCreate("jar").attributes.attribute(bcEstStripped, false)
+    registerTransform(StripBouncyCastleEst::class) {
+        from.attribute(bcEstStripped, false).attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar")
+        to.attribute(bcEstStripped, true).attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "jar")
+    }
+}
+
+configurations.configureEach {
+    if (isCanBeResolved && name.endsWith("untimeClasspath")) { // debugRuntimeClasspath, releaseRuntimeClasspath, …
+        attributes.attribute(bcEstStripped, true)
+    }
 }
