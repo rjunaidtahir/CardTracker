@@ -106,6 +106,21 @@ class GlobalWordingTest {
         }
     }
 
+    @Test fun italian_and_dutch_purchases() {
+        txn("Pagamento di 45,00 EUR presso ESSELUNGA con carta che termina con 1234").let {
+            assertEquals(TxnType.PURCHASE, it.type)
+            assertEquals("ESSELUNGA", it.merchant)
+            assertEquals("1234", it.cardLast4)
+            same("45", it.amount)
+        }
+        txn("Betaling van 45,00 EUR bij ALBERT HEIJN met betaalpas eindigend op 1234").let {
+            assertEquals(TxnType.PURCHASE, it.type)
+            assertEquals("ALBERT HEIJN", it.merchant)
+            assertEquals("1234", it.cardLast4)
+            assertEquals(CardType.DEBIT, it.cardType)
+        }
+    }
+
     @Test fun arabic_purchase() {
         val t = txn("تمت عملية شراء بمبلغ 45.00 درهم لدى كارفور باستخدام بطاقتك المنتهية بـ 1234")
         assertEquals(TxnType.PURCHASE, t.type)

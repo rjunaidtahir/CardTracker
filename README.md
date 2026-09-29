@@ -1,8 +1,8 @@
 # Fils - Cards & Spend Tracker
 
-An Android and iPhone app that turns the SMS your UAE banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
+An Android and iPhone app that turns the SMS your banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
-- **Works with any UAE bank.** The main banks have built-in formats, and a smart reader handles any other bank.
+- **Works with banks worldwide.** A smart reader understands bank alerts in English, Arabic, Spanish, Portuguese, French, German, Italian and Dutch, in any currency and date format; the main UAE banks also have built-in formats. Your home currency comes from the phone's region and can be changed in More → Home currency.
 - **Private.** No internet permission, no account, no ads. Everything stays on the phone. One-time passwords (OTPs) are never stored.
 - **Free to share.** Anyone can install it. It is not tied to one person's banks or cards.
 

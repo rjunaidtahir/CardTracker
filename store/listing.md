@@ -6,16 +6,16 @@ Fils - Cards & Spend Tracker
 (28 characters, comfortably under the 30-character limit)
 
 ## Short description (max 80 chars)
-Track card spending from bank SMS. On-device only. Any UAE bank.
+Card & account spending from your bank SMS. Private, on-device, any currency.
 
-(79 characters)
+(77 characters)
 
 ## Full description (max 4000 chars)
 
-Fils turns the SMS your UAE bank already sends you into a clear picture of your spending — by category, by card, and over time. No linking your bank account, no login, no card numbers typed in. Just install, allow SMS access, and Fils reads what your bank already tells you.
+Fils turns the SMS your bank already sends you into a clear picture of your spending — by category, by card, and over time. No linking your bank account, no login, no card numbers typed in. Just install, allow SMS access, and Fils reads what your bank already tells you.
 
-WORKS WITH ANY UAE BANK
-FAB, Emirates NBD, ADCB, Al Hilal, HSBC, Mashreq, Dubai Islamic Bank, Emirates Islamic, ADIB, RAKBANK, CBD, Citibank, Standard Chartered, NBF, Liv, Wio and more. Built-in rules cover the most common banks, and a smart reader handles the rest.
+WORKS WITH YOUR BANK, WHEREVER YOU ARE
+Built for the Gulf, South Asia, the UK & Europe, and the US & Canada. A smart reader understands bank alerts in English, Arabic, Spanish, Portuguese, French, German, Italian and Dutch, in any currency and date format, and ready-made rules cover the major UAE banks (FAB, Emirates NBD, ADCB, HSBC, Mashreq, Dubai Islamic Bank, RAKBANK, Wio and more). Your home currency is set from your phone's region and can be changed any time; spends in other currencies are converted for you.
 
 SEE WHERE YOUR MONEY GOES
 • Total spending with a comparison to last month
@@ -31,7 +31,7 @@ NEVER MISS A DUE DATE
 BUDGETS, GOALS & RECURRING PAYMENTS
 • Set monthly budgets by category
 • Track savings goals
-• Automatic detection of recurring payments like DEWA, du/Etisalat, Netflix and gym memberships
+• Automatic detection of recurring payments like utility bills, phone plans, Netflix and gym memberships
 • Log cash spending by typing, e.g. "lunch 45"
 
 BUILT AROUND YOUR PRIVACY
