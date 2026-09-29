@@ -21,6 +21,8 @@ enum AppData {
     }()
 
     static let engine: Engine = {
+        // Home currency, date style and time zone must be known before any message is read.
+        Region.apply()
         let e = Engine(context: container.mainContext)
         if DemoData.isOn { DemoData.load(into: e) }
         e.onChange = { [weak e] in
@@ -127,6 +129,7 @@ final class AppModel {
         case .active:
             if Settings.lockEnabled, let b = backgroundedAt, Date().timeIntervalSince(b) >= Double(Settings.lockTimeout) { locked = true }
             backgroundedAt = nil
+            Region.apply() // the time zone may have changed while away
             processInbox()
             Notifier.refresh(engine: engine)
         default:

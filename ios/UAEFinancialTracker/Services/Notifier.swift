@@ -175,6 +175,8 @@ enum WidgetData {
         var spentMinor: Int64
         var dueLine: String
         var updated: Date
+        /// Your home currency (older snapshots have none: AED).
+        var currency: String?
     }
 
     static let key = "widgetSnapshot"
@@ -190,7 +192,7 @@ enum WidgetData {
         let next = dues.filter { counted.contains($0.cardKey) && ($0.status.state == .unpaid || $0.status.state == .minPaid) && $0.status.daysLeft >= 0 }
             .min { $0.status.daysLeft < $1.status.daysLeft }
         let line = next.map { "\($0.label): \(MoneyText.text($0.status.remainingMinor)) due \(Dates.dayText(epochDay: $0.statement.dueDay))" } ?? "No card payments due"
-        let snap = Snapshot(month: Dates.monthShort.string(from: Date()), spentMinor: spent, dueLine: line, updated: Date())
+        let snap = Snapshot(month: Dates.monthShort.string(from: Date()), spentMinor: spent, dueLine: line, updated: Date(), currency: MoneyText.home)
         if let data = try? JSONEncoder().encode(snap) {
             shared?.set(data, forKey: key)
             UserDefaults.standard.set(data, forKey: key)

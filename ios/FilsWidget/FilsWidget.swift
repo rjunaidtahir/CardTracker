@@ -8,6 +8,8 @@ struct Snapshot: Codable {
     var spentMinor: Int64
     var dueLine: String
     var updated: Date
+    /// Your home currency (older snapshots have none: AED).
+    var currency: String? = nil
 
     static let placeholder = Snapshot(month: "Sep", spentMinor: 341_310, dueLine: "HSBC ·5258: AED 2,379.20 due 1 Oct", updated: Date())
 
@@ -64,7 +66,7 @@ struct FilsWidgetView: View {
         f.locale = Locale(identifier: "en_US_POSIX")
         f.groupingSeparator = ","
         f.usesGroupingSeparator = true
-        return "AED " + (f.string(from: NSNumber(value: Double(minor) / 100)) ?? "0")
+        return (entry.snapshot?.currency ?? "AED") + " " + (f.string(from: NSNumber(value: Double(minor) / 100)) ?? "0")
     }
 }
 

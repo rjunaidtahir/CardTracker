@@ -267,6 +267,8 @@ enum Backup {
         engine.loadCategories()
         engine.loadLearned()
         _ = engine.rereadAll()
+        // Typed entries keep the amount from the backup: recalculate them in this phone's home currency.
+        engine.recomputeHomeAmounts()
         return result
     }
 }

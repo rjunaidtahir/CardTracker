@@ -58,6 +58,9 @@ struct MoreView: View {
                     Button { statement = true } label: { RowLabel("Check a statement PDF", "doc.text.magnifyingglass") }
                     Button { exporting = true } label: { RowLabel("Export report (PDF or Excel)", "chart.bar.doc.horizontal") }
                     NavigationLink { RatesView() } label: { Label("Exchange rates", systemImage: "dollarsign.arrow.circlepath") }
+                    NavigationLink { HomeCurrencyView() } label: {
+                        LabeledContent { Text(MoneyText.home) } label: { Label("Home currency", systemImage: "banknote") }
+                    }
                     Button { confirmReread = true } label: { RowLabel("Re-read stored messages", "arrow.clockwise") }
                 }
                 Section("Notifications") {
@@ -498,7 +501,8 @@ struct AutomationGuideView: View {
     var body: some View {
         List {
             Section { AutomationStatusCard(status: status) }
-            if AppInfo.canInstallSharedAutomation {
+            // The ready-made automation looks for "AED": elsewhere it's set up by hand with your own currency.
+            if AppInfo.canInstallSharedAutomation && MoneyText.home == "AED" {
                 oneTapSection
                 Section {
                     DisclosureGroup("Set it up by hand instead", isExpanded: $showManual) {
@@ -519,7 +523,7 @@ struct AutomationGuideView: View {
             }
             Section("If messages don't arrive") {
                 Label("In Shortcuts, open Automations and check the Fils one is switched on.", systemImage: "switch.2")
-                Label("It reacts to messages containing \"AED\". If your bank writes \"Dhs\" instead, make a copy of the shortcut with Dhs.", systemImage: "textformat")
+                Label("It reacts to messages containing \"\(MoneyText.home)\". If your bank writes the amount another way (\"Dhs\", \"$\", \"Rs\"), make a copy of the automation with that word.", systemImage: "textformat")
                 Label("Messages from friends are ignored and one-time passwords are never stored.", systemImage: "lock.shield")
             }
             .font(.subheadline)
@@ -559,7 +563,7 @@ struct AutomationGuideView: View {
         } header: {
             Text("Three taps")
         } footer: {
-            Text("iPhone apps can't read SMS themselves. This Shortcuts automation hands each new message containing \"AED\" to Fils, which keeps only bank messages.")
+            Text("iPhone apps can't read SMS themselves. This Shortcuts automation hands each new message containing \"\(MoneyText.home)\" to Fils, which keeps only bank messages.")
         }
     }
 }
@@ -673,7 +677,7 @@ enum ShortcutsMock {
             HStack(spacing: 4) {
                 Text("Message").foregroundStyle(.blue)
                 Text("contains").foregroundStyle(.white)
-                Text("AED").foregroundStyle(.blue)
+                Text(MoneyText.home).foregroundStyle(.blue)
             }
             .font(.subheadline)
             HStack(spacing: 4) {
@@ -703,23 +707,23 @@ struct ManualSteps: View {
     let steps: [(String, String)]
 
     /// iOS 27: automations are built inside a shortcut.
-    static let ios27: [(String, String)] = [
+    static var ios27: [(String, String)] { [
         ("Open Shortcuts, tap +", "A new, empty shortcut opens."),
         ("Add the trigger", "In the search bar at the bottom, type message and choose \"When I receive a message\"."),
-        ("Message contains AED", "Tap the word after \"contains\" and type AED. If a \"Sender is Sender\" row appears, remove it with the ⊖ at its right, or the automation stays off."),
+        ("Message contains \(MoneyText.home)", "Tap the word after \"contains\" and type \(MoneyText.home). If a \"Sender is Sender\" row appears, remove it with the ⊖ at its right, or the automation stays off."),
         ("Add Fils", "In the search bar at the bottom, type Fils and tap Add Bank Message."),
         ("Connect the message", "In the Fils action, tap the blue word Message and choose Message from the trigger (the green speech bubble)."),
         ("Done", "Go back with < at the top left. Check the automation's switch is on."),
-    ]
+    ] }
 
     /// iOS 17–26: the Automation tab.
-    static let ios17: [(String, String)] = [
+    static var ios17: [(String, String)] { [
         ("Open Shortcuts", "Tap Automation at the bottom, then + (or New Automation)."),
-        ("Choose Message", "Tap Message Contains and type AED. Don't pick a sender. Choose Run Immediately, then Next."),
+        ("Choose Message", "Tap Message Contains and type \(MoneyText.home). Don't pick a sender. Choose Run Immediately, then Next."),
         ("Add Fils", "Tap New Blank Automation → Add Action, search Fils and tap Add Bank Message."),
         ("Connect the message", "Tap the blue word Message in the action and choose Shortcut Input."),
-        ("Done", "Tap Done. Each bank SMS that mentions AED is now added by itself."),
-    ]
+        ("Done", "Tap Done. Each bank SMS that mentions \(MoneyText.home) is now added by itself."),
+    ] }
 
     var body: some View {
         ForEach(Array(steps.enumerated()), id: \.offset) { item in
@@ -774,7 +778,7 @@ struct ReviewView: View {
                 .swipeActions {
                     Button("Dismiss") { model.engine.dismiss(sms) }.tint(.gray)
                     Button("Not a transaction") {
-                        model.engine.saveFix(sms, type: nil, amountMinor: 0, currency: "AED", merchant: "", cardLast4: nil, cardType: .credit, date: sms.receivedAt)
+                        model.engine.saveFix(sms, type: nil, amountMinor: 0, currency: MoneyText.home, merchant: "", cardLast4: nil, cardType: .credit, date: sms.receivedAt)
                     }.tint(.orange)
                 }
             }
@@ -797,7 +801,7 @@ struct FixView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var type: TxnKind = .purchase
     @State private var amount = ""
-    @State private var currency = "AED"
+    @State private var currency = MoneyText.home
     @State private var merchant = ""
     @State private var last4 = ""
     @State private var kind = CardKind.credit
@@ -807,7 +811,7 @@ struct FixView: View {
     @State private var similar = true
 
     private var canLearn: Bool {
-        guard let minor = MoneyText.parse(amount), minor > 0 else { return false }
+        guard let minor = MoneyText.parse(amount, currency: currency), minor > 0 else { return false }
         let l4 = last4.trimmingCharacters(in: .whitespaces)
         return model.engine.canLearn(sms, type: type, amountMinor: minor, merchant: merchant, cardLast4: l4.isEmpty ? nil : l4, cardType: kind)
     }
@@ -829,7 +833,7 @@ struct FixView: View {
                 }
                 HStack {
                     TextField("Amount", text: $amount).keyboardType(.decimalPad)
-                    TextField("AED", text: $currency)
+                    TextField(MoneyText.home, text: $currency)
                         .frame(width: 60)
                         .textInputAutocapitalization(.characters)
                 }
@@ -849,15 +853,15 @@ struct FixView: View {
             }
             Section {
                 Button("Save") {
-                    guard let minor = MoneyText.parse(amount) else { return }
+                    guard let minor = MoneyText.parse(amount, currency: currency) else { return }
                     let n = model.engine.saveFix(sms, type: type, amountMinor: minor, currency: currency, merchant: merchant, cardLast4: last4, cardType: kind, date: date,
                                                  applyToSimilar: similar && canLearn)
                     report(n, "Saved.")
                     dismiss()
                 }
-                .disabled(MoneyText.parse(amount) == nil || currency.trimmingCharacters(in: .whitespaces).count != 3 || !(last4.isEmpty || (3...4).contains(last4.count)))
+                .disabled(MoneyText.parse(amount, currency: currency) == nil || currency.trimmingCharacters(in: .whitespaces).count != 3 || !(last4.isEmpty || (3...4).contains(last4.count)))
                 Button("Not a transaction", role: .destructive) {
-                    let n = model.engine.saveFix(sms, type: nil, amountMinor: 0, currency: "AED", merchant: "", cardLast4: nil, cardType: kind, date: date,
+                    let n = model.engine.saveFix(sms, type: nil, amountMinor: 0, currency: MoneyText.home, merchant: "", cardLast4: nil, cardType: kind, date: date,
                                                  applyToSimilar: similar && canLearnNotTxn)
                     report(n, "Marked as not a transaction.")
                     dismiss()
@@ -876,7 +880,7 @@ struct FixView: View {
             guard let g = model.engine.guess(sms) else { return }
             type = TxnKind(rawValue: g.type ?? "") ?? .purchase
             amount = MoneyText.plain(g.amountMinor)
-            currency = g.currency ?? "AED"
+            currency = g.currency ?? MoneyText.home
             merchant = g.merchant ?? ""
             last4 = g.cardLast4 ?? ""
             kind = CardKind(rawValue: g.cardType ?? "") ?? .credit
@@ -936,10 +940,10 @@ struct RatesView: View {
     var body: some View {
         Form {
             Section {
-                Text("Spends in other currencies are shown in AED with these approximate rates (marked ≈). Changing a rate updates past transactions in that currency.")
+                Text("Spends in other currencies are also shown in \(MoneyText.home) with these approximate rates (marked ≈). Changing a rate updates past transactions.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
-            Section("1 unit in AED") {
+            Section("1 unit in \(MoneyText.home)") {
                 ForEach(rates, id: \.0) { r in
                     HStack {
                         Text(r.0).font(.body.monospaced())
@@ -948,7 +952,7 @@ struct RatesView: View {
                             get: { rates.first { $0.0 == r.0 }?.1 ?? r.1 },
                             set: { v in
                                 if let i = rates.firstIndex(where: { $0.0 == r.0 }) { rates[i].1 = v }
-                                if let d = Double(v), d > 0 { model.engine.setRate(currency: r.0, rate: v) }
+                                if (MoneyText.parseRate(v) ?? 0) > 0 { model.engine.setRate(currency: r.0, rate: v) }
                             }
                         ))
                         .keyboardType(.decimalPad)
@@ -959,14 +963,14 @@ struct RatesView: View {
             }
             Section("Add a currency") {
                 TextField("Code, e.g. INR", text: $newCurrency).textInputAutocapitalization(.characters)
-                TextField("AED for 1 unit", text: $newRate).keyboardType(.decimalPad)
+                TextField("\(MoneyText.home) for 1 unit", text: $newRate).keyboardType(.decimalPad)
                 Button("Add") {
                     model.engine.setRate(currency: newCurrency, rate: newRate)
                     newCurrency = ""
                     newRate = ""
                     load()
                 }
-                .disabled(newCurrency.trimmingCharacters(in: .whitespaces).count != 3 || (Double(newRate) ?? 0) <= 0)
+                .disabled(newCurrency.trimmingCharacters(in: .whitespaces).count != 3 || (MoneyText.parseRate(newRate) ?? 0) <= 0)
             }
         }
         .themedScreen()
@@ -975,7 +979,63 @@ struct RatesView: View {
     }
 
     private func load() {
-        rates = Settings.rates.sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+        // Every currency with a rate, AED included when it isn't your home currency, each as "1 unit = x home".
+        let home = MoneyText.home
+        let codes = Set(Settings.rates.keys).union(["AED"]).subtracting([home]).sorted()
+        rates = codes.compactMap { c in model.engine.rateInHome(c).map { (c, $0) } }
+    }
+}
+
+/// Pick your home currency: every amount is totalled and shown in it.
+struct HomeCurrencyView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var pending: String?
+
+    private var all: [(code: String, name: String)] {
+        Bridge.shared.knownCurrencies().map { c in (c, Locale(identifier: "en_US").localizedString(forCurrencyCode: c) ?? c) }
+    }
+
+    private var shown: [(code: String, name: String)] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        return q.isEmpty ? all : all.filter { $0.code.localizedCaseInsensitiveContains(q) || $0.name.localizedCaseInsensitiveContains(q) }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Text("Totals, budgets, alerts and reports are in this currency; other currencies are converted with the rates in Exchange rates. Changing it reads your messages again (a \"$\" or \"Rs\" then means your currency). Budgets and alert amounts keep their numbers.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Section {
+                ForEach(shown, id: \.code) { c in
+                    Button { if c.code != MoneyText.home { pending = c.code } } label: {
+                        HStack {
+                            Text(c.code).font(.body.monospaced().weight(.semibold)).frame(width: 56, alignment: .leading)
+                            Text(c.name).foregroundStyle(.primary).lineLimit(1)
+                            Spacer()
+                            if c.code == MoneyText.home { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                        }
+                    }
+                }
+            }
+        }
+        .searchable(text: $query)
+        .themedScreen()
+        .navigationTitle("Home currency")
+        .confirmationDialog("Use \(pending ?? "") as your home currency?", isPresented: Binding(get: { pending != nil }, set: { if !$0 { pending = nil } }), titleVisibility: .visible) {
+            Button("Use \(pending ?? "")") {
+                if let p = pending {
+                    model.engine.setHomeCurrency(p)
+                    model.toast = "Home currency: \(MoneyText.home)"
+                }
+                pending = nil
+                dismiss()
+            }
+        } message: {
+            Text("Your messages are read again and every amount is recalculated.")
+        }
     }
 }
 
@@ -1055,7 +1115,7 @@ struct FixedPaymentEditor: View {
             Form {
                 Section {
                     TextField("Name, e.g. Rent", text: $name)
-                    TextField("Amount (AED)", text: $amount).keyboardType(.decimalPad)
+                    TextField("Amount (\(MoneyText.home))", text: $amount).keyboardType(.decimalPad)
                     Picker("Day of the month", selection: $day) {
                         ForEach(1...31, id: \.self) { Text("\($0)").tag($0) }
                     }
@@ -1202,9 +1262,9 @@ struct NotificationsView: View {
                         if on { ask() }
                     }
                 if alerts {
-                    amountRow("Big spend from (AED)", $big) { Settings.bigSpendMinor = $0 }
-                    amountRow("Account balance below (AED)", $lowAccount) { Settings.lowAccountMinor = $0 }
-                    amountRow("Card available limit below (AED)", $lowCard) { Settings.lowCardMinor = $0 }
+                    amountRow("Big spend from (\(MoneyText.home))", $big) { Settings.bigSpendMinor = $0 }
+                    amountRow("Account balance below (\(MoneyText.home))", $lowAccount) { Settings.lowAccountMinor = $0 }
+                    amountRow("Card available limit below (\(MoneyText.home))", $lowCard) { Settings.lowCardMinor = $0 }
                     Toggle("Budget at 80% and 100%", isOn: $budgetAlerts).onChange(of: budgetAlerts) { _, v in Settings.budgetAlerts = v }
                 }
             } footer: {
@@ -1280,13 +1340,13 @@ struct HelpView: View {
         ("Is my data safe?",
          "Yes. Everything stays on this iPhone: there is no account and no server, and the data isn't backed up to iCloud. One-time passwords (OTPs) are never stored. Backups are files you save yourself, and you can lock the app with a PIN and Face ID."),
         ("My bank's messages don't show up",
-         "Check the automation in Shortcuts runs (it needs \"Run Immediately\"). If your bank writes amounts without \"AED\", add a second automation with another word. If the sender name is new, add it in More → Bank senders."),
+         "Check the automation in Shortcuts runs (it needs \"Run Immediately\"). If your bank writes amounts without the word your automation looks for, add a second automation with another word. If the sender name is new, add it in More → Bank senders."),
         ("A transaction is wrong",
          "Tap it on the Activity tab to see the original SMS. Change its category there, or delete it. Messages the app couldn't read are in More → Needs review, where you can tell the app what they were (it remembers)."),
         ("What counts as spending?",
          "Purchases, minus refunds and cashback. Paying off a card, transfers between your accounts and money coming in never count. Each card has a \"Show & count\" switch: debit cards and bank accounts are off by default, so money isn't counted twice when you pay a card from your account."),
         ("Foreign currency",
-         "Spends in other currencies are shown in AED with approximate rates (marked ≈). Set your own rates in More → Exchange rates."),
+         "Spends in other currencies are also shown in your home currency with approximate rates (marked ≈). Set your own rates in More → Exchange rates, and your home currency in More → Home currency."),
         ("Card due dates and statements",
          "When your bank sends a statement SMS, the card shows the amount due, the due date and whether it's paid. You can also check a statement PDF (Share → \(AppInfo.name) from Mail or Files) to compare it with what the app recorded and add anything missing."),
         ("Adding things by hand",

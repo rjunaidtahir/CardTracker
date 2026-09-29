@@ -142,9 +142,9 @@ enum Insights {
             .sorted { $0.amount != $1.amount ? $0.amount > $1.amount : $0.name < $1.name }.prefix(limit))
     }
 
-    /// Purchases in each non-AED currency: original total and AED equivalent.
-    static func byCurrency(_ txns: [TxnView], excluded: Set<String>) -> [CurrencyTotal] {
-        let foreign = txns.filter { SpendRules.counted($0, excluded: excluded) && $0.type == .purchase && $0.currency != "AED" }
+    /// Purchases in each currency other than [home]: original total and the [home] equivalent.
+    static func byCurrency(_ txns: [TxnView], excluded: Set<String>, home: String = MoneyText.home) -> [CurrencyTotal] {
+        let foreign = txns.filter { SpendRules.counted($0, excluded: excluded) && $0.type == .purchase && $0.currency != home }
         return Dictionary(grouping: foreign, by: \.currency).map { cur, l in
             CurrencyTotal(currency: cur, originalMinor: l.reduce(0) { $0 + $1.amountMinor }, aedMinor: l.reduce(0) { $0 + ($1.aed ?? 0) }, count: l.count)
         }.sorted { $0.aedMinor != $1.aedMinor ? $0.aedMinor > $1.aedMinor : $0.currency < $1.currency }

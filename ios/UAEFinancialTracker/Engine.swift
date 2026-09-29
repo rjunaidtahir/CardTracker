@@ -84,7 +84,7 @@ final class Engine {
 
     private func learnedFix(_ s: SmsRecord, type: String, amountMinor: Int64, merchant: String, cardLast4: String?, cardType: String) -> LearnedFix {
         LearnedFix(key: Backup.key(for: s), bank: s.bank ?? s.sender, body: s.body, type: type, amountMinor: amountMinor,
-                   currency: "AED", merchant: merchant, cardLast4: cardLast4 ?? "", cardType: cardType)
+                   currency: MoneyText.home, merchant: merchant, cardLast4: cardLast4 ?? "", cardType: cardType)
     }
 
     /// Whether "apply to similar messages" can work for this reading (the Fix screen offers it then).
@@ -274,7 +274,7 @@ final class Engine {
             }
             let st = StatementRecord(
                 cardKey: key, bank: bank, cardLast4: card?.last4 ?? target.last4, receivedAt: sms.receivedAt, balanceMinor: r.balanceMinor,
-                currency: r.currency ?? "AED", dueEpochDay: r.dueEpochDay
+                currency: r.currency ?? MoneyText.home, dueEpochDay: r.dueEpochDay
             )
             st.smsId = sms.id
             st.minimumDueMinor = r.hasMinimumDue ? r.minimumDueMinor : nil
@@ -326,7 +326,7 @@ final class Engine {
             cardType = r.cardType ?? CardKind.credit.rawValue
             merchant = r.merchant ?? "Transaction"
             amountMinor = r.amountMinor
-            currency = r.currency ?? "AED"
+            currency = r.currency ?? MoneyText.home
             aedMinor = r.aedMinor
             fxEstimated = r.fxEstimated
             timestamp = r.timestampMillis > 0 ? Date(timeIntervalSince1970: Double(r.timestampMillis) / 1000) : fallbackTime
@@ -345,7 +345,7 @@ final class Engine {
             amountMinor = fix.amountMinor
             currency = fix.currency
             aedMinor = Bridge.shared.toAedMinor(amountMinor: fix.amountMinor, currency: fix.currency, rates: rates)
-            fxEstimated = fix.currency.uppercased() != "AED"
+            fxEstimated = fix.currency.uppercased() != MoneyText.home
             timestamp = fix.timestamp
             availableMinor = nil
             toLast4 = nil
@@ -460,7 +460,7 @@ final class Engine {
         }
         context.insert(txn)
         if !rereading { fresh.append(txn) }
-        let note = t.aedMinor < 0 ? "No AED rate for \(t.currency): add one in More → Exchange rates" : nil
+        let note = t.aedMinor < 0 ? "No exchange rate for \(t.currency): add one in More → Exchange rates" : nil
         setResult(sms, SmsStatus.transaction, bank: t.bank, ruleId: t.ruleId, note: note)
         return .transaction
     }
@@ -545,7 +545,7 @@ final class Engine {
         let m = merchant.trimmingCharacters(in: .whitespaces)
         let cur = currency.trimmingCharacters(in: .whitespaces).uppercased()
         let fix = SmsFix(
-            smsId: sms.id, type: type?.rawValue ?? SmsFix.ignore, amountMinor: amountMinor, currency: cur.isEmpty ? "AED" : cur,
+            smsId: sms.id, type: type?.rawValue ?? SmsFix.ignore, amountMinor: amountMinor, currency: cur.isEmpty ? MoneyText.home : cur,
             merchant: m.isEmpty ? "Transaction" : m, cardLast4: (last4?.isEmpty ?? true) ? nil : last4, cardType: cardType.rawValue, timestamp: date
         )
         context.insert(fix)
@@ -598,7 +598,7 @@ final class Engine {
         let t = Txn(source: "Typed", timestamp: date, bank: card?.bank ?? "Cash", merchant: e.details, amountMinor: e.amountMinor, currency: e.currency, aedMinor: aed, type: e.type)
         t.cardKey = card?.key
         t.cardLast4 = card?.last4 ?? e.cardLast4
-        t.fxEstimated = e.currency.uppercased() != "AED"
+        t.fxEstimated = e.currency.uppercased() != MoneyText.home
         t.merchantKey = bridge.merchantKey(merchant: e.details)
         t.categoryId = category(merchant: e.details, merchantKey: t.merchantKey, type: e.type, amountMinor: e.amountMinor)
         context.insert(t)
@@ -722,18 +722,41 @@ final class Engine {
         refreshSenders()
     }
 
-    /// Saves a rate and recalculates every transaction in that currency.
+    /// Saves "1 [currency] = [rate] in your home currency" and recalculates the transactions it affects.
     func setRate(currency: String, rate: String) {
         let cur = currency.trimmingCharacters(in: .whitespaces).uppercased()
-        guard cur.count == 3, let v = Double(rate), v > 0 else { return }
+        guard cur.count == 3, let stored = bridge.rateToStore(currency: cur, perHome: rate, rates: Settings.rates), stored.count == 2 else { return }
         var r = Settings.rates
-        r[cur] = rate.trimmingCharacters(in: .whitespaces)
+        r[stored[0]] = stored[1]
         Settings.rates = r
-        for t in fetchAll(Txn.self) where t.currency.caseInsensitiveCompare(cur) == .orderedSame {
+        // Your home currency's own rate (AED edited when home isn't AED) moves every foreign amount.
+        recomputeHomeAmounts(only: stored[0] == MoneyText.home ? nil : stored[0])
+    }
+
+    /// 1 [currency] in your home currency, as text; nil when there's no rate.
+    func rateInHome(_ currency: String) -> String? { bridge.rateInHome(currency: currency, rates: Settings.rates) }
+
+    /// Recalculates amounts in your home currency: every transaction, or only those in [only].
+    func recomputeHomeAmounts(only: String? = nil) {
+        let r = Settings.rates
+        let home = MoneyText.home
+        for t in fetchAll(Txn.self) where only == nil || t.currency.caseInsensitiveCompare(only!) == .orderedSame {
             t.aedMinor = bridge.toAedMinor(amountMinor: t.amountMinor, currency: t.currency, rates: r)
+            t.fxEstimated = t.currency.uppercased() != home
         }
         save()
         changed()
+    }
+
+    /// Changes your home currency: messages are read again (a "$" or "Rs" means your currency) and every amount is
+    /// recalculated in it. Budgets, goals and alert amounts keep their numbers.
+    func setHomeCurrency(_ code: String) {
+        let c = code.trimmingCharacters(in: .whitespaces).uppercased()
+        guard bridge.knownCurrencies().contains(c) else { return }
+        Settings.homeCurrency = c
+        Region.apply()
+        _ = rereadAll()
+        recomputeHomeAmounts()
     }
 
     // MARK: - Budgets, fixed payments, goals
@@ -766,7 +789,7 @@ final class Engine {
 
     /// Records this month's payment as a typed spend and marks it paid.
     func markPaid(_ f: FixedPayment, date: Date = Date()) {
-        let t = Txn(source: "Fixed", timestamp: date, bank: "Fixed payment", merchant: f.name, amountMinor: f.amountMinor, currency: "AED", aedMinor: f.amountMinor, type: TxnKind.purchase.rawValue)
+        let t = Txn(source: "Fixed", timestamp: date, bank: "Fixed payment", merchant: f.name, amountMinor: f.amountMinor, currency: MoneyText.home, aedMinor: f.amountMinor, type: TxnKind.purchase.rawValue)
         t.note = "Fixed payment"
         t.merchantKey = bridge.merchantKey(merchant: f.name)
         t.categoryId = f.categoryId ?? category(merchant: f.name, merchantKey: t.merchantKey, type: t.type, amountMinor: f.amountMinor)
@@ -837,7 +860,7 @@ final class Engine {
                 if !exists {
                     let st = StatementRecord(
                         cardKey: cardKey, bank: card.bank, cardLast4: card.last4, receivedAt: Date(), balanceMinor: s.totalDueMinor,
-                        currency: "AED", dueEpochDay: s.dueEpochDay
+                        currency: MoneyText.home, dueEpochDay: s.dueEpochDay
                     )
                     st.minimumDueMinor = s.minimumDueMinor >= 0 ? s.minimumDueMinor : nil
                     st.statementEpochDay = s.statementEpochDay >= 0 ? s.statementEpochDay : nil
@@ -857,7 +880,7 @@ final class Engine {
             else { type = .refund }
             let date = Dates.date(epochDay: row.epochDay).addingTimeInterval(12 * 3600)
             if existing.contains(where: { $0.timestamp == date && $0.amountMinor == row.amountMinor && $0.merchant == row.details }) { continue }
-            let t = Txn(source: "Statement", timestamp: date, bank: card.bank, merchant: row.details, amountMinor: row.amountMinor, currency: "AED", aedMinor: row.amountMinor, type: type.rawValue)
+            let t = Txn(source: "Statement", timestamp: date, bank: card.bank, merchant: row.details, amountMinor: row.amountMinor, currency: MoneyText.home, aedMinor: row.amountMinor, type: type.rawValue)
             t.cardKey = card.key
             t.cardLast4 = card.last4
             t.note = "From statement PDF"

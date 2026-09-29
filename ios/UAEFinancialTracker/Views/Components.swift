@@ -199,14 +199,14 @@ struct TrendChart: View {
                     .font(.subheadline).foregroundStyle(.secondary)
             }
             Chart(points) { p in
-                AreaMark(x: .value("Date", Dates.date(epochDay: p.start)), y: .value("AED", Double(p.amountMinor) / 100))
+                AreaMark(x: .value("Date", Dates.date(epochDay: p.start)), y: .value(MoneyText.home, Double(p.amountMinor) / 100))
                     .foregroundStyle(LinearGradient(colors: [Color.accentColor.opacity(0.35), Color.accentColor.opacity(0.02)], startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
-                LineMark(x: .value("Date", Dates.date(epochDay: p.start)), y: .value("AED", Double(p.amountMinor) / 100))
+                LineMark(x: .value("Date", Dates.date(epochDay: p.start)), y: .value(MoneyText.home, Double(p.amountMinor) / 100))
                     .foregroundStyle(Color.accentColor)
                     .interpolationMethod(.monotone)
                 if let sel, sel.start == p.start {
-                    PointMark(x: .value("Date", Dates.date(epochDay: p.start)), y: .value("AED", Double(p.amountMinor) / 100))
+                    PointMark(x: .value("Date", Dates.date(epochDay: p.start)), y: .value(MoneyText.home, Double(p.amountMinor) / 100))
                         .foregroundStyle(Color.accentColor)
                 }
             }
@@ -234,7 +234,7 @@ struct MonthBars: View {
 
     var body: some View {
         Chart(months, id: \.ym) { m in
-            BarMark(x: .value("Month", Dates.monthShort.string(from: Dates.date(epochDay: m.start))), y: .value("AED", Double(m.amount) / 100))
+            BarMark(x: .value("Month", Dates.monthShort.string(from: Dates.date(epochDay: m.start))), y: .value(MoneyText.home, Double(m.amount) / 100))
                 .foregroundStyle(m.ym == selectedYm ? Color.accentColor : Color.accentColor.opacity(0.35))
                 .cornerRadius(4)
         }

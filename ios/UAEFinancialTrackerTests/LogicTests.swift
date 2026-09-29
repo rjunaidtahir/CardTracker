@@ -1,4 +1,5 @@
 import XCTest
+import Shared
 import SwiftData
 import UIKit
 @testable import UAEFinancialTracker
@@ -12,6 +13,10 @@ final class LogicTests: XCTestCase {
         let schema = Schema(AppModels.all)
         let container = try ModelContainer(for: schema, configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)])
         containers.append(container)
+        // Tests are written for a UAE phone, whatever region the simulator is set to.
+        Bridge.shared.setHomeCurrency(code: "AED")
+        Bridge.shared.setMonthFirstDates(value: false)
+        MoneyText.home = "AED"
         return Engine(context: container.mainContext)
     }
 

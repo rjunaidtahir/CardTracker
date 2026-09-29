@@ -188,7 +188,7 @@ struct HomeView: View {
                 RecurringSection(views: views, cards: cards, today: today)
                 let foreign = Insights.byCurrency(inPeriod, excluded: excluded)
                 if !foreign.isEmpty {
-                    Section("Foreign currency (in AED)") {
+                    Section("Foreign currency (in \(MoneyText.home))") {
                         ForEach(foreign) { f in
                             HStack {
                                 VStack(alignment: .leading) {
@@ -298,7 +298,7 @@ struct BudgetsEditor: View {
                         }
                     }
                 } footer: {
-                    Text("Monthly limits in AED. Leave empty for no budget. You get a warning at 80% and when a budget is used up (switch alerts on in More → Notifications).")
+                    Text("Monthly limits in \(MoneyText.home). Leave empty for no budget. You get a warning at 80% and when a budget is used up (switch alerts on in More → Notifications).")
                 }
             }
             .navigationTitle("Monthly budgets")
@@ -558,8 +558,8 @@ struct GoalEditor: View {
         NavigationStack {
             Form {
                 TextField("Name, e.g. Holiday", text: $name)
-                TextField("Target (AED)", text: $targetText).keyboardType(.decimalPad)
-                TextField("Saved so far (AED)", text: $savedText).keyboardType(.decimalPad)
+                TextField("Target (\(MoneyText.home))", text: $targetText).keyboardType(.decimalPad)
+                TextField("Saved so far (\(MoneyText.home))", text: $savedText).keyboardType(.decimalPad)
                 Toggle("Target date", isOn: $hasDate)
                 if hasDate { DatePicker("Reach it by", selection: $date, in: Date()..., displayedComponents: .date) }
                 if let error { Text(error).foregroundStyle(.red) }
@@ -623,7 +623,7 @@ struct AddMoneyView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Amount (AED)", text: $text).keyboardType(.numbersAndPunctuation)
+                    TextField("Amount (\(MoneyText.home))", text: $text).keyboardType(.numbersAndPunctuation)
                 } footer: {
                     Text("Use a minus sign to take money out, e.g. -200.")
                 }

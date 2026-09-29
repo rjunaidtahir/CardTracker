@@ -81,26 +81,26 @@ enum Reports {
         rows.append([title])
         rows.append(["Period", d.period.label])
         rows.append(["Generated", Dates.dayTime.string(from: Date())])
-        rows.append(["Total spent (AED)", plain(d.spent)])
+        rows.append(["Total spent (\(MoneyText.home))", plain(d.spent)])
         if let p = d.previous, let ps = d.previousSpent { rows.append(["Previous period", p.label, plain(ps)]) }
-        rows.append(["Money in (AED)", plain(d.moneyIn)])
+        rows.append(["Money in (\(MoneyText.home))", plain(d.moneyIn)])
         rows.append(["Spends", String(d.spends)])
-        rows.append(["Average per day (AED)", plain(d.perDay)])
+        rows.append(["Average per day (\(MoneyText.home))", plain(d.perDay)])
         rows.append([])
-        rows.append(["Category", "Amount (AED)", "Share %"])
+        rows.append(["Category", "Amount (\(MoneyText.home))", "Share %"])
         for c in d.categories {
             rows.append([Categories.name(c.categoryId), plain(c.amount), d.spent > 0 ? String(c.amount * 100 / d.spent) : "0"])
         }
         rows.append([])
         if !d.budgets.isEmpty {
-            rows.append(["Budget (this month)", "Spent (AED)", "Limit (AED)", "Used %"])
+            rows.append(["Budget (this month)", "Spent (\(MoneyText.home))", "Limit (\(MoneyText.home))", "Used %"])
             for b in d.budgets { rows.append([Categories.name(b.categoryId), plain(b.spentMinor), plain(b.limitMinor), String(b.percent)]) }
             rows.append([])
         }
-        rows.append(["Card", "Spent (AED)"])
+        rows.append(["Card", "Spent (\(MoneyText.home))"])
         for c in d.cards { rows.append([c.label, plain(c.amount)]) }
         rows.append([])
-        rows.append(["Date", "Merchant", "Category", "Card", "Type", "Amount", "Amount (AED)"])
+        rows.append(["Date", "Merchant", "Category", "Card", "Type", "Amount", "Amount (\(MoneyText.home))"])
         let f = DateFormatter()
         f.dateFormat = "dd MMM yy"
         f.locale = Locale(identifier: "en_GB")
@@ -271,7 +271,7 @@ enum Reports {
                 text(t.merchant, cols[1], y, font(9), width: 180)
                 text(t.txnType == .purchase || t.txnType == .refund ? Categories.name(t.categoryId) : typeText(t), cols[2], y, font(9), muted, width: 100)
                 text(t.cardKey.flatMap { d.cardLabels[$0] } ?? "Typed", cols[3], y, font(9), muted, width: 85)
-                let amount = (incoming ? "+" : "") + (t.currency == "AED" ? "" : t.currency + " ") + MoneyText.amount(t.amountMinor)
+                let amount = (incoming ? "+" : "") + (t.currency == MoneyText.home ? "" : t.currency + " ") + MoneyText.amount(t.amountMinor)
                 text(amount, page.width - margin, y, font(9, .semibold), incoming ? green : .black, right: true)
                 y += 14
             }

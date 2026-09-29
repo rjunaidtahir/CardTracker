@@ -167,11 +167,11 @@ struct TxnRow: View {
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text((type == .purchase || type == .transferOut ? "−" : "+") + (txn.currency.uppercased() == "AED" ? "" : txn.currency + " ") + MoneyText.amount(txn.amountMinor))
+                Text((type == .purchase || type == .transferOut ? "−" : "+") + (txn.currency.uppercased() == MoneyText.home ? "" : txn.currency + " ") + MoneyText.amount(txn.amountMinor))
                     .font(.subheadline.monospacedDigit())
                     .foregroundStyle(!counted ? .secondary : incoming ? Palette.green : .primary)
-                if txn.currency.uppercased() != "AED" {
-                    Text(txn.aedMinor >= 0 ? "≈ AED \(MoneyText.amount(txn.aedMinor))" : "no AED rate").font(.caption2).foregroundStyle(.secondary)
+                if txn.currency.uppercased() != MoneyText.home {
+                    Text(txn.aedMinor >= 0 ? "≈ \(MoneyText.home) \(MoneyText.amount(txn.aedMinor))" : "no rate").font(.caption2).foregroundStyle(.secondary)
                 } else {
                     Text(Dates.time.string(from: txn.timestamp)).font(.caption2).foregroundStyle(.secondary)
                 }
@@ -220,8 +220,8 @@ struct TxnDetailView: View {
         Form {
             Section {
                 LabeledContent("Amount", value: MoneyText.text(txn.amountMinor, txn.currency))
-                if txn.currency.uppercased() != "AED" {
-                    LabeledContent("In AED", value: txn.aedMinor >= 0 ? "≈ " + MoneyText.text(txn.aedMinor) : "Add a rate in More → Exchange rates")
+                if txn.currency.uppercased() != MoneyText.home {
+                    LabeledContent("In \(MoneyText.home)", value: txn.aedMinor >= 0 ? "≈ " + MoneyText.text(txn.aedMinor) : "Add a rate in More → Exchange rates")
                 }
                 LabeledContent("Type", value: txn.txnType.label)
                 LabeledContent("When", value: Dates.day.string(from: txn.timestamp) + ", " + Dates.time.string(from: txn.timestamp))

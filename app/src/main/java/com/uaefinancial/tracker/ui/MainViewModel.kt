@@ -790,7 +790,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Changes your home currency (More → Home currency): messages are read again and every amount recalculated. */
     fun setHomeCurrency(code: String) = viewModelScope.launch {
-        busy.value = true
+        message.value = "Changing the home currency to $code…"
         try {
             withContext(Dispatchers.IO) { repo.setHomeCurrency(code) }
             Home.code = SmsParser.homeCurrency
@@ -798,8 +798,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             refreshWidget()
         } catch (e: Exception) {
             message.value = "Couldn't change the home currency: ${e.message}"
-        } finally {
-            busy.value = false
         }
     }
 

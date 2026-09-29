@@ -292,7 +292,7 @@ struct CardDetailView: View {
             if history.count >= 2 {
                 Section(card.kind == .credit ? "Available limit history" : "Balance history") {
                     Chart(history, id: \.0) { p in
-                        LineMark(x: .value("Date", Dates.date(epochDay: p.0)), y: .value("AED", Double(p.1) / 100))
+                        LineMark(x: .value("Date", Dates.date(epochDay: p.0)), y: .value(MoneyText.home, Double(p.1) / 100))
                             .interpolationMethod(.stepEnd)
                             .foregroundStyle(card.kind == .credit ? Palette.pink : Color.accentColor)
                     }
@@ -365,7 +365,7 @@ struct CardDetailView: View {
             Section {
                 TextField("Nickname (optional)", text: $nickname)
                 if card.kind == .credit {
-                    TextField("Credit limit (AED)", text: $limitText).keyboardType(.decimalPad)
+                    TextField("Credit limit (\(MoneyText.home))", text: $limitText).keyboardType(.decimalPad)
                     TextField("Statement day (1–31)", text: $statementDayText).keyboardType(.numberPad)
                     TextField("Due day (1–31)", text: $dueDayText).keyboardType(.numberPad)
                     Toggle("Due-date reminders for this card", isOn: $reminders)

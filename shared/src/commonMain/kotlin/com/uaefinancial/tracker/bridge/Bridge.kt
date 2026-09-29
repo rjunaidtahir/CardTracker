@@ -351,6 +351,47 @@ object Bridge {
     /** Built-in approximate rates (currency to AED), as text. */
     fun defaultRates(): Map<String, String> = BankRules.fxToAed.mapValues { it.value.toPlainString() }
 
+    /** An amount you typed, in minor units, read the way [currency] (default: your home currency) writes amounts; null if not one. */
+    fun parseTypedMinor(text: String, currency: String?): Long? =
+        runCatching { SmsParser.parseTyped(text, currency ?: SmsParser.homeCurrency)?.let { Money.toMinor(it) } }.getOrNull()
+
+    /** 1 [currency] in your home currency, from [rates] ("1 unit = x AED"); null when either has no rate. */
+    fun rateInHome(currency: String, rates: Map<String, String>): String? {
+        val c = aedRate(currency, rates) ?: return null
+        val h = aedRate(SmsParser.homeCurrency, rates)?.takeIf { it > 0.0 } ?: return null
+        return fixed(c / h, 6)
+    }
+
+    /**
+     * What to store for "1 [currency] = [perHome] in your home currency": [code, rate against AED]. For AED itself
+     * (when your home currency isn't AED) that's your home currency's rate. Null if it can't be worked out.
+     */
+    fun rateToStore(currency: String, perHome: String, rates: Map<String, String>): List<String>? {
+        val home = SmsParser.homeCurrency
+        val c = currency.trim().uppercase()
+        val v = perHome.trim().let { if (!it.contains('.') && it.count { ch -> ch == ',' } == 1) it.replace(',', '.') else it.replace(",", "") }
+            .toDoubleOrNull()?.takeIf { it > 0.0 && it.isFinite() } ?: return null
+        if (c == home || c.length != 3) return null
+        val pivot = com.uaefinancial.tracker.parser.Currencies.PIVOT
+        return when {
+            home == pivot -> listOf(c, fixed(v, 8))
+            c == pivot -> listOf(home, fixed(1.0 / v, 10))
+            else -> listOf(c, fixed(v * (aedRate(home, rates) ?: return null), 8))
+        }
+    }
+
+    private fun aedRate(currency: String, rates: Map<String, String>): Double? {
+        val c = currency.uppercase()
+        if (c == com.uaefinancial.tracker.parser.Currencies.PIVOT) return 1.0
+        return (rates[c] ?: BankRules.fxToAed[c]?.toPlainString())?.toDoubleOrNull()
+    }
+
+    private fun fixed(v: Double, scale: Int): String {
+        var p = 1L
+        repeat(scale) { p *= 10 }
+        return com.uaefinancial.tracker.core.Decimal.valueOf(kotlin.math.round(v * p).toLong(), scale).stripTrailingZeros().toPlainString()
+    }
+
     private fun txnType(name: String) = runCatching { TxnType.valueOf(name) }.getOrDefault(TxnType.PURCHASE)
     private fun cardTypeOf(name: String) = runCatching { CardType.valueOf(name) }.getOrDefault(CardType.CREDIT)
 }

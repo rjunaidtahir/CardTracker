@@ -1,4 +1,5 @@
 import XCTest
+import Shared
 import SwiftData
 import UIKit
 import PDFKit
@@ -11,6 +12,10 @@ final class EngineTests: XCTestCase {
         let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [config])
         containers.append(container)
+        // Tests are written for a UAE phone, whatever region the simulator is set to.
+        Bridge.shared.setHomeCurrency(code: "AED")
+        Bridge.shared.setMonthFirstDates(value: false)
+        MoneyText.home = "AED"
         return Engine(context: container.mainContext)
     }
 

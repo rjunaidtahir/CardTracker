@@ -49,10 +49,26 @@ enum AutomationStatus: Equatable {
 enum Settings {
     private static var defaults: UserDefaults { UserDefaults.standard }
 
-    /// Currency → AED rate, as text ("3.6725"). Starts with the built-in approximate rates.
+    /// Currency → AED rate, as text ("3.6725"; AED is the pivot whatever your home currency is). The built-in
+    /// approximate rates, with the ones you changed on top.
     static var rates: [String: String] {
-        get { (defaults.dictionary(forKey: "rates") as? [String: String]) ?? Bridge.shared.defaultRates() }
+        get {
+            let mine = (defaults.dictionary(forKey: "rates") as? [String: String]) ?? [:]
+            return Bridge.shared.defaultRates().merging(mine) { _, yours in yours }
+        }
         set { defaults.set(newValue, forKey: "rates") }
+    }
+
+    /// Your home currency (ISO code); nil until it's set once from the phone's region.
+    static var homeCurrency: String? {
+        get { defaults.string(forKey: "homeCurrency") }
+        set { defaults.set(newValue, forKey: "homeCurrency") }
+    }
+
+    /// The country whose date style messages are read in ("US" writes the month first); nil until set once.
+    static var dateRegion: String? {
+        get { defaults.string(forKey: "dateRegion") }
+        set { defaults.set(newValue, forKey: "dateRegion") }
     }
 
     /// The last time the Shortcuts automation passed a message to the app (any message, bank or not).
@@ -242,8 +258,43 @@ enum Dates {
     }
 }
 
+/// Where you are, for reading messages: your home currency, whether dates are written month first, and the phone's
+/// time zone. Set before anything is read.
+enum Region {
+    static func apply() {
+        if DemoData.isOn {
+            // The demo is a UAE phone.
+            Bridge.shared.setHomeCurrency(code: "AED")
+            Bridge.shared.setMonthFirstDates(value: false)
+        } else {
+            if Settings.homeCurrency == nil || Settings.dateRegion == nil {
+                // An install from before the app went global keeps AED and day-first dates, as it always read them.
+                let country = Settings.onboarded ? "AE" : Locale.current.region?.identifier
+                if Settings.homeCurrency == nil { Settings.homeCurrency = currency(for: country) }
+                if Settings.dateRegion == nil { Settings.dateRegion = country ?? "" }
+            }
+            Bridge.shared.setHomeCurrency(code: Settings.homeCurrency ?? "AED")
+            Bridge.shared.setMonthFirstDates(value: Bridge.shared.isMonthFirstRegion(countryCode: Settings.dateRegion ?? ""))
+        }
+        Bridge.shared.setZoneMinutes(minutes: Int32(TimeZone.current.secondsFromGMT() / 60))
+        MoneyText.home = Bridge.shared.homeCurrency()
+    }
+
+    /// The currency used in [country], if the app has a rate for it; otherwise AED.
+    static func currency(for country: String?) -> String {
+        guard let country, !country.isEmpty else { return "AED" }
+        if let c = Bridge.shared.currencyForRegion(countryCode: country) { return c }
+        let known = Set(Bridge.shared.knownCurrencies())
+        if let c = Locale(identifier: "en_\(country)").currency?.identifier, known.contains(c) { return c }
+        return "AED"
+    }
+}
+
 /// Money as people read it: "AED 1,234.50".
 enum MoneyText {
+    /// Your home currency: every total is in it. Set by `Region.apply()`.
+    static var home = "AED"
+
     private static let number: NumberFormatter = {
         let f = NumberFormatter()
         f.numberStyle = .decimal
@@ -261,39 +312,42 @@ enum MoneyText {
         number.string(from: NSDecimalNumber(mantissa: UInt64(abs(minor)), exponent: -2, isNegative: minor < 0)) ?? "\(Double(minor) / 100)"
     }
 
-    static func text(_ minor: Int64, _ currency: String = "AED") -> String { "\(currency) \(amount(minor))" }
+    static func text(_ minor: Int64, _ currency: String? = nil) -> String { "\(currency ?? home) \(amount(minor))" }
 
     /// "AED 3,413", "AED 125.4K", "AED 1.2M".
     static func compact(_ minor: Int64) -> String {
         let v = Double(minor) / 100
-        if abs(v) >= 1_000_000 { return String(format: "AED %.1fM", v / 1_000_000) }
-        if abs(v) >= 100_000 { return String(format: "AED %.1fK", v / 1_000) }
+        if abs(v) >= 1_000_000 { return String(format: "%@ %.1fM", home, v / 1_000_000) }
+        if abs(v) >= 100_000 { return String(format: "%@ %.1fK", home, v / 1_000) }
         let f = NumberFormatter()
         f.numberStyle = .decimal
         f.maximumFractionDigits = 0
         f.locale = Locale(identifier: "en_US_POSIX")
         f.groupingSeparator = ","
         f.usesGroupingSeparator = true
-        return "AED " + (f.string(from: NSNumber(value: v.rounded())) ?? "\(Int(v))")
+        return home + " " + (f.string(from: NSNumber(value: v.rounded())) ?? "\(Int(v))")
     }
 
     /// For text fields: "1234.5" (no grouping).
     static func plain(_ minor: Int64) -> String { amount(minor).replacingOccurrences(of: ",", with: "") }
 
     /// "123.45" or "1,234" typed by you → fils. Nil when it isn't a positive number.
-    static func parse(_ text: String) -> Int64? {
-        guard let v = parseSigned(text), v > 0 else { return nil }
+    static func parse(_ text: String, currency: String? = nil) -> Int64? {
+        guard let v = parseSigned(text, currency: currency), v > 0 else { return nil }
         return v
     }
 
-    /// Like parse, but negative numbers are allowed ("-200" to take money out of a goal).
-    static func parseSigned(_ text: String) -> Int64? {
-        let clean = text.replacingOccurrences(of: ",", with: "").trimmingCharacters(in: .whitespaces)
-        guard !clean.isEmpty, let d = Foundation.Decimal(string: clean, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
-        var scaled = d * 100
-        var rounded = Foundation.Decimal()
-        NSDecimalRound(&rounded, &scaled, 0, .plain)
-        return NSDecimalNumber(decimal: rounded).int64Value
+    /// An exchange rate typed by you ("3.6725", or "3,6725" with a decimal comma).
+    static func parseRate(_ text: String) -> Double? {
+        let t = text.trimmingCharacters(in: .whitespaces)
+        let n = (!t.contains(".") && t.filter { $0 == "," }.count == 1) ? t.replacingOccurrences(of: ",", with: ".") : t.replacingOccurrences(of: ",", with: "")
+        return Double(n)
+    }
+
+    /// Like parse, but negative numbers are allowed ("-200" to take money out of a goal). Read the way your home
+    /// currency writes amounts: "1.234,50" in a euro country is 1234.50.
+    static func parseSigned(_ text: String, currency: String? = nil) -> Int64? {
+        Bridge.shared.parseTypedMinor(text: text, currency: currency)?.int64Value
     }
 }
 
