@@ -61,7 +61,7 @@ final class NotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
 struct FilsApp: App {
     @State private var model = AppModel()
     @Environment(\.scenePhase) private var scenePhase
-    @AppStorage("themeId") private var themeId = "system"
+    @AppStorage("themeId") private var themeId = "sand"
 
     init() {
         UNUserNotificationCenter.current().delegate = NotificationDelegate.shared

@@ -21,7 +21,7 @@ struct AppTheme: Identifiable, Equatable {
         AppTheme(id: "sand", name: "Warm Paper", scheme: .light, accent: Color(hex: 0xB4532A), bgTop: Color(hex: 0xF4E9D8), bg: Color(hex: 0xF7F3EC), bgBottom: Color(hex: 0xEFE7DA)),
     ]
 
-    static func byId(_ id: String) -> AppTheme { all.first { $0.id == id } ?? all[0] }
+    static func byId(_ id: String) -> AppTheme { all.first { $0.id == id } ?? all.first { $0.id == "sand" }! }
 
     var background: LinearGradient? {
         guard let bgTop, let bg, let bgBottom else { return nil }
@@ -32,7 +32,7 @@ struct AppTheme: Identifiable, Equatable {
 
 /// Gives a list or form screen the theme's background.
 struct ThemedScreen: ViewModifier {
-    @AppStorage("themeId") private var themeId = "system"
+    @AppStorage("themeId") private var themeId = "sand"
 
     @ViewBuilder
     func body(content: Content) -> some View {

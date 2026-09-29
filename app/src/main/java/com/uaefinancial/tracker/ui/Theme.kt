@@ -144,10 +144,13 @@ object AppThemes {
         ),
     )
 
-    fun byId(id: String?): Palette = all.firstOrNull { it.id == id } ?: all.first()
+    fun byId(id: String?): Palette = all.firstOrNull { it.id == id } ?: default
 
     /** The live theme; changing it recomposes the whole app. */
-    var current by mutableStateOf(all.first())
+    /** The default look: light, warm paper. */
+    val default: Palette get() = all.first { it.id == "sand" }
+
+    var current by mutableStateOf(default)
 }
 
 /** Design tokens, read from the selected theme. `green` is the accent, `violet` the second accent (names kept for older code). */

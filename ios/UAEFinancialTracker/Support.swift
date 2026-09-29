@@ -119,7 +119,7 @@ enum Settings {
     }
 
     static var themeId: String {
-        get { defaults.string(forKey: "themeId") ?? "system" }
+        get { defaults.string(forKey: "themeId") ?? "sand" }
         set { defaults.set(newValue, forKey: "themeId") }
     }
 
