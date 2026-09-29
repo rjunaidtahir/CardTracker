@@ -104,6 +104,25 @@ class Prefs(context: Context) {
         get() = sp.getStringSet("sent_alerts", emptySet()) ?: emptySet()
         set(v) { sp.edit { putStringSet("sent_alerts", v) } }
 
+    // --- reading messages
+    /**
+     * Fixes (by SMS dedupKey) you asked the app to apply to similar messages (Needs review → Fix). The fix itself and
+     * the message are in the database; this only marks which fixes are templates.
+     */
+    var learnedFixKeys: Set<String>
+        get() = sp.getStringSet("learned_fix_keys", emptySet())?.toSet() ?: emptySet()
+        set(v) { sp.edit { putStringSet("learned_fix_keys", v) } }
+
+    /** Banks you chose not to track (by bank name), e.g. unticked in setup. Needed before any SMS is looked at. */
+    var excludedBanks: Set<String>
+        get() = sp.getStringSet("excluded_banks", emptySet())?.toSet() ?: emptySet()
+        set(v) { sp.edit { putStringSet("excluded_banks", v) } }
+
+    /** SmsParser.ENGINE_VERSION the stored messages were last read with; 0 = never. */
+    var engineVersion: Int
+        get() = sp.getInt("engine_version", 0)
+        set(v) { sp.edit { putInt("engine_version", v) } }
+
     private companion object {
         const val KEY_LAST_SYNC = "last_sync_at"
         const val KEY_LIVE = "live_listening"

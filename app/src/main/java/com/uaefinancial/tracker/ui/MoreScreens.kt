@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -274,15 +275,17 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     val failed by vm.failedSms.collectAsStateWithLifecycle()
     val counts by vm.smsCounts.collectAsStateWithLifecycle()
     var fixing by remember { mutableStateOf<SmsEntity?>(null) }
+    var notTxn by remember { mutableStateOf<SmsEntity?>(null) }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
+    notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Panel(Modifier.fillMaxWidth()) {
                 Text("Messages the app couldn't read", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "These bank SMS mention an amount, but the app wasn't sure what they mean. For each one: Fix (tell the app what it was: " +
-                        "it remembers), Not a transaction, or Dismiss. After an app update, More → Re-read stored may read them automatically.",
+                    "These bank SMS mention an amount, but the app wasn't sure what they mean. For each one: Fix (tell the app what it was; " +
+                        "it can do the same for similar messages), Not a transaction, or Dismiss. App updates read them again automatically.",
                     style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
                 )
                 Text(
@@ -310,7 +313,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                     TextButton(onClick = { fixing = s }) { Text("Fix") }
-                    TextButton(onClick = { vm.markNotTransaction(s) }) { Text("Not a transaction") }
+                    TextButton(onClick = { notTxn = s }) { Text("Not a transaction") }
                     TextButton(onClick = { vm.dismiss(s.id) }) { Text("Dismiss", color = Ink.muted) }
                 }
             }
@@ -337,6 +340,9 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
     var merchant by remember { mutableStateOf("") }
     var last4 by remember { mutableStateOf("") }
     var cardType by remember { mutableStateOf(CardType.CREDIT) }
+    // "Apply to similar messages": on by default; only offered when it can work for this message.
+    var similar by remember { mutableStateOf(true) }
+    val canLearn = remember(type, amount, merchant, last4, cardType) { vm.canLearn(sms, type, amount, merchant, last4, cardType) }
     LaunchedEffect(sms.id) {
         vm.guessFor(sms)?.let { g ->
             type = g.type
@@ -377,11 +383,50 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
                     Pill("Bank account", cardType == CardType.ACCOUNT, onClick = { cardType = CardType.ACCOUNT })
                 }
                 Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
             }
         },
         confirmButton = {
-            TextButton(onClick = { vm.saveFix(sms, type, amount, currency, merchant, last4, cardType); onDismiss() }) { Text("Save") }
+            TextButton(onClick = { vm.saveFix(sms, type, amount, currency, merchant, last4, cardType, applyToSimilar = canLearn && similar); onDismiss() }) { Text("Save") }
         },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun SimilarMessagesOption(available: Boolean, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        verticalAlignment = Alignment.Top,
+        modifier = Modifier.fillMaxWidth().clickable(enabled = available) { onChange(!checked) }.padding(top = 4.dp),
+    ) {
+        Checkbox(available && checked, onChange, enabled = available)
+        Column(Modifier.padding(top = 12.dp)) {
+            Text("Apply to similar messages", style = MaterialTheme.typography.bodyMedium, color = if (available) Ink.text else Ink.muted)
+            Text(
+                if (available) "Other messages from this bank worded the same way (now and in future) are read like this one, with their own amount."
+                else "Not available for this message: it's too short, or the amount isn't written in it.",
+                style = MaterialTheme.typography.bodySmall, color = Ink.faint,
+            )
+        }
+    }
+}
+
+/** "Not a transaction", optionally for similar messages too. */
+@Composable
+private fun NotTransactionDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
+    var similar by remember { mutableStateOf(true) }
+    val canLearn = remember(sms.id) { vm.canLearn(sms, null, "", "", "", CardType.CREDIT) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Ink.surface,
+        title = { Text("Not a transaction?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(sms.body, style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 6, overflow = TextOverflow.Ellipsis)
+                SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
+            }
+        },
+        confirmButton = { TextButton(onClick = { vm.markNotTransaction(sms, applyToSimilar = canLearn && similar); onDismiss() }) { Text("Not a transaction") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
@@ -392,6 +437,7 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
 fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
     val senders by vm.senders.collectAsStateWithLifecycle()
     val scan by vm.scan.collectAsStateWithLifecycle()
+    val excluded by vm.excludedBanks.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showBuiltIn by rememberSaveable { mutableStateOf(false) }
     adding?.let { (s, b) -> AddSenderDialog(s, b, onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true); adding = null }, onDismiss = { adding = null }) }
@@ -421,9 +467,15 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
                 Panel(Modifier.fillMaxWidth()) {
                     Text("Found on this phone", style = MaterialTheme.typography.titleSmall)
                     if (r.known.isEmpty()) Muted("No messages from the banks the app knows.", Modifier.padding(top = 4.dp))
+                    else Text("Untick a bank to stop tracking it.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
                     r.known.forEach { (bank, n) ->
-                        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                            Text("✓ $bank", modifier = Modifier.weight(1f))
+                        val on = excluded.none { it.equals(bank, ignoreCase = true) }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable { vm.setBankTracked(bank, !on) },
+                        ) {
+                            Checkbox(on, { vm.setBankTracked(bank, it) })
+                            Text(bank, modifier = Modifier.weight(1f), color = if (on) Ink.text else Ink.muted)
                             Text("$n messages", color = Ink.muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -443,6 +495,17 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
                         }
                     } else if (!scan.running) {
                         Muted("No other senders look like banks.", Modifier.padding(top = 10.dp))
+                    }
+                }
+            }
+        }
+        if (excluded.isNotEmpty()) {
+            item { SectionHeader("Banks you don't track") }
+            items(excluded.sorted(), key = { "x:$it" }) { bank ->
+                Panel(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(bank, modifier = Modifier.weight(1f), color = Ink.muted)
+                        TextButton(onClick = { vm.setBankTracked(bank, true) }) { Text("Track again") }
                     }
                 }
             }

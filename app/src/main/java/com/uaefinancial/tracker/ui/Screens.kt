@@ -476,6 +476,7 @@ private fun TransactionRow(
             when {
                 t.ruleId?.startsWith("auto-") == true -> Text("Read by the smart reader: check it looks right.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
                 t.ruleId == com.uaefinancial.tracker.data.Repository.FIX_RULE -> Text("Your fix from Needs review.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                t.ruleId == com.uaefinancial.tracker.parser.LearnedFormats.RULE_ID -> Text("Read like a similar message you fixed.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
             }
             raw?.let {
                 SelectionContainer {

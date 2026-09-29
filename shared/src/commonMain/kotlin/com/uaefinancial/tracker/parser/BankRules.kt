@@ -600,7 +600,7 @@ object BankRules {
         Bank("Al Masraf", listOf("AlMasraf", "ARBIFT"), emptyList()),
         Bank("InvestBank", listOf("InvestBank"), emptyList()),
         Bank("Liv", listOf("Liv", "LivBank", "LIV-ENBD"), emptyList()),
-        Bank("Wio", listOf("Wio", "WioBank"), emptyList()),
+        Bank("Wio", listOf("Wio", "WioBank", "WioPersonal"), emptyList()),
         Bank("Mashreq Neo", listOf("MashreqNeo"), emptyList()),
         Bank("Zand", listOf("Zand", "ZandBank"), emptyList()),
         Bank("Ruya", listOf("Ruya", "RuyaBank"), emptyList()),
@@ -616,6 +616,23 @@ object BankRules {
     val otpPreCheck = IgnoreRule(
         "OTP",
         """^(?=.*\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN|auth(?:entication|ori[sz]ation)?\s+code)\b)(?=.*(\b\d{6,8}\b|\b(is|:)\s*\d{4,8}\b|\b\d{4,8}\s+is\s+(your|the)\b)).*""",
+        store = false,
+    )
+
+    /**
+     * Also checked BEFORE any rule: one-time codes that don't use the word "OTP", e.g. Wio's
+     * "Use code 022765 to pay AED 80.74 at Noon with card 2093". Dropped, never stored.
+     * Needs the code itself (4-8 digits) right after "use/enter code", after a named code type ("security code 1234"),
+     * or a code followed by what it's for ("... to pay / to confirm"). So footers like "never share your security code",
+     * "reference code 12345678", "merchant code 5411" and promo codes don't match.
+     */
+    val otpCodePreCheck = IgnoreRule(
+        "OTP",
+        """\b(?:use|enter|type|quote)\s+(?:the\s+)?(?:(?:security|secure|verification|confirmation|login|access|one[\s-]?time)\s+)?(?:code|pin)\s*(?:is|:|#|-)?\s*\d{4,8}\b""" +
+            """|\b(?:use|enter|type)\s+\d{4,8}\b.{0,60}\bto\s+(?:pay|complete|confirm|verify|authori[sz]e|approve|log\s*in|sign\s*in|proceed|continue|activate|reset)\b""" +
+            """|\b(?:security|secure|verification|confirmation|login|access|one[\s-]?time|3-?d\s*secure|3ds)\s+code\s*(?:is|:|-)?\s*\d{4,8}\b""" +
+            """|\b\d{4,8}\s+is\s+(?:your|the)\b.{0,40}\bcode\b""" +
+            """|\bcode\s*(?:is|:)?\s*\d{4,8}\b.{0,80}\bto\s+(?:pay|complete|confirm|verify|authori[sz]e|approve|log\s*in|sign\s*in|proceed|continue|activate)\b""",
         store = false,
     )
 

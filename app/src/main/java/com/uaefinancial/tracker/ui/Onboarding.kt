@@ -7,6 +7,7 @@ import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -140,6 +141,9 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
     val syncing by vm.syncing.collectAsStateWithLifecycle()
     val picked = remember { mutableStateMapOf<String, Boolean>() }
     val names = remember { mutableStateMapOf<String, String>() }
+    // Banks the app knows, found on this phone: ticked unless you left them out before.
+    val excludedBefore by vm.excludedBanks.collectAsStateWithLifecycle()
+    val track = remember { mutableStateMapOf<String, Boolean>() }
     val finished by vm.syncsFinished.collectAsStateWithLifecycle()
     // -1 = not importing; otherwise the finished-sync count when Import was tapped.
     var importFrom by rememberSaveable { mutableIntStateOf(-1) }
@@ -167,9 +171,15 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
             if (r.known.isNotEmpty()) {
                 Panel(Modifier.fillMaxWidth()) {
                     Text("Found", style = MaterialTheme.typography.titleSmall)
+                    Text("Untick any bank you don't want the app to track.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
                     r.known.forEach { (bank, n) ->
-                        Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                            Text("✓  $bank", modifier = Modifier.weight(1f))
+                        val on = track[bank] ?: excludedBefore.none { it.equals(bank, ignoreCase = true) }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp).clickable { track[bank] = !on },
+                        ) {
+                            Checkbox(on, { track[bank] = it })
+                            Text(bank, modifier = Modifier.weight(1f), color = if (on) Ink.text else Ink.muted)
                             Text("$n messages", color = Ink.muted, style = MaterialTheme.typography.bodySmall)
                         }
                     }
@@ -199,6 +209,12 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
     Button(
         onClick = {
             val add = r?.suggestions.orEmpty().filter { picked[it.sender] ?: true }.map { it.sender to (names[it.sender] ?: it.sender) }
+            // Banks left unticked are not tracked (changeable later in More → Bank senders).
+            r?.known?.let { known ->
+                val off = known.map { it.first }.filter { b -> !(track[b] ?: excludedBefore.none { it.equals(b, ignoreCase = true) }) }.toSet()
+                val keep = excludedBefore.filterNot { e -> known.any { it.first.equals(e, ignoreCase = true) } }.toSet()
+                vm.setExcludedBanksBeforeImport(keep + off)
+            }
             importFrom = finished
             // Senders first, then one import that includes their older messages.
             if (add.isNotEmpty()) vm.addSenders(add, syncAfter = true) else vm.sync()

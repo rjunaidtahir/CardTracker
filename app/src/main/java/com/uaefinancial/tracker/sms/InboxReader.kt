@@ -67,7 +67,8 @@ object InboxReader {
             var n = 0
             while (c.moveToNext() && n++ < limit) {
                 val addr = c.getString(iAddr)?.trim() ?: continue
-                val bank = SmsParser.bankFor(addr)
+                // Banks you unticked are still listed (with the box unticked), so you can tick them again.
+                val bank = SmsParser.anyBankFor(addr)
                 if (bank != null) {
                     known[bank.name] = (known[bank.name] ?: 0) + 1
                     continue

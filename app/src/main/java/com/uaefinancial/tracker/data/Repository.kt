@@ -16,11 +16,12 @@ import com.uaefinancial.tracker.parser.Money
 import com.uaefinancial.tracker.parser.ParseResult
 import com.uaefinancial.tracker.parser.SmsParser
 import com.uaefinancial.tracker.parser.CategoryRules
+import com.uaefinancial.tracker.parser.LearnedFormats
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Shared by Sync and live listening: same parser, same de-duplication. */
-class Repository(private val db: AppDatabase) {
+class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) {
     val dao = db.dao()
     private val lock = Mutex()
 
@@ -107,8 +108,46 @@ class Repository(private val db: AppDatabase) {
         return CategoryRules.guess(merchant, type)
     }
 
+    // ------------------------------------------------------------ learned formats ("apply to similar messages")
+
+    @Volatile private var learnedLoaded = false
+
+    /** Hands the fixes you asked the app to learn from to the parser. Call again whenever they change. */
+    suspend fun loadLearned() {
+        val keys = prefs?.learnedFixKeys.orEmpty()
+        if (keys.isEmpty()) {
+            LearnedFormats.setAll(emptyList())
+        } else {
+            val fixes = dao.allFixes().filter { it.dedupKey in keys }.associateBy { it.dedupKey }
+            val sources = dao.smsByDedupKeys(keys.toList()).mapNotNull { s -> fixes[s.dedupKey]?.let { learnedSource(s, it) } }
+            LearnedFormats.setAll(sources)
+        }
+        learnedLoaded = true
+    }
+
+    private suspend fun ensureLearned() { if (!learnedLoaded) loadLearned() }
+
+    private fun learnedSource(s: SmsEntity, f: SmsFixEntity) = LearnedFormats.Source(
+        key = s.dedupKey, bank = s.bank ?: s.sender, body = s.body,
+        type = if (f.type == FIX_IGNORE) null else runCatching { TxnType.valueOf(f.type) }.getOrNull(),
+        amount = if (f.amountMinor > 0) Money.fromMinor(f.amountMinor) else null,
+        currency = f.currency, merchant = f.merchant, cardLast4 = f.cardLast4,
+        cardType = runCatching { CardType.valueOf(f.cardType) }.getOrDefault(CardType.CREDIT),
+    )
+
+    /** Whether "apply to similar messages" can work for this reading of [sms] (for the Fix form). */
+    fun canLearn(sms: SmsEntity, type: TxnType?, amountMinor: Long, merchant: String, cardLast4: String?, cardType: CardType): Boolean =
+        LearnedFormats.canLearn(
+            LearnedFormats.Source(
+                key = sms.dedupKey, bank = sms.bank ?: sms.sender, body = sms.body, type = type,
+                amount = if (amountMinor > 0) Money.fromMinor(amountMinor) else null, currency = "AED",
+                merchant = merchant, cardLast4 = cardLast4, cardType = cardType,
+            ),
+        )
+
     suspend fun ingestSms(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): IngestOutcome =
         lock.withLock {
+            ensureLearned()
             val bank = SmsParser.bankFor(sender) ?: return IngestOutcome.NOT_BANK
             val parsed = SmsParser.parse(sender, body, receivedAt)
             if (parsed is ParseResult.Ignored && !parsed.store) return IngestOutcome.OTP_SKIPPED
@@ -136,6 +175,7 @@ class Repository(private val db: AppDatabase) {
 
     /** Re-runs the current BankRules over every stored SMS (except dismissed ones). */
     suspend fun reparseAll(): Map<IngestOutcome, Int> = lock.withLock {
+        ensureLearned()
         val all = dao.smsForReparse()
         val counts = mutableMapOf<IngestOutcome, Int>()
         reparsing = true
@@ -187,6 +227,11 @@ class Repository(private val db: AppDatabase) {
         // The SMS doesn't name the account (e.g. some bill payments): use your only account at that bank.
         if (t.cardLast4 == null && t.accountNotNamed) {
             dao.cardsOfBank(t.bank, CardTypes.ACCOUNT).singleOrNull()?.let { t = t.copy(cardLast4 = it.last4, cardType = CardType.ACCOUNT) }
+        }
+        // A card payment that doesn't say which card ("You have made a credit repayment of AED 80.74"): your only
+        // credit card at that bank, if you have exactly one.
+        if (t.cardLast4 == null && t.type == TxnType.PAYMENT && t.cardType == CardType.CREDIT) {
+            dao.cardsOfBank(t.bank, CardTypes.CREDIT).singleOrNull()?.last4?.let { t = t.copy(cardLast4 = it) }
         }
         // No card/account number: bank-account money goes on a "Bank ·????" account (not counted as spending by
         // default); anything else has no card, like a typed entry.
@@ -328,10 +373,10 @@ class Repository(private val db: AppDatabase) {
      */
     suspend fun saveFix(
         smsId: Long, type: TxnType?, amountMinor: Long, currency: String, merchant: String,
-        cardLast4: String?, cardType: CardType, timestamp: Long,
-    ): IngestOutcome = lock.withLock {
-        val sms = dao.smsById(smsId) ?: return@withLock IngestOutcome.FAILED
-        db.withTransaction {
+        cardLast4: String?, cardType: CardType, timestamp: Long, applyToSimilar: Boolean = false,
+    ): FixResult = lock.withLock {
+        val sms = dao.smsById(smsId) ?: return@withLock FixResult(IngestOutcome.FAILED, 0)
+        val outcome = db.withTransaction {
             dao.upsertFixes(
                 listOf(
                     SmsFixEntity(
@@ -343,7 +388,29 @@ class Repository(private val db: AppDatabase) {
             )
             applyParse(sms.id, sms.dedupKey, ParseResult.NotBank, sms.receivedAt, sms.bank ?: sms.sender)
         }
+        // Remember (or forget) this fix as a template, then read the other unread messages from this bank again.
+        prefs?.let { p ->
+            val keys = p.learnedFixKeys
+            val wanted = applyToSimilar && canLearn(sms, type, amountMinor, merchant, cardLast4, cardType)
+            if (wanted != (sms.dedupKey in keys)) p.learnedFixKeys = if (wanted) keys + sms.dedupKey else keys - sms.dedupKey
+        }
+        loadLearned()
+        var similar = 0
+        if (applyToSimilar) {
+            val bank = sms.bank ?: sms.sender
+            db.withTransaction {
+                for (o in dao.failedSmsList()) {
+                    if (o.id == sms.id || (o.bank ?: o.sender) != bank) continue
+                    val r = applyParse(o.id, o.dedupKey, SmsParser.parse(o.sender, o.body, o.receivedAt), o.receivedAt, o.bank)
+                    if (r != IngestOutcome.FAILED) similar++
+                }
+            }
+        }
+        FixResult(outcome, similar)
     }
+
+    /** What saving a fix did: its own outcome, and how many other messages in Needs review it also read. */
+    data class FixResult(val outcome: IngestOutcome, val similar: Int)
 
     /** What the smart reader makes of an SMS: used to pre-fill the Fix form. */
     fun guess(sms: SmsEntity): ParsedTransaction? =

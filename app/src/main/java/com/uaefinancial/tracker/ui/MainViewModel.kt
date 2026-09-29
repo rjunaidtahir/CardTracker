@@ -43,6 +43,8 @@ import com.uaefinancial.tracker.notify.DueReminders
 import com.uaefinancial.tracker.parser.CardType
 import com.uaefinancial.tracker.parser.ManualEntryParser
 import com.uaefinancial.tracker.parser.TxnType
+import com.uaefinancial.tracker.parser.SmsParser
+import com.uaefinancial.tracker.data.Repository
 import com.uaefinancial.tracker.sms.InboxReader
 import com.uaefinancial.tracker.sms.LiveListening
 import com.uaefinancial.tracker.sms.SenderScan
@@ -801,6 +803,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 getApplication<Application>().contentResolver.openInputStream(uri)?.use { ctApp.backup.import(it) }
                     ?: error("Couldn't open the file")
             }
+            excludedBanks.value = prefs.excludedBanks
             message.value = "Restored ${r.sms} SMS, ${r.manual} typed entries, ${r.cards} cards"
             refreshWidget()
         } catch (e: Exception) {
@@ -899,8 +902,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     suspend fun guessFor(sms: SmsEntity): com.uaefinancial.tracker.parser.ParsedTransaction? =
         withContext(Dispatchers.Default) { repo.guess(sms) }
 
+    /** Whether "apply to similar messages" can work for this reading (the Fix form enables the option then). */
+    fun canLearn(sms: SmsEntity, type: TxnType?, amountText: String, merchant: String, cardLast4: String, cardType: CardType): Boolean {
+        val amount = amountText.replace(",", "").trim().toDecimalOrNull()
+        val minor = amount?.takeIf { it.signum() > 0 }?.let { runCatching { com.uaefinancial.tracker.parser.Money.toMinor(it) }.getOrNull() } ?: 0L
+        if (type != null && minor <= 0L) return false
+        return repo.canLearn(sms, type, minor, merchant, cardLast4.trim().ifEmpty { null }, cardType)
+    }
+
+    private fun fixMessage(r: Repository.FixResult, what: String): String =
+        if (r.similar > 0) "$what Also applied to ${r.similar} similar message${if (r.similar == 1) "" else "s"}." else what
+
     fun saveFix(
         sms: SmsEntity, type: TxnType, amountText: String, currency: String, merchant: String, cardLast4: String, cardType: CardType,
+        applyToSimilar: Boolean = false,
     ) = viewModelScope.launch {
         val amount = amountText.replace(",", "").trim().toDecimalOrNull()
         if (amount == null || amount.signum() <= 0) { message.value = "Enter the amount, e.g. 120.50"; return@launch }
@@ -908,14 +923,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!Regex("[A-Z]{3}").matches(cur)) { message.value = "Currency is a 3-letter code, e.g. AED or USD"; return@launch }
         val last4 = cardLast4.trim()
         if (last4.isNotEmpty() && !Regex("""\d{3,4}""").matches(last4)) { message.value = "Card / account: the last 4 digits, or leave it empty"; return@launch }
-        repo.saveFix(sms.id, type, com.uaefinancial.tracker.parser.Money.toMinor(amount), cur, merchant, last4.ifEmpty { null }, cardType, sms.receivedAt)
-        message.value = "Saved. The app will remember this message."
+        val r = repo.saveFix(
+            sms.id, type, com.uaefinancial.tracker.parser.Money.toMinor(amount), cur, merchant, last4.ifEmpty { null }, cardType,
+            sms.receivedAt, applyToSimilar,
+        )
+        message.value = fixMessage(r, if (applyToSimilar) "Saved. Similar messages will be read the same way." else "Saved. The app will remember this message.")
         refreshWidget()
     }
 
-    fun markNotTransaction(sms: SmsEntity) = viewModelScope.launch {
-        repo.saveFix(sms.id, null, 0, "AED", "", null, CardType.CREDIT, sms.receivedAt)
-        message.value = "Marked as not a transaction"
+    fun markNotTransaction(sms: SmsEntity, applyToSimilar: Boolean = false) = viewModelScope.launch {
+        val r = repo.saveFix(sms.id, null, 0, "AED", "", null, CardType.CREDIT, sms.receivedAt, applyToSimilar)
+        message.value = fixMessage(r, "Marked as not a transaction.")
+        refreshWidget()
+    }
+
+    // ------------------------------------------------------------ banks you track
+    /** Banks you chose not to track (unticked in setup or in More → Bank senders). */
+    val excludedBanks = MutableStateFlow(prefs.excludedBanks)
+
+    private fun applyExcluded(names: Set<String>) {
+        prefs.excludedBanks = names
+        excludedBanks.value = names
+        SmsParser.setExcludedBanks(names)
+    }
+
+    /** Setup: which of the banks found on this phone to leave out, before the first import. */
+    fun setExcludedBanksBeforeImport(names: Set<String>) = applyExcluded(names)
+
+    /** Starts or stops tracking a bank. Stored messages are read again so the change shows everywhere. */
+    fun setBankTracked(bank: String, tracked: Boolean) = viewModelScope.launch {
+        val now = excludedBanks.value
+        val next = if (tracked) now.filterNot { it.equals(bank, ignoreCase = true) }.toSet() else now + bank
+        if (next == now) return@launch
+        applyExcluded(next)
+        repo.reparseAll()
+        runCatching { repo.autoFillCardDays() }
+        if (tracked) {
+            // Its older messages were never imported: the next Sync reads the whole inbox again.
+            resetSyncPointerQuietly()
+            message.value = "Tracking $bank again. Tap Sync to bring in its messages."
+        } else {
+            message.value = "Stopped tracking $bank. Its transactions are hidden; tick it again to bring them back."
+        }
+        refreshWidget()
     }
 
     // ------------------------------------------------------------ cards by hand

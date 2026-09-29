@@ -150,7 +150,7 @@ object SmartParser {
         I,
     )
     private val atmWord = Regex("""\b(?:atm|cash withdrawal|withdrawn|withdrawal|cash advance)\b""", I)
-    private val creditWord = Regex("""\b(?:credited|deposited|received|deposit|salary|inward|incoming)\b""", I)
+    private val creditWord = Regex("""\b(?:credited|deposited|received|deposit|salary|inward|incoming|added to your)\b""", I)
     private val debitWord = Regex(
         """\b(?:purchase[ds]?|spent|used|paid|payment of|debited|charged|transaction of|pos|txn|deducted|bought|transferred|sent|withdrawn|""" +
             """a debit of|dr\.?\s+transaction|outward remittance)\b|\b(?:transfer|payment|remittance)\b.{0,120}\b(?:processed|successful(?:ly)?|completed)\b""",
@@ -169,6 +169,19 @@ object SmartParser {
     private val spendWord = Regex("""\b(?:purchase|used for|spent|pos)\b""", I)
     private val creditSignal = Regex("""\bcr\.?\s+transaction\b|\bcredit(?:ed)?\s+transaction\b|\binward remittance\b|\bcash deposit\b""", I)
     private val salaryWord = Regex("""\bsalary|payroll|wps\b""", I)
+    /** Interest / profit (Islamic banks) / dividends paid to you: "You have earned AED 37.05 as interest on your saving space". */
+    private val returnWord = Regex("""\b(interest|profit|dividends?)\b""", I)
+    private val paidToYou = Regex("""\b(?:earned|credited|received|deposited|paid (?:in)?to your|added to your)\b""", I)
+    /** Interest / profit / fees the bank takes: "Interest of AED 45.20 charged on your credit card". */
+    private val takenWord = Regex("""\b(?:charged|debited|deducted|applied|levied|billed|payable)\b""", I)
+    /** Paying back a credit card / credit line: "You have made a credit repayment of AED 80.74." */
+    private val repaymentWord = Regex("""\brepa(?:y|ym(?:ent|ents)|id)\b""", I)
+    private val loanWord = Regex("""\b(?:loan|finance|financing|mortgage|emi|instal+ment)\b""", I)
+    private val feeName = Regex(
+        """\b((?:annual|late(?:\s+payment)?|over-?limit|service|maintenance|joining|membership|renewal|processing|transaction|atm|""" +
+            """cash advance|foreign(?:\s+currency)?|fx|minimum balance|card replacement|statement)\s+(?:fee|charges?))\b""",
+        I,
+    )
 
     private val merchantEnd =
         """(?=\s+on\s|\s+dated\s|\s*[.;](?:\s|$)|,\s|\s+(?:avl|available|avail|bal(?:ance)?|using|via|with|ref|txn|reference|card|from your|for your|has been|was|is|through|for (?:consumer|customer|account|contract|mobile|bill|ref))\b|\s+\d{1,2}[/-]\d{1,2}|\s+\d{1,2}-[A-Za-z]{3}|\s*$)"""
@@ -236,7 +249,9 @@ object SmartParser {
 
         // ---- transaction
         if (notDone.containsMatchIn(text)) return null
-        val txnAmount = all.firstOrNull { it.role == Role.TXN } ?: return null
+        // Only a fee in the message ("Annual fee of AED 300 has been charged"): the fee is the transaction.
+        val feeOnly = all.none { it.role == Role.TXN } && takenWord.containsMatchIn(text)
+        val txnAmount = all.firstOrNull { it.role == Role.TXN } ?: all.firstOrNull { feeOnly && it.role == Role.FEE } ?: return null
         if (txnAmount.amount.signum() <= 0) return null
         val available = all.firstOrNull { it.role == Role.AVAILABLE && it.start > txnAmount.start }
 
@@ -251,7 +266,32 @@ object SmartParser {
 
         val type: TxnType
         var fixed: String? = null
+        // Interest / profit / dividend only counts when it describes THIS amount ("AED 37.05 as interest",
+        // "Interest of AED 45 charged"), not a footer like "pay in full to avoid interest".
+        val near = text.substring(maxOf(0, txnAmount.start - 60), minOf(text.length, txnAmount.end + 30))
+        val returnMatch = returnWord.find(near)
+        val repayment = repaymentWord.containsMatchIn(text) && !isDue.containsMatchIn(text)
         when {
+            // Interest / profit / dividend paid to you (not charged).
+            returnMatch != null && paidToYou.containsMatchIn(near) && !takenWord.containsMatchIn(near) -> {
+                type = TxnType.TRANSFER_IN
+                fixed = when (returnMatch.groupValues[1].lowercase()) {
+                    "profit" -> "Profit"
+                    "interest" -> "Interest"
+                    else -> "Dividend"
+                }
+            }
+            // Interest / profit / finance charges the bank takes.
+            returnMatch != null && takenWord.containsMatchIn(near) && !paidToYou.containsMatchIn(near) -> {
+                type = TxnType.PURCHASE; fixed = "Interest / finance charge"
+            }
+            feeOnly -> {
+                type = TxnType.PURCHASE
+                fixed = feeName.find(text)?.groupValues?.get(1)?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Bank fee"
+            }
+            // Paying back a loan (money out) vs. a credit card / credit line (a payment to that card).
+            repayment && loanWord.containsMatchIn(text) -> { type = TxnType.TRANSFER_OUT; fixed = "Loan repayment" }
+            repayment && !refundWord.containsMatchIn(text) -> { type = TxnType.PAYMENT; fixed = "Card payment received" }
             cardCtx && paymentReceived.containsMatchIn(text) -> { type = TxnType.PAYMENT; fixed = "Card payment received" }
             refundWord.containsMatchIn(text) && !cashbackCard -> {
                 type = TxnType.REFUND

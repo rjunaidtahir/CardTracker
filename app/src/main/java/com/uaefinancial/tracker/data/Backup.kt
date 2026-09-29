@@ -18,7 +18,7 @@ import java.util.zip.ZipOutputStream
  * fixed by hand), then re-reads the SMS to rebuild everything else. all_transactions.csv is for Excel only.
  * Backups made by the earlier "Card Tracker" / "RJ's Financials" builds restore too (same file layout).
  */
-class Backup(private val db: AppDatabase, private val repo: Repository) {
+class Backup(private val db: AppDatabase, private val repo: Repository, private val prefs: Prefs? = null) {
     private val dao = db.dao()
 
     data class Result(val sms: Int, val manual: Int, val cards: Int)
@@ -70,6 +70,9 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                     listOf(it.dedupKey, it.type, it.amountMinor.toString(), it.currency, it.merchant, it.cardLast4, it.cardType, it.timestamp.toString())
                 },
             ),
+            // Which fixes also apply to similar messages, and banks you chose not to track (same files on iPhone).
+            "learned_fixes.csv" to Csv.write(listOf("dedupKey"), prefs?.learnedFixKeys.orEmpty().sorted().map { listOf(it) }),
+            "excluded_banks.csv" to Csv.write(listOf("bankName"), prefs?.excludedBanks.orEmpty().sorted().map { listOf(it) }),
             "all_transactions.csv" to Csv.write(
                 listOf("date", "bank", "card", "merchant", "category", "type", "amount", "currency", "amount_aed"),
                 dao.allTxns().map {
@@ -216,7 +219,15 @@ class Backup(private val db: AppDatabase, private val repo: Repository) {
                 }
             }
         }
+        prefs?.let { p ->
+            files["learned_fixes.csv"]?.mapNotNull { it.s("dedupKey")?.takeIf { k -> k.isNotBlank() } }?.let { p.learnedFixKeys = p.learnedFixKeys + it }
+            files["excluded_banks.csv"]?.mapNotNull { it.s("bankName")?.takeIf { b -> b.isNotBlank() } }?.let {
+                p.excludedBanks = p.excludedBanks + it
+                com.uaefinancial.tracker.parser.SmsParser.setExcludedBanks(p.excludedBanks)
+            }
+        }
         repo.ensureDefaults()
+        repo.loadLearned()
         repo.reparseAll()
         return Result(sms, manual, cards)
     }

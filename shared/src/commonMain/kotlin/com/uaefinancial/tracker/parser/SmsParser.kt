@@ -11,6 +11,13 @@ import com.uaefinancial.tracker.core.UAE_OFFSET_MINUTES
  */
 object SmsParser {
 
+    /**
+     * Bump this whenever a change here, in BankRules.kt or in SmartParser.kt can read a stored message differently.
+     * The apps re-read every stored message once when it changes, so fixes reach messages already in Needs review
+     * (and a message a newer rule recognises as an OTP is deleted).
+     */
+    const val ENGINE_VERSION: Int = 2
+
     /** UAE time: UTC+4 all year. Zones are passed as minutes ahead of UTC. */
     const val UAE_ZONE: Int = UAE_OFFSET_MINUTES
 
@@ -65,6 +72,10 @@ object SmsParser {
     }
 
     private val otpRegex by lazy { Regex(BankRules.otpPreCheck.pattern, RegexOption.IGNORE_CASE) }
+    private val otpCodeRegex by lazy { Regex(BankRules.otpCodePreCheck.pattern, RegexOption.IGNORE_CASE) }
+
+    /** True when the message is a one-time code (never stored). */
+    fun isOtp(body: String): Boolean = normalizeBody(body).let { otpRegex.containsMatchIn(it) || otpCodeRegex.containsMatchIn(it) }
 
     fun normalizeSender(s: String) = s.uppercase().filter { it.isLetterOrDigit() }
 
@@ -74,6 +85,16 @@ object SmsParser {
      */
     @kotlin.concurrent.Volatile
     private var custom: Map<String, CompiledBank> = emptyMap()
+
+    /** Banks you chose not to track (by bank name). Their messages are treated like any other sender's. */
+    @kotlin.concurrent.Volatile
+    private var excluded: Set<String> = emptySet()
+
+    fun setExcludedBanks(bankNames: Set<String>) {
+        excluded = bankNames.map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
+    }
+
+    fun isExcluded(bankName: String): Boolean = bankName.trim().lowercase() in excluded
 
     fun setCustomSenders(senderToBank: Map<String, String>) {
         custom = senderToBank.entries.associate { (sender, bankName) ->
@@ -102,14 +123,19 @@ object SmsParser {
     /** Returns the bank for an SMS sender ID, or null if it isn't a bank the app knows or you added. */
     fun bankFor(sender: String?): Bank? = compiledBankFor(sender)?.bank
 
+    /** Like [bankFor] but also returns banks you chose not to track (to list them with a tick box). */
+    fun anyBankFor(sender: String?): Bank? = compiledBankFor(sender, includeExcluded = true)?.bank
+
     /** True for built-in bank senders (not ones you added). */
     fun isBuiltInSender(sender: String?): Boolean =
         !sender.isNullOrBlank() && compiled.any { cb -> cb.bank.senderIds.any { senderMatches(sender, it) } }
 
-    private fun compiledBankFor(sender: String?): CompiledBank? {
+    private fun compiledBankFor(sender: String?, includeExcluded: Boolean = false): CompiledBank? {
         if (sender.isNullOrBlank()) return null
-        custom[normalizeSender(sender)]?.let { return it }
-        return compiled.firstOrNull { cb -> cb.bank.senderIds.any { id -> senderMatches(sender, id) } }
+        val cb = custom[normalizeSender(sender)]
+            ?: compiled.firstOrNull { c -> c.bank.senderIds.any { id -> senderMatches(sender, id) } }
+            ?: return null
+        return if (!includeExcluded && isExcluded(cb.bank.name)) null else cb
     }
 
     /** Line breaks become single spaces; runs of spaces inside a line are kept (they separate merchant and city). */
@@ -155,7 +181,9 @@ object SmsParser {
 
     private fun parseWith(cb: CompiledBank, body: String, receivedAt: Long, zone: Int): ParseResult {
         val text = normalizeBody(body)
-        if (otpRegex.containsMatchIn(text)) return ParseResult.Ignored(cb.bank.name, BankRules.otpPreCheck.label, store = false)
+        if (otpRegex.containsMatchIn(text) || otpCodeRegex.containsMatchIn(text)) {
+            return ParseResult.Ignored(cb.bank.name, BankRules.otpPreCheck.label, store = false)
+        }
         val errors = mutableListOf<String>()
 
         for ((rule, regex) in cb.rules) {
@@ -169,6 +197,9 @@ object SmsParser {
                 errors += "${rule.id}: ${e.message}"
             }
         }
+
+        // A message like one you fixed by hand and asked the app to learn ("apply to similar messages").
+        LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { return it }
 
         cb.ignore.firstOrNull { it.second.containsMatchIn(text) }?.let {
             return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store)

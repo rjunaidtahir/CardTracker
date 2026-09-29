@@ -555,6 +555,10 @@ interface AppDao {
     @Query("SELECT * FROM sms WHERE id = :id")
     suspend fun smsById(id: Long): SmsEntity?
 
+    /** The messages behind the fixes you asked the app to learn from (a query only: no schema change). */
+    @Query("SELECT * FROM sms WHERE dedupKey IN (:keys)")
+    suspend fun smsByDedupKeys(keys: List<String>): List<SmsEntity>
+
     @Query("SELECT * FROM cards WHERE bank = :bank AND cardType = :type AND archived = 0")
     suspend fun cardsOfBank(bank: String, type: String): List<CardEntity>
 

@@ -10,6 +10,7 @@ import com.uaefinancial.tracker.parser.BankNames
 import com.uaefinancial.tracker.parser.BankRules
 import com.uaefinancial.tracker.parser.CardType
 import com.uaefinancial.tracker.parser.CategoryRules
+import com.uaefinancial.tracker.parser.LearnedFormats
 import com.uaefinancial.tracker.parser.ManualEntryParser
 import com.uaefinancial.tracker.parser.Money
 import com.uaefinancial.tracker.parser.ParseResult
@@ -91,10 +92,44 @@ data class CategoryInfo(val id: Long, val name: String)
 
 data class TypedEntry(val details: String, val amountMinor: Long, val currency: String, val cardLast4: String?, val type: String)
 
+/**
+ * Your fix of one message that the app should also apply to similar messages (Needs review → Fix → "apply to similar").
+ * [type]: a transaction type name (PURCHASE, REFUND, PAYMENT, TRANSFER_IN, TRANSFER_OUT); anything else means
+ * "not a transaction". [cardLast4] empty = none.
+ */
+data class LearnedFix(
+    val key: String, val bank: String, val body: String, val type: String, val amountMinor: Long,
+    val currency: String, val merchant: String, val cardLast4: String, val cardType: String,
+)
+
 object Bridge {
     const val NONE = -1L
 
     fun setCustomSenders(senderToBank: Map<String, String>) = SmsParser.setCustomSenders(senderToBank)
+
+    /** Changes whenever the engine may read stored messages differently: re-read everything once when it changes. */
+    fun engineVersion(): Int = SmsParser.ENGINE_VERSION
+
+    /** True for one-time codes (never store them). */
+    fun isOtp(body: String): Boolean = SmsParser.isOtp(body)
+
+    /** Banks you chose not to track, by name. */
+    fun setExcludedBanks(bankNames: List<String>) = SmsParser.setExcludedBanks(bankNames.toSet())
+
+    /** Replaces the fixes the app applies to similar messages. */
+    fun setLearnedFixes(fixes: List<LearnedFix>) = LearnedFormats.setAll(fixes.map { it.source() })
+
+    /** Whether "apply to similar messages" can work for this fix (the message is long enough and has the amount). */
+    fun canLearn(fix: LearnedFix): Boolean = LearnedFormats.canLearn(fix.source())
+
+    private fun LearnedFix.source() = LearnedFormats.Source(
+        key = key, bank = bank, body = body,
+        type = runCatching { TxnType.valueOf(type) }.getOrNull(),
+        amount = if (amountMinor > 0) Money.fromMinor(amountMinor) else null,
+        currency = currency, merchant = merchant,
+        cardLast4 = cardLast4.trim().ifEmpty { null },
+        cardType = cardTypeOf(cardType),
+    )
     fun bankFor(sender: String): String? = SmsParser.bankFor(sender)?.name
     fun bankNames(): List<String> = BankRules.banks.map { it.name }
     fun senderIds(bank: String): List<String> = BankRules.banks.firstOrNull { it.name == bank }?.senderIds.orEmpty()
