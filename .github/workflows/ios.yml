@@ -136,8 +136,8 @@ jobs:
           mkdir -p shots
           shot() {
             name=$1; shift
-            xcrun simctl terminate "$DEST" com.uaefinancial.tracker 2>/dev/null || true
-            xcrun simctl launch "$DEST" com.uaefinancial.tracker -demo YES "$@" > /dev/null
+            xcrun simctl terminate "$DEST" com.filsspend.tracker 2>/dev/null || true
+            xcrun simctl launch "$DEST" com.filsspend.tracker -demo YES "$@" > /dev/null
             sleep 7
             xcrun simctl io "$DEST" screenshot "shots/$name.png" > /dev/null
           }

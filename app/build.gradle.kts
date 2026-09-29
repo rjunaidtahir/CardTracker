@@ -10,7 +10,12 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.uaefinancial.tracker"
+        // Deliberately different from `namespace` above: this is the Play Store / installed-app
+        // identity, changed once before first publish to drop the legacy "uaefinancial" name.
+        // `namespace` (and every Kotlin file's own `package` line) stays as-is — it only controls
+        // where the generated R/BuildConfig classes live, is invisible to users and app stores, and
+        // renaming it would mean touching the entire source tree for zero user-facing benefit.
+        applicationId = "com.filsspend.tracker"
         minSdk = 26
         targetSdk = 35
         // versionCode must strictly increase for Android to treat a new APK as an update to an

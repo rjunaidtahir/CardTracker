@@ -12,7 +12,7 @@ struct Snapshot: Codable {
     static let placeholder = Snapshot(month: "Sep", spentMinor: 341_310, dueLine: "HSBC ·5258: AED 2,379.20 due 1 Oct", updated: Date())
 
     static func load() -> Snapshot? {
-        guard let data = UserDefaults(suiteName: "group.com.uaefinancial.tracker")?.data(forKey: "widgetSnapshot") else { return nil }
+        guard let data = UserDefaults(suiteName: "group.com.filsspend.tracker")?.data(forKey: "widgetSnapshot") else { return nil }
         return try? JSONDecoder().decode(Snapshot.self, from: data)
     }
 }

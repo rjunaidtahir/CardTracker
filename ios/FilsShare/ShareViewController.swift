@@ -24,7 +24,7 @@ final class ShareViewController: UIViewController {
     }
 
     private var inbox: URL? {
-        guard let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.uaefinancial.tracker") else { return nil }
+        guard let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.filsspend.tracker") else { return nil }
         let f = base.appendingPathComponent("Inbox", isDirectory: true)
         try? FileManager.default.createDirectory(at: f, withIntermediateDirectories: true)
         return f
