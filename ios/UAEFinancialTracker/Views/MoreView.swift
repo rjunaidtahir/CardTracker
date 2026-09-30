@@ -1302,7 +1302,7 @@ struct NotificationsView: View {
 // MARK: - Appearance
 
 struct AppearanceView: View {
-    @AppStorage("themeId") private var themeId = "system"
+    @AppStorage("themeId") private var themeId = "sand"
     @State private var name = Settings.displayName
 
     var body: some View {

@@ -75,7 +75,7 @@ class Prefs(context: Context) {
     // --- look
     /** App colour theme id (see ui/Theme.kt AppThemes). */
     var themeId: String
-        get() = sp.getString("theme_id", "neon") ?: "neon"
+        get() = sp.getString("theme_id", "sand") ?: "sand"
         set(v) { sp.edit { putString("theme_id", v) } }
 
     // --- alerts (a threshold of 0 = off)
