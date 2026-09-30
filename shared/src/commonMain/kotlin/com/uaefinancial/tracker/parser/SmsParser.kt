@@ -16,7 +16,7 @@ object SmsParser {
      * The apps re-read every stored message once when it changes, so fixes reach messages already in Needs review
      * (and a message a newer rule recognises as an OTP is deleted).
      */
-    const val ENGINE_VERSION: Int = 3
+    const val ENGINE_VERSION: Int = 4
 
     /** UAE time: UTC+4 all year. Zones are passed as minutes ahead of UTC. */
     const val UAE_ZONE: Int = UAE_OFFSET_MINUTES
@@ -313,7 +313,8 @@ object SmsParser {
         // A message like one you fixed by hand and asked the app to learn ("apply to similar messages").
         LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { return it }
 
-        cb.ignore.firstOrNull { it.second.containsMatchIn(text) }?.let {
+        val done = BankRules.completedAction.containsMatchIn(text)
+        cb.ignore.firstOrNull { it.second.containsMatchIn(text) && !(done && it.first.label in BankRules.SOFT_IGNORE_LABELS) }?.let {
             return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store)
         }
         if (!looksFinancial.containsMatchIn(text)) return ParseResult.Ignored(cb.bank.name, "Informational (no amount)")

@@ -218,6 +218,18 @@ object BankRules {
                     kind = RuleKind.STATEMENT,
                     pattern = """statement of the card ending with\s+{CARD}\s+dated\s+{STMTDATE}\b.*?total amount due is\s+{CUR}\s*{TOTAL}\.?\s+Minimum due is\s+{ANYCUR}\s*{MIN}\.?\s+Due date is\s+{DUE}""",
                 ),
+                // Dear Customer, your Domestic Fund transfer standing instructions of AED 915.32 to RAK Annum XXXX0552
+                // has been processed on 29/09/2026.   (a standing order that has run; FAB also sends "Outward Remittance
+                // Debit" for it, which names the account: pairGroup merges the two. The payee's name is optional.)
+                Rule(
+                    id = "fab-standing-instruction",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.TRANSFER_OUT,
+                    cardType = CardType.ACCOUNT,
+                    accountNotNamed = true,
+                    pairGroup = "fab-transfer",
+                    pattern = """standing\s+instructions?\s+of\s+{CUR}\s*{AMOUNT}\s+to\s+(?:{MERCHANT}\s+)?{TO}\s+(?:has|have)\s+been\s+(?:processed|executed|completed)\s+on\s+{DATETIME}""",
+                ),
                 // Dear Customer, Your payment instructions of AED 500.00 to 5425********0831 has been processed on 15/09/2026 06:24
                 // (paying a card from the account; the SMS doesn't say which account: accountNotNamed)
                 Rule(
@@ -688,6 +700,19 @@ object BankRules {
         ).joinToString("|")
     }
 
+    /**
+     * Ignore rules that go by a topic word, not by what happened. A message that also says the action was carried out
+     * ("has been processed", "debited"...) is not ignored by them: it goes on to the smart reader, and if that can't
+     * read it either, it lands in Needs review instead of vanishing.
+     */
+    val SOFT_IGNORE_LABELS: Set<String> = setOf("Standing instruction")
+
+    /** Wording for "this has been carried out", used with [SOFT_IGNORE_LABELS]. */
+    val completedAction: Regex = Regex(
+        """\b(?:has|have|had)\s+been\s+(?:successfully\s+)?(?:processed|executed|debited|credited|deducted|completed|paid|transferred)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
     /** Checked only when no transaction/statement rule matched. Applies to every bank. */
     val globalIgnore: List<IgnoreRule> = listOf(
         IgnoreRule("OTP", """\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN\s+is)\b""", store = false),
@@ -703,6 +728,8 @@ object BankRules {
         ),
         IgnoreRule("Instalment conversion / loan", """\bconverted\s+(?:in)?to\b.{0,60}\binstal+ments?\b|\bLoan on Card\b|\bmortgage\b.{0,120}\bdisburs"""),
         IgnoreRule("IPO subscription", """\bIPO\b"""),
+        // Setting up, changing or cancelling one. A standing instruction that has RUN ("has been processed") is money
+        // that moved: SmsParser.parseWith lets [SOFT_IGNORE_LABELS] rules yield to completed-action wording.
         IgnoreRule("Standing instruction", """standing\s+instruction"""),
         IgnoreRule("Transfer request (not yet processed)", """\bRequest received for fund transfer\b"""),
         IgnoreRule(
