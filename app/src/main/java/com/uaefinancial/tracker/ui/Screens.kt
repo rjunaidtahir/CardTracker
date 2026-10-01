@@ -801,7 +801,7 @@ private fun CardFigures(s: CardSummary, periodLabel: String) {
     }
     s.latestBalanceMinor?.let {
         val label = if (s.card.cardType == CardTypes.ACCOUNT) "Balance" else "Available"
-        Text("$label (latest SMS): ${fmtMoney(it)}", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        Text("$label (${s.balanceBasis ?: "latest SMS"}): ${fmtMoney(it)}", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
     }
 }
 

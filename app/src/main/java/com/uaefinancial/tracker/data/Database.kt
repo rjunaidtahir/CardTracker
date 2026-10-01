@@ -194,6 +194,9 @@ data class CardEntity(
     @ColumnInfo(defaultValue = "1000") val sortOrder: Int = 1000,
     /** null = yours; "FAMILY" = someone else's card you pay for (a family member's). Its spends go to the Family category. */
     val owner: String? = null,
+    /** Available limit printed on the latest statement you saved, and the statement date it is true for (see core/AvailableLimit.kt). */
+    val statementAvailMinor: Long? = null,
+    val statementAvailEpochDay: Long? = null,
 )
 
 object CardOwner {
@@ -339,6 +342,14 @@ interface AppDao {
 
     @Query("UPDATE cards SET creditLimitMinor = :limitMinor WHERE cardKey = :key")
     suspend fun setCreditLimit(key: String, limitMinor: Long)
+
+    /** Keeps the newest statement's figure: an older statement never replaces a newer one. */
+    @Query("UPDATE cards SET statementAvailMinor = :minor, statementAvailEpochDay = :epochDay WHERE cardKey = :key AND (statementAvailEpochDay IS NULL OR statementAvailEpochDay <= :epochDay)")
+    suspend fun setStatementAvailable(key: String, minor: Long, epochDay: Long)
+
+    /** The statement PDF's own date is the bank's: correct a date that came from an SMS (the day it was sent). */
+    @Query("UPDATE statements SET statementDateEpochDay = :statementDay WHERE cardKey = :key AND dueDateEpochDay = :dueDay")
+    suspend fun setStatementDate(key: String, dueDay: Long, statementDay: Long)
 
     @Query(
         "SELECT * FROM transactions WHERE timestamp >= :from AND timestamp < :to " +
@@ -587,7 +598,7 @@ data class StatusCount(val status: String, val n: Int)
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
         BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

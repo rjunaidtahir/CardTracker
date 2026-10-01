@@ -80,6 +80,8 @@ data class CardSummary(
     val monthOutMinor: Long = 0,
     /** Latest available limit (cards) or balance (accounts) from any SMS. */
     val latestBalanceMinor: Long? = null,
+    /** Where [latestBalanceMinor] comes from, e.g. "latest SMS, 30 Sep" or "statement 12 Sep + 3 transactions". */
+    val balanceBasis: String? = null,
     /** Latest statement with paid/due status (credit cards with a statement SMS). */
     val due: CardDue? = null,
     /** Last available limit / balance of each day (last ~13 months), oldest first: the balance line. */
@@ -265,9 +267,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val byCard = txns.groupBy { it.cardKey }
             val latest = statements.groupBy { it.cardKey }.mapValues { (_, v) -> v.maxByOrNull { it.receivedAt } }
             val payments = CardDues.paymentsByCard(txns, zone)
-            val latestBalance = recent.filter { it.availableLimitMinor != null && it.cardKey != null }
+            val latestSms = recent.filter { it.availableLimitMinor != null && it.cardKey != null }
                 .groupBy { it.cardKey!! }
-                .mapValues { (_, l) -> l.maxBy { it.timestamp }.availableLimitMinor }
+                .mapValues { (_, l) -> l.maxBy { it.timestamp } }
             val dueByCard = dueList.associateBy { it.card.cardKey }
             val recentByCard = recent.filter { it.cardKey != null }.groupBy { it.cardKey!! }.mapValues { (_, l) -> l.map { it.toInsight() } }
             val history = recent.filter { it.availableLimitMinor != null && it.cardKey != null }
@@ -279,6 +281,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             cards.map { c ->
                 val t = byCard[c.cardKey].orEmpty()
+                // Credit cards: newest of the SMS figure and the saved statement's, rolled forward (core/AvailableLimit.kt).
+                val smsTxn = latestSms[c.cardKey]
+                val resolved = if (c.cardType == CardTypes.CREDIT) {
+                    com.uaefinancial.tracker.core.AvailableLimit.resolve(
+                        sms = smsTxn?.let { com.uaefinancial.tracker.core.AvailableLimit.Figure(it.availableLimitMinor!!, Instant.ofEpochMilli(it.timestamp).atZone(zone).toLocalDate().toEpochDay()) },
+                        statement = if (c.statementAvailMinor != null && c.statementAvailEpochDay != null)
+                            com.uaefinancial.tracker.core.AvailableLimit.Figure(c.statementAvailMinor, c.statementAvailEpochDay) else null,
+                        transactions = recentByCard[c.cardKey].orEmpty().map { com.uaefinancial.tracker.core.AvailableLimit.Move(it.date.toEpochDay(), it.type, it.amountAedMinor) },
+                        limitMinor = c.creditLimitMinor,
+                    )
+                } else null
+                val shownBalance = resolved?.minor ?: smsTxn?.availableLimitMinor
+                val basis = when {
+                    resolved == null -> if (smsTxn != null) "latest SMS" else null
+                    resolved.source == com.uaefinancial.tracker.core.AvailableLimit.Source.SMS ->
+                        "latest SMS, ${LocalDate.ofEpochDay(resolved.asOfEpochDay).format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}"
+                    else -> "statement ${LocalDate.ofEpochDay(resolved.asOfEpochDay).format(java.time.format.DateTimeFormatter.ofPattern("d MMM"))}" +
+                        if (resolved.moves > 0) " + ${resolved.moves} transaction${if (resolved.moves == 1) "" else "s"}" else ""
+                }
                 CardSummary(
                     card = c,
                     monthSpendAedMinor = spendingTotal(t, emptySet()),
@@ -287,7 +308,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     monthPaidInMinor = payments[c.cardKey].orEmpty().sumOf { it.amountMinor },
                     monthInMinor = t.filter { it.type == TxnType.TRANSFER_IN.name || it.type == TxnType.REFUND.name }.sumOf { it.amountAedMinor ?: 0L },
                     monthOutMinor = t.filter { it.type == TxnType.TRANSFER_OUT.name || it.type == TxnType.PURCHASE.name }.sumOf { it.amountAedMinor ?: 0L },
-                    latestBalanceMinor = latestBalance[c.cardKey],
+                    latestBalanceMinor = shownBalance,
+                    balanceBasis = basis,
                     due = dueByCard[c.cardKey],
                     balanceHistory = history[c.cardKey].orEmpty(),
                 ).let { cs ->

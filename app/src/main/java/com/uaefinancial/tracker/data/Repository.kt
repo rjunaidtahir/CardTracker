@@ -652,8 +652,17 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             dao.updateCardProfile(cardKey, card.nickname, s.creditLimitMinor ?: card.creditLimitMinor, sd ?: card.statementDay, dd ?: card.dueDay, card.remindersEnabled)
             done += "statement / due day"
         }
+        val avail = s.availableLimitMinor
+        val stDate = s.statementDate
+        if (avail != null && stDate != null) {
+            dao.setStatementAvailable(cardKey, avail, stDate.toEpochDay())
+            done += "available limit"
+        }
         val due = s.dueDate
         val total = s.totalDueMinor
+        if (due != null && stDate != null && dao.countStatements(cardKey, due.toEpochDay()) > 0) {
+            dao.setStatementDate(cardKey, due.toEpochDay(), stDate.toEpochDay())
+        }
         if (due != null && total != null && dao.countStatements(cardKey, due.toEpochDay()) == 0) {
             dao.insertStatement(
                 StatementEntity(
