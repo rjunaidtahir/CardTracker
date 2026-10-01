@@ -113,7 +113,35 @@ class StandingInstructionTest {
         assertTrue(r is ParseResult.Transaction || r is ParseResult.Failed, "Silently ignored: $r")
     }
 
+    @Test fun executed_standing_instruction_from_a_saver_account_is_a_transfer_out() {
+        val t = txn(
+            "FAB",
+            "Your Standing instruction from online saver account has been executed successfully for AED 8000.00. The account balance is now AED 129154.14",
+        )
+        assertEquals(TxnType.TRANSFER_OUT, t.type)
+        assertEquals(CardType.ACCOUNT, t.cardType)
+        same("8000", t.amount, "amount, not the balance")
+        assertEquals("AED", t.currency)
+        same("129154.14", t.availableLimit, "balance")
+        assertEquals("Standing instruction", t.merchant)
+        assertTrue(t.accountNotNamed)
+    }
+
+    @Test fun suggestion_for_a_message_the_reader_cannot_settle_fills_amount_currency_and_digits() {
+        val body = "Update on your account XXXX8001: AED 8000.00 processed. The account balance is now AED 129154.14"
+        val g = SmartParser.suggest("FAB", body, received)!!
+        same("8000", g.amount, "amount, not the balance")
+        assertEquals("AED", g.currency)
+        assertEquals("8001", g.cardLast4)
+        assertEquals(CardType.ACCOUNT, g.cardType)
+        same("129154.14", g.availableLimit, "balance")
+    }
+
+    @Test fun suggestion_needs_an_amount() {
+        assertEquals(null, SmartParser.suggest("FAB", "Dear customer, thank you for banking with us", received))
+    }
+
     @Test fun engine_version_moved_so_stored_messages_are_read_again() {
-        assertTrue(SmsParser.ENGINE_VERSION >= 4)
+        assertTrue(SmsParser.ENGINE_VERSION >= 5)
     }
 }

@@ -422,6 +422,10 @@ object SmartParser {
             debit != null && strongTransfer.containsMatchIn(text) && !spendWord.containsMatchIn(text) -> type = TxnType.TRANSFER_OUT
             debit != null && !cardCtx && transferWord.containsMatchIn(text) -> type = TxnType.TRANSFER_OUT
             debit != null -> type = TxnType.PURCHASE
+            // "Your standing instruction ... has been executed successfully for AED 8000": money left the account, no debit word.
+            standingDone.containsMatchIn(text) && BankRules.completedAction.containsMatchIn(text) -> {
+                type = TxnType.TRANSFER_OUT; fixed = "Standing instruction"
+            }
             else -> return null
         }
 
@@ -508,6 +512,48 @@ object SmartParser {
                 auto = true,
             ),
             "auto-" + type.name.lowercase(),
+        )
+    }
+
+    private val standingDone = Regex("""\bstanding\s+(?:instruction|order)s?\b""", I)
+
+    /**
+     * A best guess for a message [read] could not settle, only to pre-fill the Fix form (never stored by itself):
+     * the transaction amount (not a balance), its currency, the card / account digits and a likely kind. Null when the
+     * message has no amount at all.
+     */
+    fun suggest(bank: String, text: String, receivedAt: Long): ParsedTransaction? {
+        val all = mentions(text)
+        val amount = all.firstOrNull { it.role == Role.TXN }?.takeIf { it.amount.signum() > 0 } ?: return null
+        val available = all.firstOrNull { it.role == Role.AVAILABLE && it.start > amount.start }
+        val ref = refs(text).firstOrNull()
+        val accountCtx = accountWord.containsMatchIn(text)
+        val cardCtx = cardWord.containsMatchIn(text)
+        val credit = creditWord.find(text)
+        val debit = debitWord.find(text)
+        val creditFirst = (credit != null && (debit == null || credit.range.first < debit.range.first)) || creditSignal.containsMatchIn(text)
+        val type = when {
+            creditFirst -> if (cardCtx && !accountCtx) TxnType.REFUND else TxnType.TRANSFER_IN
+            strongTransfer.containsMatchIn(text) || transferWord.containsMatchIn(text) || standingDone.containsMatchIn(text) -> TxnType.TRANSFER_OUT
+            else -> TxnType.PURCHASE
+        }
+        val cardType = when {
+            creditCardWord.containsMatchIn(text) -> CardType.CREDIT
+            debitCardWord.containsMatchIn(text) -> CardType.DEBIT
+            accountCtx -> CardType.ACCOUNT
+            type == TxnType.TRANSFER_OUT || type == TxnType.TRANSFER_IN -> CardType.ACCOUNT
+            else -> CardType.CREDIT
+        }
+        val merchant = when {
+            standingDone.containsMatchIn(text) -> "Standing instruction"
+            type == TxnType.TRANSFER_OUT -> "Money out (transfer)"
+            type == TxnType.TRANSFER_IN -> "Money in"
+            else -> ""
+        }
+        return ParsedTransaction(
+            bank = bank, cardLast4 = ref?.last4, cardType = cardType, merchant = merchant, amount = amount.amount.abs(),
+            currency = amount.currency, type = type, timestamp = receivedAt, dateFromSms = false,
+            availableLimit = available?.amount, accountNotNamed = ref == null && cardType == CardType.ACCOUNT, auto = false,
         )
     }
 

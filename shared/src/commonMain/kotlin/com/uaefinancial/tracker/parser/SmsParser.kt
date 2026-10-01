@@ -16,7 +16,7 @@ object SmsParser {
      * The apps re-read every stored message once when it changes, so fixes reach messages already in Needs review
      * (and a message a newer rule recognises as an OTP is deleted).
      */
-    const val ENGINE_VERSION: Int = 4
+    const val ENGINE_VERSION: Int = 5
 
     /** UAE time: UTC+4 all year. Zones are passed as minutes ahead of UTC. */
     const val UAE_ZONE: Int = UAE_OFFSET_MINUTES

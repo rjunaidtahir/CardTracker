@@ -1,6 +1,7 @@
 package com.uaefinancial.tracker.data
 
 import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Database migrations, so people's data survives app updates.
@@ -13,5 +14,13 @@ import androidx.room.migration.Migration
  * Never use a destructive fallback: it would wipe everyone's history on update.
  */
 object Migrations {
-    val ALL: Array<Migration> = emptyArray()
+    /** 2.3: the available limit printed on a saved statement, so a card's available limit can be rolled forward from it. */
+    val MIGRATION_1_2 = object : Migration(1, 2) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE cards ADD COLUMN statementAvailMinor INTEGER")
+            db.execSQL("ALTER TABLE cards ADD COLUMN statementAvailEpochDay INTEGER")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
 }
