@@ -413,9 +413,13 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     data class FixResult(val outcome: IngestOutcome, val similar: Int)
 
     /** What the smart reader makes of an SMS: used to pre-fill the Fix form. */
-    fun guess(sms: SmsEntity): ParsedTransaction? =
-        (runCatching { com.uaefinancial.tracker.parser.SmartParser.read(sms.bank ?: sms.sender, SmsParser.normalizeBody(sms.body), sms.receivedAt) }
-            .getOrNull() as? ParseResult.Transaction)?.txn
+    fun guess(sms: SmsEntity): ParsedTransaction? {
+        val bank = sms.bank ?: sms.sender
+        val body = SmsParser.normalizeBody(sms.body)
+        val read = (runCatching { com.uaefinancial.tracker.parser.SmartParser.read(bank, body, sms.receivedAt) }.getOrNull() as? ParseResult.Transaction)?.txn
+        // Not readable as a whole: still offer what it does say (amount, currency, digits, a likely kind) rather than a blank form.
+        return read ?: runCatching { com.uaefinancial.tracker.parser.SmartParser.suggest(bank, body, sms.receivedAt) }.getOrNull()
+    }
 
     // -------------------------------------------------------------- cards you add by hand
 
