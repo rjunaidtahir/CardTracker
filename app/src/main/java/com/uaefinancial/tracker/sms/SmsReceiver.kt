@@ -28,11 +28,7 @@ class SmsReceiver : BroadcastReceiver() {
             .groupBy { it.displayOriginatingAddress ?: it.originatingAddress ?: "" }
             .forEach { (sender, pieces) ->
                 val body = pieces.joinToString("") { it.displayMessageBody ?: it.messageBody ?: "" }
-                if (SmsParser.bankFor(sender) == null) {
-                    // Not one of your banks. Remember it (sender and a count only) if it looks like a bank, to offer it later.
-                    runCatching { Candidates.note(com.uaefinancial.tracker.data.Prefs(context), sender, body) }
-                    return@forEach
-                }
+                if (SmsParser.bankFor(sender) == null) return@forEach // only your bank sender IDs
                 val sentAt = pieces.first().timestampMillis
                 // Drop OTPs here so their text never even reaches WorkManager's queue.
                 val quick = SmsParser.parse(sender, body, now)

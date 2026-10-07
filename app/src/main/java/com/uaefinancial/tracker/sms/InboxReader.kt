@@ -24,7 +24,6 @@ object InboxReader {
     fun read(context: Context, sinceMillis: Long): List<InboxSms> {
         if (!hasPermission(context)) throw SecurityException("READ_SMS not granted")
         val out = mutableListOf<InboxSms>()
-        val candPrefs = com.uaefinancial.tracker.data.Prefs(context)
         context.contentResolver.query(
             Telephony.Sms.Inbox.CONTENT_URI,
             arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.DATE_SENT),
@@ -38,11 +37,7 @@ object InboxReader {
             val iSent = c.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)
             while (c.moveToNext()) {
                 val addr = c.getString(iAddr) ?: continue
-                if (SmsParser.bankFor(addr) == null) {
-                    // Not a bank you added: only remember (sender and a count) if it looks like a bank, so the app can offer it.
-                    runCatching { Candidates.note(candPrefs, addr, c.getString(iBody) ?: "") }
-                    continue
-                }
+                if (SmsParser.bankFor(addr) == null) continue // only bank senders
                 val sent = if (c.isNull(iSent)) null else c.getLong(iSent).takeIf { it > 0 }
                 out += InboxSms(addr, c.getString(iBody) ?: "", c.getLong(iDate), sent)
             }
