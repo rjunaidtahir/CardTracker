@@ -3,7 +3,7 @@
 An Android and iPhone app that turns the SMS your banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
 - **Works with banks worldwide.** A smart reader understands bank alerts in English, Arabic, Spanish, Portuguese, French, German, Italian and Dutch, in any currency and date format; the main UAE banks also have built-in formats. Your home currency comes from the phone's region and can be changed in More → Home currency.
-- **Private.** No internet permission, no account, no ads. Everything stays on the phone. One-time passwords (OTPs) are never stored.
+- **Private.** No account, no ads. Your messages, amounts and cards stay on the phone. One-time passwords (OTPs) are never stored. The app uses the internet for two things only: downloading a signed list of banks and reading rules (data, never code), and, unless you switch it off, sharing the masked *shape* of a message it could not read (no amounts, names or numbers).
 - **Free to share.** Anyone can install it. It is not tied to one person's banks or cards.
 
 ## Install
@@ -178,4 +178,5 @@ The `drive.file` permission only lets GitHub see the files it creates itself, no
 - Database changes need a Room migration (`data/Migrations.kt`), never a destructive fallback.
 - Bank formats live only in `BankRules.kt`.
 - Nothing runs in the background unless the user switches it on.
-- The app has no internet permission.
+- The internet is used for exactly two things: the signed rules file (`learn/RulesUpdater.kt`) and masked message shapes (`learn/Learning.kt`, off until the first-run consent screen is answered, switchable in More → Settings). Anything personal must be removed by `Masker` or nothing is sent. Never send raw message text, amounts, names or numbers.
+- The rules file is data only, checked against the built-in public key; the private key is never in the repo (GitHub secret `PACK_SIGNING_KEY`). Rules can only add formats for their own bank after its built-in rules.
