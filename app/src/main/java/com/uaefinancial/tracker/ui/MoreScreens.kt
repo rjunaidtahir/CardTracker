@@ -191,8 +191,31 @@ fun MoreScreen(
                     TextButton(onClick = { settingPin = true }) { Text("Change PIN") }
                 }
                 Text(
-                    "Everything stays on this phone. The app has no internet permission, so it can't send your data anywhere.",
+                    "Your messages, amounts and cards stay on this phone. The app never uploads them.",
                     style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        }
+        // ---- helping the app learn
+        item {
+            val share by vm.shareConsent.collectAsStateWithLifecycle()
+            val shared by vm.recentShared.collectAsStateWithLifecycle()
+            androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshShared() }
+            MenuGroup("Help Fils learn") {
+                SettingSwitchRow(
+                    "Share message shapes",
+                    "When a bank message can't be read, or you fix one, the app shares only its shape: no amounts, names, numbers or card digits. Never OTPs, never tied to you.",
+                    share == com.uaefinancial.tracker.learn.Learning.ON,
+                ) { vm.setShareConsent(it) }
+                if (shared.isNotEmpty()) {
+                    Text("Last shared", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp))
+                    shared.reversed().forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp)) }
+                } else {
+                    Text("Nothing has been shared yet.", style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 6.dp))
+                }
+                Text(
+                    "The app also downloads a signed list of banks and reading rules (data only) about once a day, so it can read new bank formats without an update.",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 8.dp),
                 )
             }
         }
@@ -389,6 +412,16 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
                 }
                 Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
                 SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
+                val sharing by vm.shareConsent.collectAsStateWithLifecycle()
+                if (sharing == com.uaefinancial.tracker.learn.Learning.ON) {
+                    val shape = remember(sms.id) { com.uaefinancial.tracker.learn.Learning.previewShape(sms.sender, sms.bank, sms.body) }
+                    Text("Helping Fils learn", style = MaterialTheme.typography.labelMedium, color = Ink.muted, modifier = Modifier.padding(top = 4.dp))
+                    Text(
+                        if (shape != null) "Only this shape is shared (turn off in More → Settings): $shape"
+                        else "Nothing from this message is shared: it has details that can't be hidden.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.faint,
+                    )
+                }
             }
         },
         confirmButton = {

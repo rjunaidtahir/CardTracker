@@ -1,0 +1,45 @@
+name: Publish signed rules
+
+# Signs rules/pack.json with the private key (repository secret PACK_SIGNING_KEY, never in the repo) and publishes
+# pack.json + pack.sig to the rules-pages branch, which GitHub Pages serves to the app. Data only, never code.
+on:
+  push:
+    branches: [main]
+    paths: ['rules/**', '.github/workflows/rules.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the key is set
+        id: key
+        env:
+          KEY: ${{ secrets.PACK_SIGNING_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then echo "present=false" >> "$GITHUB_OUTPUT"; echo "PACK_SIGNING_KEY is not set: nothing signed."; else echo "present=true" >> "$GITHUB_OUTPUT"; fi
+      - name: Validate JSON
+        if: steps.key.outputs.present == 'true'
+        run: python3 -c "import json,sys; d=json.load(open('rules/pack.json')); assert isinstance(d['version'],int); print('version', d['version'], len(d['rules']), 'rules')"
+      - name: Sign and publish
+        if: steps.key.outputs.present == 'true'
+        env:
+          KEY: ${{ secrets.PACK_SIGNING_KEY }}
+        run: |
+          mkdir -p out
+          cp rules/pack.json out/pack.json
+          printf '%s\n' "$KEY" > key.pem
+          openssl dgst -sha256 -sign key.pem out/pack.json | base64 -w0 > out/pack.sig
+          rm -f key.pem
+          echo '<!doctype html><title>Fils rules</title><p>Signed rules data for the Fils app. Data only.</p>' > out/index.html
+          cd out
+          git init -q -b rules-pages
+          git config user.name "rules-bot"
+          git config user.email "rules-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "Signed rules"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" rules-pages

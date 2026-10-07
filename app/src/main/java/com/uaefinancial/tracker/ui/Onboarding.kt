@@ -72,7 +72,7 @@ fun OnboardingFlow(
     var step by rememberSaveable { mutableIntStateOf(0) }
     var denied by rememberSaveable { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) { denied = false; step = 2 } else denied = true
+        if (ok) { denied = false; step = 4 } else denied = true
     }
 
     Box(Modifier.fillMaxSize().background(screenBrush)) {
@@ -80,20 +80,22 @@ fun OnboardingFlow(
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            StepDots(step, 4)
+            StepDots(step, 6)
             when (step) {
                 0 -> {
                     Text("Fils", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("See where your money goes, from the SMS your banks already send you.", style = MaterialTheme.typography.bodyLarge, color = Ink.muted)
                     Feature(Icons.Filled.Sms, "Reads your bank SMS", "Card spends, refunds, payments and transfers become a clean list, by category and by card.")
-                    Feature(Icons.Filled.CreditCard, "Every UAE bank", "Built-in formats for the main banks, plus a smart reader for any other.")
-                    Feature(Icons.Filled.WifiOff, "Private by design", "No internet, no account, no ads. Your data never leaves this phone.")
+                    Feature(Icons.Filled.CreditCard, "Banks around the world", "Built-in formats for UAE banks, a smart reader for the rest, and it keeps learning new banks.")
+                    Feature(Icons.Filled.WifiOff, "Private by design", "No account, no ads. Your messages, amounts and cards stay on this phone.")
                     Feature(Icons.Filled.Lock, "Ignores OTPs", "One-time passwords are never stored.")
                     Spacer(Modifier.height(8.dp))
-                    Button(onClick = { step = if (InboxReader.hasPermission(ctx)) 2 else 1 }, modifier = Modifier.fillMaxWidth()) { Text("Get started") }
+                    Button(onClick = { step = 1 }, modifier = Modifier.fillMaxWidth()) { Text("Get started") }
                     TextButton(onClick = { vm.finishOnboarding() }, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("Skip setup") }
                 }
-                1 -> {
+                1 -> CountryStep(vm, onNext = { step = 2 })
+                2 -> ConsentStep(vm, onNext = { step = if (InboxReader.hasPermission(ctx)) 4 else 3 })
+                3 -> {
                     Text("Allow access to SMS", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text(
                         "The app needs to read your SMS to find your bank messages. It only keeps messages from bank senders, and never OTPs.",
@@ -121,17 +123,69 @@ fun OnboardingFlow(
                         }
                     }
                     Button(
-                        onClick = { if (InboxReader.hasPermission(ctx)) step = 2 else permission.launch(Manifest.permission.READ_SMS) },
+                        onClick = { if (InboxReader.hasPermission(ctx)) step = 4 else permission.launch(Manifest.permission.READ_SMS) },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text(if (denied) "Allow SMS again" else "Allow SMS") }
-                    TextButton(onClick = { step = 3 }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                    TextButton(onClick = { step = 5 }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
                         Text("Not now (add transactions by hand)")
                     }
                 }
-                2 -> FindBanksStep(vm, onDone = { step = 3 })
+                4 -> FindBanksStep(vm, onDone = { step = 5 })
                 else -> DoneStep(vm, onLiveToggle, onRemindersToggle)
             }
         }
+    }
+}
+
+@Composable
+private fun CountryStep(vm: MainViewModel, onNext: () -> Unit) {
+    val ctx = LocalContext.current
+    val detected = remember { com.uaefinancial.tracker.data.Region.detect(ctx) }
+    var picked by rememberSaveable { mutableStateOf(vm.homeCountry() ?: detected ?: "AE") }
+    Text("Where do you bank?", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    Text(
+        "This sets your home currency and how dates are read, and puts your country's banks first. You can change it later.",
+        style = MaterialTheme.typography.bodyLarge, color = Ink.muted,
+    )
+    Panel(Modifier.fillMaxWidth()) {
+        val list = com.uaefinancial.tracker.parser.GlobalBanks.countries
+        // The detected country first, then the rest as listed.
+        (list.filter { it.code == detected } + list.filter { it.code != detected }).forEach { c ->
+            val cur = com.uaefinancial.tracker.data.Region.currencyFor(c.code)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth().clickable { picked = c.code }.padding(vertical = 2.dp),
+            ) {
+                androidx.compose.material3.RadioButton(picked == c.code, { picked = c.code })
+                Text(c.name, modifier = Modifier.weight(1f))
+                Text(cur, color = Ink.muted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+    Button(onClick = { vm.setCountry(picked); onNext() }, modifier = Modifier.fillMaxWidth()) { Text("Continue") }
+}
+
+@Composable
+private fun ConsentStep(vm: MainViewModel, onNext: () -> Unit) {
+    Text("Help Fils learn new banks", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+    Text(
+        "We send only the shape of a message: no amounts, names or numbers.",
+        style = MaterialTheme.typography.bodyLarge, color = Ink.muted,
+    )
+    Panel(Modifier.fillMaxWidth()) {
+        Text("For example, this message", style = MaterialTheme.typography.labelMedium, color = Ink.muted)
+        Text("Your Visa card ending 1234 was used for AED 45.50 at NOON on 03-10-2026", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+        Text("is shared only as", style = MaterialTheme.typography.labelMedium, color = Ink.muted, modifier = Modifier.padding(top = 10.dp))
+        Text("Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at {TEXT} on {DATE}", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = 2.dp))
+    }
+    Text(
+        "Only messages the app could not read, or that you fix, are shared, and never OTPs. Nothing is tied to you: no account, phone number or name. " +
+            "You can turn this off any time in More → Settings → Help Fils learn, where you can also see what was sent.",
+        style = MaterialTheme.typography.bodyMedium, color = Ink.muted,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { vm.setShareConsent(false); onNext() }, modifier = Modifier.weight(1f)) { Text("No thanks") }
+        Button(onClick = { vm.setShareConsent(true); onNext() }, modifier = Modifier.weight(1.4f)) { Text("Allow") }
     }
 }
 
@@ -195,7 +249,7 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
                             Checkbox(on, { picked[s.sender] = it })
                             Column(Modifier.weight(1f)) {
                                 OutlinedTextField(
-                                    names[s.sender] ?: s.sender, { names[s.sender] = it }, singleLine = true,
+                                    names[s.sender] ?: s.name ?: s.sender, { names[s.sender] = it }, singleLine = true,
                                     label = { Text("${s.sender} · ${s.alerts} messages") }, modifier = Modifier.fillMaxWidth(),
                                 )
                                 Text(s.sample, style = MaterialTheme.typography.bodySmall, color = Ink.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -208,7 +262,7 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
     }
     Button(
         onClick = {
-            val add = r?.suggestions.orEmpty().filter { picked[it.sender] ?: true }.map { it.sender to (names[it.sender] ?: it.sender) }
+            val add = r?.suggestions.orEmpty().filter { picked[it.sender] ?: true }.map { it.sender to (names[it.sender] ?: it.name ?: it.sender) }
             // Banks left unticked are not tracked (changeable later in More → Bank senders).
             r?.known?.let { known ->
                 val off = known.map { it.first }.filter { b -> !(track[b] ?: excludedBefore.none { it.equals(b, ignoreCase = true) }) }.toSet()

@@ -134,6 +134,63 @@ class Prefs(context: Context) {
         get() = sp.getString("date_region", null)
         set(v) { sp.edit { if (v == null) remove("date_region") else putString("date_region", v) } }
 
+    /** Your country (ISO 3166 alpha-2), chosen at first run; used to put your banks first. Null = not chosen. */
+    var homeCountry: String?
+        get() = sp.getString("home_country", null)
+        set(v) { sp.edit { if (v == null) remove("home_country") else putString("home_country", v) } }
+
+    // --- chats that look like banks (sender and a count only; never message text)
+    /** "key<US>sender<US>count" entries for unknown senders whose messages look like bank alerts. */
+    var candidateCounts: Set<String>
+        get() = sp.getStringSet("candidate_counts", emptySet())?.toSet() ?: emptySet()
+        set(v) { sp.edit { putStringSet("candidate_counts", v) } }
+
+    /** Sender keys you said are not banks. */
+    var dismissedCandidates: Set<String>
+        get() = sp.getStringSet("dismissed_candidates", emptySet())?.toSet() ?: emptySet()
+        set(v) { sp.edit { putStringSet("dismissed_candidates", v) } }
+
+    // --- helping the app learn (shape reports)
+    /** 0 = not asked yet, 1 = on, 2 = off. Nothing is ever sent while this is 0 or 2. */
+    var shareConsent: Int
+        get() = sp.getInt("share_consent", 0)
+        set(v) { sp.edit { putInt("share_consent", v) } }
+
+    /** Hashes of shapes already sent (so the same shape is never sent twice), newest last, capped. */
+    var sentShapeHashes: List<String>
+        get() = (sp.getString("sent_shapes", "") ?: "").split(',').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("sent_shapes", v.takeLast(300).joinToString(",")) } }
+
+    /** The last few shapes sent, so More → Settings can show exactly what leaves the phone. */
+    var recentShared: List<String>
+        get() = (sp.getString("recent_shared", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("recent_shared", v.takeLast(5).joinToString("\u001E")) } }
+
+    /** "epochDay:count" of shapes sent today (daily cap). */
+    var sentToday: String
+        get() = sp.getString("sent_today", "") ?: ""
+        set(v) { sp.edit { putString("sent_today", v) } }
+
+    /** Shapes waiting to be sent: "hash<US>bank<US>country<US>kind<US>shape". Held until consent is on. */
+    var shapeQueue: List<String>
+        get() = (sp.getString("shape_queue", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("shape_queue", v.takeLast(20).joinToString("\u001E")) } }
+
+    // --- rules file
+    /** Newest version of the signed rules file this phone accepted; 0 = none. */
+    var packVersion: Int
+        get() = sp.getInt("pack_version", 0)
+        set(v) { sp.edit { putInt("pack_version", v) } }
+
+    var lastPackCheck: Long
+        get() = sp.getLong("last_pack_check", 0L)
+        set(v) { sp.edit { putLong("last_pack_check", v) } }
+
+    /** Messages the app has learned to read from your Fix, shown in More → Settings. */
+    var learnedCount: Int
+        get() = sp.getInt("learned_count", 0)
+        set(v) { sp.edit { putInt("learned_count", v) } }
+
     private companion object {
         const val KEY_LAST_SYNC = "last_sync_at"
         const val KEY_LIVE = "live_listening"
