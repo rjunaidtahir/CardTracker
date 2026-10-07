@@ -90,6 +90,9 @@ object Masker {
                 else -> "{TEXT}"
             }
         }
+        // Count unknown words before neighbours are merged, so a message full of them is recognised as such.
+        val rawWords = Regex("""\{[A-Z]+\}|\p{L}+""").findAll(t).map { it.value }.toList()
+        val textShare = rawWords.count { it == "{TEXT}" }.toDouble() / maxOf(1, rawWords.size)
         t = t.replace(tokenText, "{TEXT} ")
         t = t.replace(Regex("""\s+"""), " ").trim()
 
@@ -99,7 +102,6 @@ object Masker {
         if (t.contains('@')) return Result(t, false, "address left")
         val words = Regex("""\{[A-Z]+\}|\p{L}+""").findAll(t).map { it.value }.toList()
         if (words.size < MIN_WORDS) return Result(t, false, "too short")
-        val textShare = words.count { it == "{TEXT}" }.toDouble() / words.size
         if (textShare > MAX_TEXT_SHARE) return Result(t, false, "mostly unknown words")
         if (words.none { it == "{AMOUNT}" }) return Result(t, false, "no amount")
         return Result(t, true)
