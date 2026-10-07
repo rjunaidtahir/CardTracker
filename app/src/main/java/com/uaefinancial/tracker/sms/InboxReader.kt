@@ -11,7 +11,7 @@ import com.uaefinancial.tracker.parser.SmsParser
 data class InboxSms(val sender: String, val body: String, val date: Long, val dateSent: Long?)
 
 /** A sender on the phone whose messages look like bank alerts but that the app doesn't know yet. */
-data class SenderSuggestion(val sender: String, val alerts: Int, val sample: String)
+data class SenderSuggestion(val sender: String, val alerts: Int, val sample: String, val name: String? = null)
 
 /** What a scan of the inbox found: known banks (with message counts) and senders worth adding. */
 data class SenderScan(val known: List<Pair<String, Int>>, val suggestions: List<SenderSuggestion>)
@@ -24,6 +24,7 @@ object InboxReader {
     fun read(context: Context, sinceMillis: Long): List<InboxSms> {
         if (!hasPermission(context)) throw SecurityException("READ_SMS not granted")
         val out = mutableListOf<InboxSms>()
+        val candPrefs = com.uaefinancial.tracker.data.Prefs(context)
         context.contentResolver.query(
             Telephony.Sms.Inbox.CONTENT_URI,
             arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.DATE_SENT),
@@ -37,7 +38,11 @@ object InboxReader {
             val iSent = c.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)
             while (c.moveToNext()) {
                 val addr = c.getString(iAddr) ?: continue
-                if (SmsParser.bankFor(addr) == null) continue // only bank senders
+                if (SmsParser.bankFor(addr) == null) {
+                    // Not a bank you added: only remember (sender and a count) if it looks like a bank, so the app can offer it.
+                    runCatching { Candidates.note(candPrefs, addr, c.getString(iBody) ?: "") }
+                    continue
+                }
                 val sent = if (c.isNull(iSent)) null else c.getLong(iSent).takeIf { it > 0 }
                 out += InboxSms(addr, c.getString(iBody) ?: "", c.getLong(iDate), sent)
             }
@@ -84,12 +89,17 @@ object InboxReader {
                 samples.putIfAbsent(key, body)
             }
         }
+        val country = com.uaefinancial.tracker.data.Prefs(context).homeCountry
+        val all = alerts.entries.map { e ->
+            val sender = names[e.key] ?: e.key
+            val dir = com.uaefinancial.tracker.parser.GlobalBanks.match(sender, samples[e.key], country)
+            SenderSuggestion(sender, e.value, samples[e.key] ?: "", dir?.name)
+        }
         return SenderScan(
             known = known.entries.sortedByDescending { it.value }.map { it.key to it.value },
-            suggestions = alerts.entries
-                .filter { it.value >= 2 } // one odd message isn't enough to call a sender a bank
-                .sortedByDescending { it.value }
-                .map { SenderSuggestion(names[it.key] ?: it.key, it.value, samples[it.key] ?: "") },
+            // One odd message isn't enough to call a sender a bank, unless its name is a bank we know.
+            suggestions = all.filter { it.alerts >= 2 || it.name != null }
+                .sortedWith(compareByDescending<SenderSuggestion> { it.name != null }.thenByDescending { it.alerts }),
         )
     }
 }

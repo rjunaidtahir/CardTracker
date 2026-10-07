@@ -914,6 +914,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ------------------------------------------------------------ country and sharing
+    fun homeCountry(): String? = prefs.homeCountry
+
+    /** First-run (or later) choice of country: sets the home currency and date style and puts that country's banks first. */
+    fun setCountry(code: String) {
+        prefs.homeCountry = code
+        prefs.dateRegion = code
+        SmsParser.setMonthFirstDates(SmsParser.isMonthFirstRegion(code))
+        val cur = com.uaefinancial.tracker.data.Region.currencyFor(code)
+        if (!cur.equals(SmsParser.homeCurrency, ignoreCase = true)) setHomeCurrency(cur)
+    }
+
+    val shareConsent = MutableStateFlow(prefs.shareConsent)
+    val recentShared = MutableStateFlow(prefs.recentShared)
+
+    fun setShareConsent(on: Boolean) {
+        prefs.shareConsent = if (on) com.uaefinancial.tracker.learn.Learning.ON else com.uaefinancial.tracker.learn.Learning.OFF
+        if (!on) prefs.shapeQueue = emptyList()
+        shareConsent.value = prefs.shareConsent
+    }
+
+    fun refreshShared() { recentShared.value = prefs.recentShared }
+
+    // ------------------------------------------------------------ chats that look like banks
+    val candidates = MutableStateFlow<List<com.uaefinancial.tracker.sms.Candidates.Candidate>>(emptyList())
+
+    fun refreshCandidates() {
+        candidates.value = com.uaefinancial.tracker.sms.Candidates.list(prefs)
+    }
+
+    /** One tap: this chat is a bank. Its messages (also the older ones) are read from now on. */
+    fun acceptCandidate(c: com.uaefinancial.tracker.sms.Candidates.Candidate) {
+        addSenders(listOf(c.sender to (c.bankName ?: c.sender)), syncAfter = true)
+        com.uaefinancial.tracker.sms.Candidates.forget(prefs, c.sender)
+        refreshCandidates()
+    }
+
+    fun dismissCandidate(c: com.uaefinancial.tracker.sms.Candidates.Candidate) {
+        com.uaefinancial.tracker.sms.Candidates.dismiss(prefs, c.key)
+        refreshCandidates()
+    }
+
     /** Adds sender IDs; the next Sync re-reads the whole inbox so their older messages come in too. */
     fun addSenders(pairs: List<Pair<String, String>>, syncAfter: Boolean) = viewModelScope.launch {
         val clean = pairs.map { (s, b) -> s.trim() to b.trim() }.filter { it.first.isNotEmpty() }
@@ -950,7 +992,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun fixMessage(r: Repository.FixResult, what: String): String =
-        if (r.similar > 0) "$what Also applied to ${r.similar} similar message${if (r.similar == 1) "" else "s"}." else what
+        if (r.similar > 0) "Learned. $what Also applied to ${r.similar} similar message${if (r.similar == 1) "" else "s"}." else what
 
     fun saveFix(
         sms: SmsEntity, type: TxnType, amountText: String, currency: String, merchant: String, cardLast4: String, cardType: CardType,

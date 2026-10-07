@@ -145,6 +145,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             ),
         )
 
+    /** Set by the app: gets (sender, bank, body, kind) for messages worth learning from. The app masks before storing anything. */
+    var onShape: ((String, String?, String, String) -> Unit)? = null
+
     suspend fun ingestSms(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): IngestOutcome =
         lock.withLock {
             ensureLearned()
@@ -170,6 +173,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 )
                 val dedupKey = SmsKey.of(sender, sent, receivedAt, body)
                 if (id == -1L) IngestOutcome.DUPLICATE else applyParse(id, dedupKey, parsed, receivedAt, bank.name)
+            }.also { outcome ->
+                // Could not be read: offer its masked shape for learning (only if you allowed it).
+                if (outcome == IngestOutcome.FAILED) runCatching { onShape?.invoke(sender, bank.name, body, "unread") }
             }
         }
 
@@ -388,6 +394,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             )
             applyParse(sms.id, sms.dedupKey, ParseResult.NotBank, sms.receivedAt, sms.bank ?: sms.sender)
         }
+        // A fix you made teaches the app: offer the masked shape with what you said it is (only if you allowed it).
+        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:" + (type?.name ?: "NOT_A_TRANSACTION")) }
         // Remember (or forget) this fix as a template, then read the other unread messages from this bank again.
         prefs?.let { p ->
             val keys = p.learnedFixKeys

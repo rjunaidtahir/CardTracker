@@ -114,6 +114,18 @@ object SmsParser {
         }
     }
 
+    /** Rules from the signed rules file, by lower-case bank name. They only ever run after the bank's built-in rules. */
+    @kotlin.concurrent.Volatile
+    private var packRules: Map<String, List<Pair<Rule, Regex>>> = emptyMap()
+
+    /** Replaces the rules from the signed rules file (see RulesPack). A rule that fails to compile is dropped. */
+    internal fun setPackRules(byBank: Map<String, List<Rule>>) {
+        packRules = byBank.mapValues { (_, rs) -> rs.mapNotNull { r -> runCatching { r to compile(r.pattern) }.getOrNull() } }
+    }
+
+    /** How many rules from the rules file are active. */
+    fun packRuleCount(): Int = packRules.values.sumOf { it.size }
+
     private val otpRegex by lazy { Regex(BankRules.otpPreCheck.pattern, RegexOption.IGNORE_CASE) }
     private val otpCodeRegex by lazy { Regex(BankRules.otpCodePreCheck.pattern, RegexOption.IGNORE_CASE) }
     private val otpIntlRegex by lazy { Regex(BankRules.otpIntlPreCheck) }
@@ -307,6 +319,21 @@ object SmsParser {
                 }
             } catch (e: Exception) {
                 errors += "${rule.id}: ${e.message}"
+            }
+        }
+
+        // Rules from the signed rules file, for this bank only, after its built-in rules.
+        packRules[cb.bank.name.trim().lowercase()]?.let { extra ->
+            for ((rule, regex) in extra) {
+                val m = regex.find(text) ?: continue
+                try {
+                    return when (rule.kind) {
+                        RuleKind.TRANSACTION -> ParseResult.Transaction(buildTxn(cb.bank, rule, m, receivedAt, zone), rule.id)
+                        RuleKind.STATEMENT -> ParseResult.Statement(buildStatement(cb.bank, rule, m), rule.id)
+                    }
+                } catch (e: Exception) {
+                    errors += "${rule.id}: ${e.message}"
+                }
             }
         }
 

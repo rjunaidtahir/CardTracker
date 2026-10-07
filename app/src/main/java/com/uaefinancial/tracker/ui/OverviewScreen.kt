@@ -122,6 +122,9 @@ fun OverviewScreen(
     var selectedCat by remember(o.period) { mutableStateOf<Long?>(null) }
     var hasSel by remember(o.period) { mutableStateOf(false) }
 
+    val found by vm.candidates.collectAsStateWithLifecycle()
+    androidx.compose.runtime.LaunchedEffect(lastSync) { vm.refreshCandidates() }
+
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         // ---- getting started (nothing imported yet)
         if (lastSync == null && cards.isEmpty()) {
@@ -135,6 +138,25 @@ fun OverviewScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
                         androidx.compose.material3.Button(onClick = onSync) { Text("Import bank messages") }
                         androidx.compose.material3.OutlinedButton(onClick = onAddManual) { Text("Add by hand") }
+                    }
+                }
+            }
+        }
+        // ---- chats that look like banks (one tap to add)
+        found.firstOrNull()?.let { c ->
+            item(key = "candidate-${c.key}") {
+                Panel(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
+                    Text(
+                        if (c.bankName != null) "Is ${c.bankName} one of your banks?" else "Is \"${c.sender}\" a bank you use?",
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        "It sends messages that look like bank alerts. Add it and the app will read them, including the older ones.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 2.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 10.dp)) {
+                        androidx.compose.material3.Button(onClick = { vm.acceptCandidate(c) }) { Text("Yes, add it") }
+                        androidx.compose.material3.OutlinedButton(onClick = { vm.dismissCandidate(c) }) { Text("Not a bank") }
                     }
                 }
             }

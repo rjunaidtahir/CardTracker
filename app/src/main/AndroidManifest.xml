@@ -8,8 +8,8 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
-    <!-- No internet, ever: nothing can leave the phone. Removes it even if a library asks for it. -->
-    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <!-- Used only for (1) downloading the signed rules file and (2) the opt-out "help Fils learn" reports of masked message shapes. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:name=".TrackerApp"
