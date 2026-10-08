@@ -321,9 +321,6 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                         "not transactions ${counts["IGNORED"] ?: 0}",
                     style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 8.dp),
                 )
-                if (failed.isNotEmpty()) {
-                    TextButton(onClick = onShare, modifier = Modifier.padding(top = 2.dp)) { Text("Share these messages (to report a bank format)") }
-                }
             }
         }
         if (failed.isEmpty()) {
