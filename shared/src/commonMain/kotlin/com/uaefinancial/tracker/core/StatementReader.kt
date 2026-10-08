@@ -19,6 +19,8 @@ data class StatementAnalysis(
     /** Sum of spends minus credits read from the transaction list, and whether it agrees with the statement totals. */
     val totalsCheck: String?,
     val totalsAgree: Boolean?,
+    /** Instalment plans printed on the statement (EPP / easy payment / deals). */
+    val plans: List<InstalmentPlan> = emptyList(),
 )
 
 /**
@@ -778,7 +780,7 @@ object StatementReader {
                 (if (agree) "They add up to the statement's balance." else "Expected balance ${fmt(expected)}, statement shows ${fmt(closing)}: some lines may be missing or instalments are included.") +
                 (how?.let { " (Money in / out was worked out from $it.)" } ?: "")
         }
-        return StatementAnalysis(summary, lines2, check, agree)
+        return StatementAnalysis(summary, lines2, check, agree, runCatching { InstalmentPlans.read(lines) }.getOrDefault(emptyList()))
     }
 
     /** What each transaction line says about its direction; used when the first reading doesn't add up. */

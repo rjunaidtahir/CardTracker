@@ -104,6 +104,25 @@ data class TransactionEntity(
     val pairedSmsId: Long? = null,
     /** Normalised merchant (CategoryRules.merchantKey) used to learn categories. */
     val merchantKey: String? = null,
+    /** Set when a check found something to look at at the time of reading (e.g. the amount isn't written in the message). */
+    val checkNote: String? = null,
+)
+
+/** An instalment plan (EPP, easy payment, balance transfer...) read from a card statement. Not spending: the purchase is already counted. */
+@Entity(tableName = "instalment_plans", indices = [Index(value = ["cardKey"])])
+data class InstalmentPlanEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val cardKey: String,
+    val kind: String,
+    val bookedEpochDay: Long?,
+    val originalMinor: Long?,
+    val outstandingMinor: Long?,
+    val instalmentsLeft: Int?,
+    val tenure: Int?,
+    val monthlyMinor: Long?,
+    val endEpochDay: Long?,
+    /** The day this was read (the statement that showed it). */
+    val readEpochDay: Long,
 )
 
 @Entity(tableName = "categories")
@@ -433,6 +452,16 @@ interface AppDao {
     @Query("DELETE FROM budgets WHERE categoryId = :categoryId")
     suspend fun deleteBudget(categoryId: Long)
 
+    // --- instalment plans
+    @Query("SELECT * FROM instalment_plans ORDER BY endEpochDay IS NULL, endEpochDay")
+    fun instalmentPlans(): Flow<List<InstalmentPlanEntity>>
+
+    @Query("DELETE FROM instalment_plans WHERE cardKey = :cardKey")
+    suspend fun deletePlansFor(cardKey: String)
+
+    @Insert
+    suspend fun insertPlans(plans: List<InstalmentPlanEntity>)
+
     // --- fixed payments
     @Query("SELECT * FROM fixed_payments ORDER BY dayOfMonth, name")
     fun fixedPayments(): Flow<List<FixedPaymentEntity>>
@@ -610,9 +639,9 @@ data class StatusCount(val status: String, val n: Int)
     entities = [
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
-        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class,
+        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
