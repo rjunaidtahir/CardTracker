@@ -3,7 +3,7 @@
 An Android and iPhone app that turns the SMS your banks already send you into a clear picture of your spending: by category, by card and over time. It keeps track of card statements, due dates, budgets and fixed payments.
 
 - **Works with banks worldwide.** A smart reader understands bank alerts in English, Arabic, Spanish, Portuguese, French, German, Italian and Dutch, in any currency and date format; the main UAE banks also have built-in formats. Your home currency comes from the phone's region and can be changed in More → Home currency.
-- **Private.** No account, no ads. Your messages, amounts and cards stay on the phone. One-time passwords (OTPs) are never stored. The app uses the internet for two things only: downloading a signed list of banks and reading rules (data, never code), and, unless you switch it off, sharing the masked *shape* of a message it could not read (no amounts, names or numbers).
+- **Private.** No account, no ads. Your messages, amounts and cards stay on the phone. One-time passwords (OTPs) are never stored. The app uses the internet for two things only: downloading a signed list of banks and reading rules (data, never code), and, unless you switch it off, sharing the masked *shape* of a message it could not read (no amounts, names or numbers). Optionally, on Android, you can allow notification access and tick your bank apps so spends announced only inside an app (some neobanks) are read too; only the ticked apps are read, on the phone.
 - **Free to share.** Anyone can install it. It is not tied to one person's banks or cards.
 
 ## Install
