@@ -49,7 +49,7 @@ class ProcessSmsWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker
         val receivedAt = inputData.getLong("receivedAt", System.currentTimeMillis())
         val sentAt = inputData.getLong("sentAt", 0L).takeIf { it > 0 }
         val app = applicationContext as TrackerApp
-        app.repo.ingestSms(sender, body, receivedAt, sentAt, SmsSource.LIVE)
+        app.repo.ingestSms(sender, body, receivedAt, sentAt, inputData.getString("source") ?: SmsSource.LIVE)
         runCatching { Alerts.onNewTransactions(applicationContext, app.repo.drainFresh()) }
         runCatching { app.repo.autoFillCardDays() }
         return Result.success()

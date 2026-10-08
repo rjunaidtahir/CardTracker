@@ -754,6 +754,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         liveListening.value = prefs.liveListening
     }
 
+    // ------------------------------------------------- bank-app notifications
+    val notifApps = MutableStateFlow(prefs.notifApps)
+    val seenNotifApps = MutableStateFlow(prefs.seenNotifApps)
+
+    fun refreshNotifApps() {
+        notifApps.value = prefs.notifApps
+        seenNotifApps.value = prefs.seenNotifApps
+    }
+
+    /** Tick or untick one bank app ("package<TAB>name"). A ticked app's name becomes a bank sender if it isn't one already. */
+    fun setNotifApp(entry: String, on: Boolean) {
+        val pkg = entry.substringBefore('\t')
+        val label = entry.substringAfter('\t', pkg)
+        prefs.notifApps = prefs.notifApps.filterNot { it.substringBefore('\t') == pkg }.toSet() + (if (on) setOf(entry) else emptySet())
+        notifApps.value = prefs.notifApps
+        if (on) viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val bankName = com.uaefinancial.tracker.parser.SmsParser.anyBankFor(label)?.name ?: label
+                repo.addSender(label, bankName)
+            }
+        }
+    }
+
     fun shouldShowBatteryTip(): Boolean = !prefs.batteryTipShown
     fun markBatteryTipShown() { prefs.batteryTipShown = true }
 

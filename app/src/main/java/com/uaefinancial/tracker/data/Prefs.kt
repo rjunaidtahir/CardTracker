@@ -35,6 +35,16 @@ class Prefs(context: Context) {
         get() = sp.getBoolean(KEY_LIVE, false)
         set(v) { sp.edit { putBoolean(KEY_LIVE, v) } }
 
+    /** Bank apps whose notifications are read, as "package<TAB>app name". Empty = notifications are ignored. */
+    var notifApps: Set<String>
+        get() = sp.getStringSet("notif_apps", emptySet()) ?: emptySet()
+        set(v) { sp.edit { putStringSet("notif_apps", v) } }
+
+    /** Apps seen posting a notification (name only, never the text), so you can pick your bank apps. Max 80. */
+    var seenNotifApps: Set<String>
+        get() = sp.getStringSet("seen_notif_apps", emptySet()) ?: emptySet()
+        set(v) { sp.edit { putStringSet("seen_notif_apps", v) } }
+
     /** The "keep the app from sleeping" tip was shown once. */
     var batteryTipShown: Boolean
         get() = sp.getBoolean(KEY_BATTERY_TIP, false)
