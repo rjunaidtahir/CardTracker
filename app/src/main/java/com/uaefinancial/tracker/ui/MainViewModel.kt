@@ -23,6 +23,7 @@ import com.uaefinancial.tracker.core.Bucket
 import com.uaefinancial.tracker.core.BudgetStatus
 import com.uaefinancial.tracker.core.Budgets
 import com.uaefinancial.tracker.data.FixedPaymentEntity
+import com.uaefinancial.tracker.data.InstalmentPlanEntity
 import com.uaefinancial.tracker.data.CardTypes
 import com.uaefinancial.tracker.report.ReportBuilder
 import com.uaefinancial.tracker.core.RecurringPayment
@@ -56,6 +57,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
@@ -474,6 +476,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val totalsAgree: Boolean? = null,
         /** Supplementary cards found in the statement (last 4 → card key in the app, if known). */
         val otherCards: Map<String, String?> = emptyMap(),
+        /** Instalment plans printed on the statement. */
+        val plans: List<com.uaefinancial.tracker.core.InstalmentPlan> = emptyList(),
     )
     val statementCheck = MutableStateFlow<StatementCheck?>(null)
 
@@ -519,7 +523,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val key = cur.cardKey ?: summary.cardLast4?.let { l4 -> dao.allCards().filter { it.last4 == l4 }.singleOrNull()?.cardKey }
                 statementCheck.value = statementCheck.value?.copy(
                     cardKey = key, loading = false, lineCount = lines.size, text = text, lines = lines, summary = summary,
-                    totalsCheck = analysis.totalsCheck, totalsAgree = analysis.totalsAgree,
+                    totalsCheck = analysis.totalsCheck, totalsAgree = analysis.totalsAgree, plans = analysis.plans,
                     error = if (lines.isEmpty() && summary.isEmpty) "No transaction lines or statement figures found in this PDF." else null,
                 )
                 if (key != null) reconcileStatement()
@@ -584,7 +588,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val key = cur.cardKey ?: return
         val s = cur.summary ?: return
         viewModelScope.launch {
-            val done = repo.applyStatementSummary(key, s, System.currentTimeMillis())
+            val done = repo.applyStatementSummary(key, s, System.currentTimeMillis()).toMutableList()
+            if (repo.savePlans(key, cur.plans, (s.statementDate ?: com.uaefinancial.tracker.core.CalendarDate.ofEpochDay(LocalDate.now(zone).toEpochDay())).toEpochDay())) {
+                done += "${cur.plans.size} instalment plan${if (cur.plans.size == 1) "" else "s"}"
+            }
             statementCheck.value = statementCheck.value?.copy(summarySaved = done)
             message.value = if (done.isEmpty()) "Nothing new to save" else "Saved: " + done.joinToString(", ")
             refreshWidget()
@@ -753,6 +760,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         LiveListening.setEnabled(getApplication(), prefs, on)
         liveListening.value = prefs.liveListening
     }
+
+    // ------------------------------------------------- accuracy checks
+    val dismissedChecks = MutableStateFlow(prefs.dismissedChecks)
+
+    /** "Check this" reasons per transaction id, from every saved transaction (cleared ones are left out). */
+    val checkFlags: StateFlow<Map<Long, List<com.uaefinancial.tracker.core.Checks.Flag>>> =
+        combine(dao.txnsBetween(0L, Long.MAX_VALUE), dismissedChecks) { all, dismissed ->
+            val rows = all.map {
+                com.uaefinancial.tracker.core.Checks.Row(it.id, it.cardKey, it.timestamp, it.type, it.amountMinor, it.currency, it.merchantKey, it.availableLimitMinor)
+            }
+            val found = com.uaefinancial.tracker.core.Checks.evaluate(rows) { m -> fmtMoney(m) }.toMutableMap()
+            for (t in all) {
+                val note = t.checkNote ?: continue
+                found[t.id] = listOf(com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.BALANCE, note)) + (found[t.id] ?: emptyList())
+            }
+            found.filterKeys { it.toString() !in dismissed }
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
+
+    fun dismissCheck(id: Long) {
+        prefs.dismissedChecks = prefs.dismissedChecks + id.toString()
+        dismissedChecks.value = prefs.dismissedChecks
+    }
+
+    /** The ten newest transactions of one card, for its page. */
+    fun recentFor(cardKey: String): kotlinx.coroutines.flow.Flow<List<TransactionEntity>> =
+        dao.txns(0L, Long.MAX_VALUE, cardKey).map { it.take(10) }
+
+    val instalmentPlans: StateFlow<List<InstalmentPlanEntity>> =
+        dao.instalmentPlans().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     // ------------------------------------------------- bank-app notifications
     val notifApps = MutableStateFlow(prefs.notifApps)

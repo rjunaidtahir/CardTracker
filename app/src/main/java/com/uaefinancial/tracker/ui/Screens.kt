@@ -88,6 +88,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.uaefinancial.tracker.data.CardEntity
+import com.uaefinancial.tracker.data.InstalmentPlanEntity
 import com.uaefinancial.tracker.data.CategoryEntity
 import com.uaefinancial.tracker.data.CardTypes
 import com.uaefinancial.tracker.data.SmsEntity
@@ -159,6 +160,7 @@ fun TransactionsScreen(
     categoryFilter: Long? = null,
 ) {
     val query by vm.search.collectAsStateWithLifecycle()
+    val checks by vm.checkFlags.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf(false) }
     val catNames = categories.associate { it.id to it.name }
     val cardNames = cards.associate { it.cardKey to CardArts.displayName(it) }
@@ -272,7 +274,7 @@ fun TransactionsScreen(
                 }
             }
             items(list, key = { it.id }) { t ->
-                TransactionRow(vm, t, counted = t.cardKey == null || t.cardKey !in excluded, categories = categories, catNames = catNames, cardNames = cardNames)
+                TransactionRow(vm, t, counted = t.cardKey == null || t.cardKey !in excluded, categories = categories, catNames = catNames, cardNames = cardNames, flags = checks[t.id].orEmpty())
             }
         }
     }
@@ -390,13 +392,14 @@ private fun QuickAddDialog(onAdd: (String) -> Boolean, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun TransactionRow(
+internal fun TransactionRow(
     vm: MainViewModel,
     t: TransactionEntity,
     counted: Boolean,
     categories: List<CategoryEntity>,
     catNames: Map<Long, String>,
     cardNames: Map<String, String>,
+    flags: List<com.uaefinancial.tracker.core.Checks.Flag> = emptyList(),
 ) {
     var expanded by remember { mutableStateOf(false) }
     var picking by remember { mutableStateOf(false) }
@@ -448,6 +451,16 @@ private fun TransactionRow(
                 }
                 val tags = listOfNotNull(first.ifBlank { null }, card, if (t.source == "MANUAL") "typed" else null, if (!counted) "not counted" else null)
                 Text(tags.joinToString(" • "), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (flags.isNotEmpty()) {
+                    Text(
+                        "⚠ Check this: " + when (flags.first().kind) {
+                            com.uaefinancial.tracker.core.Checks.Kind.BALANCE -> if (t.checkNote != null && flags.first().message == t.checkNote) "amount not in the message" else "balance doesn't add up"
+                            com.uaefinancial.tracker.core.Checks.Kind.DUPLICATE -> "possible duplicate"
+                            com.uaefinancial.tracker.core.Checks.Kind.UNUSUAL -> "unusually large"
+                        },
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.amber, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -476,6 +489,16 @@ private fun TransactionRow(
             Spacer(Modifier.height(6.dp))
             Text(fmtDateTime(t.timestamp) + " · " + t.bank, style = MaterialTheme.typography.bodySmall, color = Ink.muted)
             t.availableLimitMinor?.let { Text("Available limit/balance after: ${fmtMoney(it)}", style = MaterialTheme.typography.bodySmall, color = Ink.muted) }
+            if (flags.isNotEmpty()) {
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(Ink.bg).padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    flags.forEach { Text("⚠ " + it.message, style = MaterialTheme.typography.bodySmall, color = Ink.amber) }
+                    Text("Nothing was changed. If it's right, tap It's correct to clear the mark; if not, fix or delete it.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                    TextButton(onClick = { vm.dismissCheck(t.id) }) { Text("It's correct") }
+                }
+            }
             if (canCategorise) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -700,10 +723,6 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
                         "${s.monthTxnCount} txns" + (if (s.monthPaidInMinor > 0) " · paid in ${fmtMoney(s.monthPaidInMinor)}" else "") + if (c.countInSpending) "" else " · not in totals",
                         style = MaterialTheme.typography.bodySmall, color = fgMuted, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    s.sinceStatementStart?.let { d ->
-                        Text("Since statement (${d.format(dateFmt)}): ${fmtMoney(s.sinceStatementMinor)}", style = MaterialTheme.typography.bodySmall,
-                            color = fg, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -713,6 +732,15 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
                     Spacer(Modifier.height(4.dp))
                 }
                 NetworkMark(art.network, fg)
+            }
+        }
+        if (c.cardType != CardTypes.ACCOUNT) s.sinceStatementStart?.let { d ->
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Since statement · ${d.format(dateFmt)}", style = MaterialTheme.typography.bodySmall, color = fgMuted,
+                    modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(8.dp))
+                Text(fmtMoney(s.sinceStatementMinor), style = MaterialTheme.typography.titleSmall, color = fg, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
             }
         }
         s.due?.let { d ->
@@ -858,6 +886,9 @@ fun CardDetailScreen(
     onShowSinceStatement: (LocalDate) -> Unit = {},
     onSetFamily: (Boolean) -> Unit = {},
     onDelete: () -> Unit = {},
+    plans: List<InstalmentPlanEntity> = emptyList(),
+    recent: List<TransactionEntity> = emptyList(),
+    recentRow: @Composable (TransactionEntity) -> Unit = {},
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -889,6 +920,50 @@ fun CardDetailScreen(
                     Icon(Icons.Filled.PictureAsPdf, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Check statement", maxLines = 1)
                 }
             }
+        }
+        // --- no credit limit yet
+        if (c.cardType == CardTypes.CREDIT && c.creditLimitMinor == null) item {
+            Panel(Modifier.fillMaxWidth()) {
+                Eyebrow("No credit limit yet")
+                Text(
+                    "Without it the app can't show how much of your limit is used. Enter it under Profile below, or read it from a statement.",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.muted,
+                )
+                TextButton(onClick = onCheckStatement) { Text("Read it from a statement") }
+            }
+        }
+        // --- instalment plans (from the statement; not counted as spending)
+        if (plans.isNotEmpty()) item {
+            Panel(Modifier.fillMaxWidth()) {
+                Eyebrow("Instalment plans")
+                plans.forEach { p ->
+                    val head = buildString {
+                        append(p.kind)
+                        p.monthlyMinor?.let { append(": ${fmtMoney(it)} / month") }
+                        p.instalmentsLeft?.let { append(", $it left") }
+                    }
+                    Text(head, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 6.dp))
+                    val detail = listOfNotNull(
+                        p.outstandingMinor?.let { "outstanding ${fmtMoney(it)}" },
+                        p.endEpochDay?.let { "ends ${LocalDate.ofEpochDay(it).format(java.time.format.DateTimeFormatter.ofPattern("MMM yyyy"))}" },
+                    ).joinToString(" · ")
+                    if (detail.isNotEmpty()) Text(detail, style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                }
+                Text(
+                    "Read from your statement of ${LocalDate.ofEpochDay(plans.maxOf { it.readEpochDay }).format(dateFmt)}. Not counted as spending: the purchase was already counted.",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 6.dp),
+                )
+            }
+        }
+        // --- recent transactions
+        if (recent.isNotEmpty()) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Eyebrow("Recent transactions", modifier = Modifier.weight(1f))
+                    TextButton(onClick = onShowTransactions) { Text("See all") }
+                }
+            }
+            items(recent, key = { "recent-" + it.id }) { t -> recentRow(t) }
         }
         // --- usage since the last statement
         summary.sinceStatementStart?.let { start ->

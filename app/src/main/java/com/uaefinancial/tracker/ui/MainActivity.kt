@@ -426,7 +426,19 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onExportReport = { showReport = true },
                     )
                 }
-                is Route.CardDetail -> CardDetailScreen(
+                is Route.CardDetail -> {
+                val allPlans by vm.instalmentPlans.collectAsStateWithLifecycle()
+                val recentFlow = remember(route.cardKey) { vm.recentFor(route.cardKey) }
+                val recent by recentFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+                val checks by vm.checkFlags.collectAsStateWithLifecycle()
+                val catNames = categories.associate { it.id to it.name }
+                val cardNames = cards.associate { it.cardKey to com.uaefinancial.tracker.ui.CardArts.displayName(it) }
+                CardDetailScreen(
+                    plans = allPlans.filter { it.cardKey == route.cardKey },
+                    recent = recent,
+                    recentRow = { t ->
+                        TransactionRow(vm, t, counted = t.cardKey == null || t.cardKey !in excluded, categories = categories, catNames = catNames, cardNames = cardNames, flags = checks[t.id].orEmpty())
+                    },
                     summary = summaries.firstOrNull { it.card.cardKey == route.cardKey },
                     periodLabel = period.label(),
                     onSetType = { vm.setCardType(route.cardKey, it) },
@@ -443,6 +455,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     },
                     onDelete = { vm.deleteCard(route.cardKey) { nav.back() } },
                 )
+                }
                 Route.Rates -> RatesScreen(rates, inHome = { vm.rateInHome(it) }, onSave = { c, r -> vm.setRate(c, r) })
                 Route.FixedPayments -> FixedPaymentsScreen(vm)
                 is Route.StatementCheck -> StatementCheckScreen(vm)

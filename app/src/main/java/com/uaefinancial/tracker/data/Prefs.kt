@@ -45,6 +45,11 @@ class Prefs(context: Context) {
         get() = sp.getStringSet("seen_notif_apps", emptySet()) ?: emptySet()
         set(v) { sp.edit { putStringSet("seen_notif_apps", v) } }
 
+    /** Ids of transactions whose "check this" mark you cleared with "It's correct". */
+    var dismissedChecks: Set<String>
+        get() = sp.getStringSet("dismissed_checks", emptySet()) ?: emptySet()
+        set(v) { sp.edit { putStringSet("dismissed_checks", v) } }
+
     /** The "keep the app from sleeping" tip was shown once. */
     var batteryTipShown: Boolean
         get() = sp.getBoolean(KEY_BATTERY_TIP, false)

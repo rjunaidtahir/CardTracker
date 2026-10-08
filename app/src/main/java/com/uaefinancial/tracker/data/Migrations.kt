@@ -22,5 +22,19 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    /** 2.4: a check note on transactions, and instalment plans read from statements. */
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE transactions ADD COLUMN checkNote TEXT")
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS instalment_plans (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, cardKey TEXT NOT NULL, kind TEXT NOT NULL, " +
+                    "bookedEpochDay INTEGER, originalMinor INTEGER, outstandingMinor INTEGER, instalmentsLeft INTEGER, " +
+                    "tenure INTEGER, monthlyMinor INTEGER, endEpochDay INTEGER, readEpochDay INTEGER NOT NULL)",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_instalment_plans_cardKey ON instalment_plans (cardKey)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

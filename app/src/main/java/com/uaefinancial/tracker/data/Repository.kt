@@ -306,6 +306,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         }
 
         val override = dao.overrideFor(dedupKey)
+        // Check: the amount read must be written in the message (user fixes are checked by the user).
+        val checkNote = if (r.ruleId == FIX_RULE) null else dao.smsBody(smsId)?.let { b ->
+            if (com.uaefinancial.tracker.core.Checks.amountAppearsIn(SmsParser.normalizeBody(b), amountMinor)) null
+            else "The amount (${t.currency} ${Money.fromMinor(amountMinor).toPlainString()}) isn't written in the message: check it."
+        }
         // Spends on a card you pay for someone else go to the Family category (unless you chose another).
         val family = card?.owner == CardOwner.FAMILY && t.type == TxnType.PURCHASE && override == null
         val entity =
@@ -319,6 +324,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 merchantKey = merchantKey,
                 categoryId = if (family) CategoryRules.FAMILY else resolveCategory(dedupKey, merchantKey, t.merchant, t.type, amountMinor),
                 categoryUserSet = override != null,
+                checkNote = checkNote,
             )
         dao.insertTxn(entity)
         if (!reparsing) synchronized(fresh) { fresh += entity }
@@ -666,6 +672,22 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      * Saves the key figures read from a statement PDF: credit limit, statement / due day, and (when no SMS statement
      * with that due date exists) the statement itself so it shows in Payments due. Returns what was saved.
      */
+    /** Replaces a card's instalment plans with the ones the newest statement shows (nothing changes if it shows none). */
+    suspend fun savePlans(cardKey: String, plans: List<com.uaefinancial.tracker.core.InstalmentPlan>, readEpochDay: Long): Boolean {
+        if (plans.isEmpty()) return false
+        db.withTransaction {
+            dao.deletePlansFor(cardKey)
+            dao.insertPlans(plans.map {
+                InstalmentPlanEntity(
+                    cardKey = cardKey, kind = it.kind, bookedEpochDay = it.bookedEpochDay, originalMinor = it.originalMinor,
+                    outstandingMinor = it.outstandingMinor, instalmentsLeft = it.instalmentsLeft, tenure = it.tenure,
+                    monthlyMinor = it.monthlyMinor, endEpochDay = it.endEpochDay, readEpochDay = readEpochDay,
+                )
+            })
+        }
+        return true
+    }
+
     suspend fun applyStatementSummary(cardKey: String, s: com.uaefinancial.tracker.core.StatementSummary, receivedAt: Long): List<String> = db.withTransaction {
         val card = dao.allCards().firstOrNull { it.cardKey == cardKey } ?: return@withTransaction emptyList()
         val done = mutableListOf<String>()
