@@ -23,7 +23,7 @@ android {
         // CI passes the run number (always increasing) via ANDROID_VERSION_CODE; local builds fall
         // back to a fixed placeholder, which is fine since those aren't distributed.
         versionCode = (System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 21)
-        versionName = "2.3"
+        versionName = "2.4"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.
