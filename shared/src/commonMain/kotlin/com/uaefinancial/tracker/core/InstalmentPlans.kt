@@ -108,10 +108,10 @@ object InstalmentPlans {
             kind = kind ?: kindRx.find(line)?.value
             val f = fieldsIn(line).firstOrNull() ?: continue
             when (f) {
-                F.OUTSTANDING, F.MONTHLY, F.ORIGINAL -> money.find(line)?.let { toMinor(it.value)?.let { v -> mv.putIfAbsent(f, v) } }
+                F.OUTSTANDING, F.MONTHLY, F.ORIGINAL -> money.find(line)?.let { toMinor(it.value)?.let { v -> mv.putFirst(f, v) } }
                 F.LEFT, F.TENURE -> Regex("""(?<![\d.,/-])\d{1,3}(?![\d.,/-])""").findAll(line.replace(money, " ").replace(dateRx, " ")).lastOrNull()
-                    ?.let { iv.putIfAbsent(f, it.value.toInt()) }
-                F.BOOKED, F.END -> dateRx.find(line)?.let { toDay(it)?.let { d -> dv.putIfAbsent(f, d) } }
+                    ?.let { iv.putFirst(f, it.value.toInt()) }
+                F.BOOKED, F.END -> dateRx.find(line)?.let { toDay(it)?.let { d -> dv.putFirst(f, d) } }
                 F.TYPE -> kind = kind ?: kindRx.find(line)?.value
             }
         }
@@ -130,6 +130,9 @@ object InstalmentPlans {
             instalmentsLeft = iv[F.LEFT], tenure = iv[F.TENURE], monthlyMinor = monthly, endEpochDay = dv[F.END],
         )
     }
+
+    /** Keeps the first value seen for a key (common code can't use the JVM's putIfAbsent). */
+    private fun <K, V> MutableMap<K, V>.putFirst(k: K, v: V) { if (!containsKey(k)) put(k, v) }
 
     private fun toMinor(s: String): Long? = s.replace(",", "").let { v ->
         val p = v.split('.')
