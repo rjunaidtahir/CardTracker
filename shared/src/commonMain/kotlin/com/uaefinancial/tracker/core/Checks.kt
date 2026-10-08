@@ -133,26 +133,30 @@ object Checks {
         return false
     }
 
+    /** Groups like 1,250 or 12,345,678: first group 1 to 3 digits, the rest exactly 3. A single group is always fine. */
+    private fun thousandsOk(parts: List<String>): Boolean =
+        parts.size <= 1 || (parts[0].length in 1..3 && parts.drop(1).all { it.length == 3 })
+
     /** Every minor-unit value a number token could mean. */
     private fun candidates(token: String): List<Long> {
         val compact = token.filter { it.isDigit() || it == '.' || it == ',' }
         val digitsOnly = compact.filter { it.isDigit() }
         if (digitsOnly.isEmpty() || digitsOnly.length > 15) return emptyList()
+        val parts = compact.split('.', ',')
         val out = ArrayList<Long>(3)
-        // As a whole number (separators are thousands marks): 1,250 · 1.250 · 1 250
-        digitsOnly.toLongOrNull()?.let { out += it * 100 }
-        // With a decimal part after the last separator: 1,250.50 · 1.250,5 · 1250.5 · 1.250 (3 decimals)
-        val lastSep = maxOf(compact.lastIndexOf('.'), compact.lastIndexOf(','))
-        if (lastSep >= 0) {
-            val before = compact.substring(0, lastSep).filter { it.isDigit() }
-            val after = compact.substring(lastSep + 1)
-            if (after.isNotEmpty() && after.all { it.isDigit() } && after.length <= 3) {
-                val whole = (if (before.isEmpty()) "0" else before).toLongOrNull()
+        // As a whole number, the separators being thousands marks: 1,250 · 1.250 · 1 250
+        if (thousandsOk(parts)) digitsOnly.toLongOrNull()?.let { out += it * 100 }
+        // With a decimal part after the last separator: 1,250.50 · 1.250,5 · 1250.5 · 12.345 (3 decimals)
+        if (parts.size >= 2) {
+            val after = parts.last()
+            val beforeParts = parts.dropLast(1)
+            if (after.isNotEmpty() && after.length <= 3 && thousandsOk(beforeParts)) {
+                val whole = beforeParts.joinToString("").ifEmpty { "0" }.toLongOrNull()
                 if (whole != null) {
-                    val two = after.padEnd(3, '0')
-                    val cents = two.substring(0, 2).toInt()
+                    val padded = after.padEnd(3, '0')
+                    val cents = padded.substring(0, 2).toInt()
                     out += whole * 100 + cents
-                    if (after.length == 3 && two[2] >= '5') out += whole * 100 + cents + 1
+                    if (after.length == 3 && padded[2] >= '5') out += whole * 100 + cents + 1
                 }
             }
         }
