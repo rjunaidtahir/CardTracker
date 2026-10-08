@@ -148,6 +148,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     /** Set by the app: gets (sender, bank, body, kind) for messages worth learning from. The app masks before storing anything. */
     var onShape: ((String, String?, String, String) -> Unit)? = null
 
+    /** Offers the masked shape of every message waiting in Needs review (nothing is sent unless sharing is on). */
+    suspend fun queueUnreadForLearning() {
+        for (m in dao.failedSmsList()) onShape?.invoke(m.sender, m.bank, m.body, "unread")
+    }
+
     suspend fun ingestSms(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): IngestOutcome =
         lock.withLock {
             ensureLearned()

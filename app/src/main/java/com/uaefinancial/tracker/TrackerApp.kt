@@ -43,6 +43,7 @@ class TrackerApp : Application() {
         appScope.launch {
             runCatching { repo.ensureDefaults() }
             runCatching { repo.loadLearned() }
+            if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { repo.queueUnreadForLearning() }
             // A newer reading engine: read every stored message again once, so Needs review and wrongly read messages
             // benefit from it (and a message now recognised as a one-time code is deleted).
             if (prefs.engineVersion != SmsParser.ENGINE_VERSION) {

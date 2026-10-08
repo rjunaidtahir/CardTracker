@@ -933,6 +933,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         prefs.shareConsent = if (on) com.uaefinancial.tracker.learn.Learning.ON else com.uaefinancial.tracker.learn.Learning.OFF
         if (!on) prefs.shapeQueue = emptyList()
         shareConsent.value = prefs.shareConsent
+        // Messages already waiting in Needs review count too, not only new ones.
+        if (on) viewModelScope.launch(Dispatchers.IO) { runCatching { repo.queueUnreadForLearning() } }
     }
 
     fun refreshShared() { recentShared.value = prefs.recentShared }

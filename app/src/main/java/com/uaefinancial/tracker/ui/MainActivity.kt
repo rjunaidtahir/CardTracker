@@ -291,6 +291,25 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
         OnboardingFlow(vm, onLiveToggle = onLiveToggle, onRemindersToggle = onRemindersToggle)
         return
     }
+    // An install from before the sharing option: ask once, the same way the first-run screen does.
+    val consent by vm.shareConsent.collectAsStateWithLifecycle()
+    if (consent == com.uaefinancial.tracker.learn.Learning.ASKED) {
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = Ink.surface,
+            title = { Text("Help Fils learn new banks") },
+            text = {
+                Text(
+                    "We send only the shape of a message: no amounts, names or numbers. For example, \"Your Visa card ending 1234 was used for AED 45.50 at NOON\" " +
+                        "is shared only as \"Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at {TEXT}\".\n\n" +
+                        "Only messages the app could not read, or that you fix, are shared. Never OTPs, and nothing is tied to you. " +
+                        "You can turn this off any time in More → Settings → Help Fils learn.",
+                )
+            },
+            confirmButton = { androidx.compose.material3.Button(onClick = { vm.setShareConsent(true) }) { Text("Allow") } },
+            dismissButton = { TextButton(onClick = { vm.setShareConsent(false) }) { Text("No thanks") } },
+        )
+    }
     BackHandler(enabled = nav.canGoBack) { nav.back() }
     if (addingCard) AddCardDialog(onAdd = { b, l, t, n, f -> vm.addCard(b, l, t, n, f) }, onDismiss = { addingCard = false })
 
