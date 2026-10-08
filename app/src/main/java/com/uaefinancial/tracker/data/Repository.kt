@@ -167,6 +167,14 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             if (dao.countNearDuplicates(bank.name, hash, receivedAt - window, receivedAt + window, sent) > 0) {
                 return IngestOutcome.DUPLICATE
             }
+            // The same purchase as an SMS and as a bank-app notification is one transaction.
+            if (parsed is ParseResult.Transaction) {
+                val twins = dao.countCrossSourceTwins(
+                    bank.name, Money.toMinor(parsed.txn.amount), parsed.txn.type.name,
+                    receivedAt - window, receivedAt + window, if (source == SmsSource.NOTIF) 1 else 0,
+                )
+                if (twins > 0) return IngestOutcome.DUPLICATE
+            }
             db.withTransaction {
                 val id = dao.insertSms(
                     SmsEntity(

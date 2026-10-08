@@ -32,6 +32,8 @@ object SmsStatus {
 object SmsSource {
     const val SYNC = "SYNC"
     const val LIVE = "LIVE"
+    /** A bank-app notification (Android notification access). */
+    const val NOTIF = "NOTIF"
 }
 
 /** Every bank SMS is kept raw (except OTPs, which are never stored). */
@@ -271,6 +273,18 @@ interface AppDao {
             "AND (:sentAt IS NULL OR sentAt IS NULL)",
     )
     suspend fun countNearDuplicates(bank: String, hash: String, from: Long, to: Long, sentAt: Long?): Int
+
+    /**
+     * The same money movement arriving twice, once as an SMS and once as a bank-app notification (different wording,
+     * so the body hash can't match): same bank, amount and kind within the window, from the other source.
+     */
+    @Query(
+        "SELECT COUNT(*) FROM transactions t JOIN sms s ON s.id = t.smsId " +
+            "WHERE t.bank = :bank AND t.amountMinor = :amountMinor AND t.type = :type " +
+            "AND s.receivedAt BETWEEN :from AND :to " +
+            "AND ((:incomingNotif = 1 AND s.source != 'NOTIF') OR (:incomingNotif = 0 AND s.source = 'NOTIF'))",
+    )
+    suspend fun countCrossSourceTwins(bank: String, amountMinor: Long, type: String, from: Long, to: Long, incomingNotif: Int): Int
 
     @Query("SELECT * FROM sms WHERE status != 'DISMISSED' ORDER BY receivedAt ASC")
     suspend fun smsForReparse(): List<SmsEntity>

@@ -53,6 +53,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -172,6 +174,48 @@ fun MoreScreen(
                 )
                 Spacer(Modifier.height(12.dp))
                 AlertsSettings(vm, onAlertsToggle)
+            }
+        }
+        // ---- bank-app notifications
+        item {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
+            val picked by vm.notifApps.collectAsStateWithLifecycle()
+            val seen by vm.seenNotifApps.collectAsStateWithLifecycle()
+            var access by remember { mutableStateOf(com.uaefinancial.tracker.notify.NotifApps.hasAccess(ctx)) }
+            val settingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                access = com.uaefinancial.tracker.notify.NotifApps.hasAccess(ctx)
+                vm.refreshNotifApps()
+            }
+            LaunchedEffect(Unit) { vm.refreshNotifApps() }
+            MenuGroup("Bank app notifications") {
+                Text(
+                    "Some banks (mostly neobanks) tell you about a spend only inside their app, not by SMS. " +
+                        "Allow notification access, then tick your bank apps. Only the apps you tick are read; every other notification is ignored. Nothing leaves your phone.",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.muted,
+                )
+                OutlinedButton(
+                    onClick = { settingsLauncher.launch(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)) },
+                    modifier = Modifier.padding(top = 8.dp),
+                ) { Text(if (access) "Notification access: on (change)" else "Turn on notification access") }
+                if (access) {
+                    if (seen.isEmpty()) {
+                        Text(
+                            "Apps appear here after they show a notification. Make a small card spend, then come back.",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 8.dp),
+                        )
+                    } else {
+                        Text("Your bank apps", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp))
+                        val pickedPkgs = picked.map { it.substringBefore('\t') }.toSet()
+                        seen.sortedWith(compareByDescending<String> { it.substringBefore('\t') in pickedPkgs }
+                            .thenBy { it.substringAfter('\t').lowercase() }).forEach { e ->
+                            val on = e.substringBefore('\t') in pickedPkgs
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { vm.setNotifApp(e, !on) }) {
+                                Checkbox(checked = on, onCheckedChange = { vm.setNotifApp(e, it) })
+                                Text(e.substringAfter('\t'), modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
             }
         }
         // ---- security
