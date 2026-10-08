@@ -141,9 +141,12 @@ dependencies {
     implementation("org.bouncycastle:bcprov-jdk15to18:$bouncyCastleVersion")
 
     // App lock (fingerprint / face). BiometricPrompt needs a FragmentActivity.
+    // On-device Gemini Nano (optional "Suggest with phone AI" in the Fix form). Nothing is sent anywhere.
+    implementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.fragment:fragment-ktx:1.8.5")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20231013")
     testImplementation(kotlin("test"))
 }

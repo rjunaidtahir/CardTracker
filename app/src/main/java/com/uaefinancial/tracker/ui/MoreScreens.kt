@@ -53,6 +53,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
@@ -412,6 +413,11 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
     // "Apply to similar messages": on by default; only offered when it can work for this message.
     var similar by remember { mutableStateOf(true) }
     val canLearn = remember(type, amount, merchant, last4, cardType) { vm.canLearn(sms, type, amount, merchant, last4, cardType) }
+    var aiReady by remember { mutableStateOf(false) }
+    var aiBusy by remember { mutableStateOf(false) }
+    var aiNote by remember { mutableStateOf<String?>(null) }
+    val aiScope = androidx.compose.runtime.rememberCoroutineScope()
+    LaunchedEffect(sms.id) { aiReady = com.uaefinancial.tracker.ai.PhoneAi.available() }
     LaunchedEffect(sms.id) {
         vm.guessFor(sms)?.let { g ->
             type = g.type
@@ -450,6 +456,29 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
                     Pill("Credit card", cardType == CardType.CREDIT, onClick = { cardType = CardType.CREDIT })
                     Pill("Debit card", cardType == CardType.DEBIT, onClick = { cardType = CardType.DEBIT })
                     Pill("Bank account", cardType == CardType.ACCOUNT, onClick = { cardType = CardType.ACCOUNT })
+                }
+                if (aiReady) {
+                    OutlinedButton(
+                        enabled = !aiBusy,
+                        onClick = {
+                            aiBusy = true; aiNote = null
+                            aiScope.launch {
+                                val g = com.uaefinancial.tracker.ai.PhoneAi.suggest(sms.body)
+                                if (g == null) aiNote = "The phone's AI couldn't read this one."
+                                else {
+                                    type = g.type
+                                    amount = g.amount.stripTrailingZeros().toPlainString()
+                                    g.currency?.let { currency = it }
+                                    if (g.merchant.isNotEmpty()) merchant = g.merchant
+                                    g.cardLast4?.let { last4 = it }
+                                    g.cardType?.let { cardType = it }
+                                    aiNote = "Filled in by your phone's own AI (nothing was sent anywhere). Check it, then Save."
+                                }
+                                aiBusy = false
+                            }
+                        },
+                    ) { Text(if (aiBusy) "Reading…" else "Suggest with phone AI") }
+                    aiNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Ink.faint) }
                 }
                 Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
                 SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
