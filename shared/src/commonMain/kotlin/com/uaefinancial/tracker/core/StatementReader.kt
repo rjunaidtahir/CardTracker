@@ -278,7 +278,25 @@ object StatementReader {
                 }
                 // Summary tiles: the figure printed ABOVE its caption ("AED 2,531.60" over "Total Amount Due"). Only when the
                 // label's own row has no values and the value row above is closer than any value row below.
-                if (amountsIn(l).isEmpty() && !dateRx.containsMatchIn(l.text)) {
+                // Not when the column starts with a caption (caption, its value, next caption, its value ...): then the figure
+                // above this label belongs to the caption above it ("Credit Card Limit / 10,000 / Available Credit / Card Limit / 5,504").
+                fun columnStartsWithCaption(): Boolean {
+                    var topIsCaption = false
+                    var prevY = l.y
+                    for (k in i - 1 downTo maxOf(0, i - 8)) {
+                        val n = lines[k]
+                        if (n.page != l.page || prevY - n.y > 30f) break
+                        val part = columnPart(n, x0 - 30f, x1 + 40f)
+                        if (part == null) { prevY = n.y; continue }
+                        val hasAmt = amountsIn(part).isNotEmpty()
+                        val isLabel = !hasAmt && anyLabel.any { it.containsMatchIn(part.text) }
+                        if (!hasAmt && !isLabel) break // a heading or other text: the column starts below it
+                        topIsCaption = isLabel
+                        prevY = n.y
+                    }
+                    return topIsCaption
+                }
+                if (amountsIn(l).isEmpty() && !dateRx.containsMatchIn(l.text) && !columnStartsWithCaption()) {
                     val above = (i - 1 downTo maxOf(0, i - 2)).map { lines[it] }
                         .firstOrNull { n -> n.page == l.page && l.y - n.y in 1f..22f && anyLabel.none { r -> r.containsMatchIn(n.text) } }
                     val v = above?.let { pick(it, 0, x0, x1, sameLine = false) }
@@ -309,6 +327,14 @@ object StatementReader {
             }
         }
         return null
+    }
+
+    /** The part of [n] printed between [lo] and [hi] (points), or null when nothing is there. */
+    private fun columnPart(n: PrintedLine, lo: Float, hi: Float): PrintedLine? {
+        val idx = n.xs.indices.filter { n.xs[it] in lo..hi }
+        if (idx.isEmpty()) return null
+        val a = idx.first(); val b = idx.last()
+        return PrintedLine(n.page, n.y, n.text.substring(a, b + 1), n.xs.copyOfRange(a, b + 1))
     }
 
     private fun rx(vararg p: String) = p.map { Regex(it, RegexOption.IGNORE_CASE) }
@@ -500,12 +526,24 @@ object StatementReader {
             return if (alone || (masked && Regex("""card|:""", RegexOption.IGNORE_CASE).containsMatchIn(l.text))) m.groupValues.drop(1).lastOrNull { it.length == 4 } else null
         }
         var firstTxnIndex = -1
+        // After a heading such as "Your Installment Plans" or "Your Rewards" the rows belong to another table (with
+        // dates and amounts of its own) and are not transactions, until a transaction table's header appears again.
+        var otherTable = false
+        val otherTableHeading = Regex("""^\s*(?:your\s*)?(?:ins?tall?ments?\s*plans?|reward\s*(?:points|summary)|rewards|loyalty|interest\s*rates?|payment\s*allocation)\b""", RegexOption.IGNORE_CASE)
+        val txnHeaderWord = Regex("""\b(?:description|particulars|narration|details|transactions?)\b""", RegexOption.IGNORE_CASE)
         var i = 0
         while (i < lines.size) {
             val l = lines[i]
+            if (otherTableHeading.containsMatchIn(l.text) && amountsIn(l).isEmpty()) { otherTable = true; cols = null; pending = null; i++; continue }
             val hdr = headerAt(lines, i)
-            if (hdr != null) { cols = hdr; pending = null; headerPage = l.page; headerY = l.y; i++; continue }
+            if (hdr != null) {
+                val band = (maxOf(0, i - 2)..minOf(lines.lastIndex, i + 2)).filter { lines[it].page == l.page && abs(lines[it].y - l.y) < 25 }
+                if (otherTable && band.none { txnHeaderWord.containsMatchIn(lines[it].text) }) { i++; continue } // the other table's own header
+                otherTable = false
+                cols = hdr; pending = null; headerPage = l.page; headerY = l.y; i++; continue
+            }
             val row = leadingDates(l, year)
+            if (otherTable) { i++; continue }
             if (row == null) {
                 // card sections inside the table ("Supplementary Card Number ... 3944")
                 cardHeading(l)?.let { section = it }
