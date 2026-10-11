@@ -398,14 +398,15 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         syncing = syncing, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
                         categories = categories, categoryFilter = categoryFilter,
                     )
-                    Tab.CARDS -> CardsScreen(
+                    Tab.CARDS -> { val ov by vm.overview.collectAsStateWithLifecycle(); CardsScreen(
                         summaries, period,
+                        homeTotalMinor = ov.spentMinor, homeSpendCount = ov.txnCount,
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onToggleCounted = { key, on -> vm.setCardCounted(key, on) },
                         onReorder = { vm.setCardOrder(it) },
                         onImportStatement = { vm.startStatementCheck(null); nav.push(Route.StatementCheck(null)) },
                         onAddCard = { addingCard = true },
-                    )
+                    ) }
                     Tab.MORE -> MoreScreen(
                         vm = vm,
                         reviewCount = failed.size,
