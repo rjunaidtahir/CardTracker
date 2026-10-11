@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.SouthWest
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.SwitchDefaults
 import com.uaefinancial.tracker.core.Period
+import com.uaefinancial.tracker.core.PeriodKind
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -538,6 +539,9 @@ fun CardsScreen(
     onReorder: (List<String>) -> Unit,
     onImportStatement: () -> Unit = {},
     onAddCard: () -> Unit = {},
+    /** Home's total and spend count for the same period, so this tab can show the very same figure. */
+    homeTotalMinor: Long? = null,
+    homeSpendCount: Int? = null,
 ) {
     val periodLabel = period.label()
     var arranging by rememberSaveable { mutableStateOf(false) }
@@ -562,6 +566,8 @@ fun CardsScreen(
             }
         }
         if (!arranging) {
+            val counted = summaries.filter { it.card.countInSpending && it.monthSpendAedMinor != 0L }
+            if (counted.isNotEmpty()) item { ThisPeriodPanel(counted, period, homeTotalMinor, homeSpendCount, onOpenCard) }
             val unbilled = summaries.filter { it.sinceStatementStart != null && it.card.countInSpending }
             if (unbilled.isNotEmpty()) item { SinceStatementPanel(unbilled, onOpenCard) }
             if (withLimit.isNotEmpty()) {
@@ -760,13 +766,73 @@ fun CardTile(s: CardSummary, periodLabel: String, onClick: (() -> Unit)?, onTogg
     }
 }
 
+/** "<period> on your cards": each card's net spend for the period picked on Home, adding up to Home's total. */
+@Composable
+private fun ThisPeriodPanel(
+    cards: List<CardSummary>,
+    period: Period,
+    homeTotalMinor: Long?,
+    homeSpendCount: Int?,
+    onOpenCard: (String) -> Unit,
+) {
+    val title = when (period.kind) {
+        PeriodKind.MONTH -> period.label()
+        PeriodKind.W1 -> "Last week"
+        PeriodKind.M1 -> "Last month"
+        PeriodKind.M3 -> "Last 3 months"
+        PeriodKind.M6 -> "Last 6 months"
+        PeriodKind.M12 -> "Last 12 months"
+        PeriodKind.ALL -> "All time"
+        PeriodKind.CUSTOM -> period.label()
+    }
+    val sorted = cards.sortedByDescending { it.monthSpendAedMinor }
+    val top = sorted.take(5)
+    val rest = sorted.drop(5)
+    val cardsSum = sorted.sumOf { it.monthSpendAedMinor }
+    val total = homeTotalMinor ?: cardsSum
+    // Typed entries without a card count on Home but belong to no card.
+    val noCard = if (homeTotalMinor != null) homeTotalMinor - cardsSum else 0L
+    Panel(Modifier.fillMaxWidth()) {
+        Eyebrow("$title on your cards")
+        Text(fmtMoney(total), style = MaterialTheme.typography.headlineMedium, color = Ink.green, maxLines = 1)
+        Text(
+            "Same as Home: ${period.label()}" + (homeSpendCount?.let { ", $it spends" } ?: ""),
+            style = MaterialTheme.typography.bodySmall, color = Ink.muted,
+        )
+        top.forEach { s ->
+            Row(Modifier.fillMaxWidth().clickable { onOpenCard(s.card.cardKey) }.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                CardThumb(s.card, 44.dp, 28.dp)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(CardArts.displayName(s.card), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(typeLabel(s.card.cardType).lowercase() + " · ${s.monthTxnCount} txns", style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 1)
+                }
+                Text(fmtAmount(s.monthSpendAedMinor), fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            }
+        }
+        if (rest.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Others (${rest.size} cards)", style = MaterialTheme.typography.bodyMedium, color = Ink.muted, modifier = Modifier.weight(1f))
+                Text(fmtAmount(rest.sumOf { it.monthSpendAedMinor }), fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            }
+        }
+        if (noCard != 0L) {
+            Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Typed entries (no card)", style = MaterialTheme.typography.bodyMedium, color = Ink.muted, modifier = Modifier.weight(1f))
+                Text(fmtAmount(noCard), fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+            }
+        }
+        Text("Cards switched off in totals are left out, like on Home.", style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 8.dp))
+    }
+}
+
 /** Spend on each credit card since its last statement: what goes on the next one. */
 @Composable
 private fun SinceStatementPanel(cards: List<CardSummary>, onOpenCard: (String) -> Unit) {
     Panel(Modifier.fillMaxWidth()) {
         Eyebrow("Since last statement")
         Text(fmtMoney(cards.sumOf { it.sinceStatementMinor }), style = MaterialTheme.typography.headlineMedium, color = Ink.green, maxLines = 1)
-        Text("Spent on your credit cards since each card's last statement (goes on the next one).", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        Text("Credit cards only. Spent since each card's own statement date; this is what goes on the next statement. Not the same as the period total above.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
         cards.sortedByDescending { it.sinceStatementMinor }.forEach { s ->
             Row(Modifier.fillMaxWidth().clickable { onOpenCard(s.card.cardKey) }.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                 CardThumb(s.card, 44.dp, 28.dp)
