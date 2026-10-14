@@ -718,7 +718,8 @@ private val helpItems = listOf(
         "Your bank sends an SMS for every card spend, payment and transfer. The app reads those messages on your phone and turns them into transactions. " +
         "Tap Sync (↻) to import new ones, or turn on \"Record new messages automatically\" in More.",
     "Is my data safe?" to
-        "Yes. The app has no internet access at all, so nothing can leave your phone. It only reads SMS from bank senders, and never stores one-time passwords (OTPs). " +
+        "Yes. Your messages, amounts, merchants and cards stay on your phone. The app only reads SMS from bank senders, and never stores one-time passwords (OTPs). " +
+        "It uses the internet for two things only: downloading a signed list of bank formats, and (unless you switch it off in More → Settings → Help Fils learn) sending the masked shape of a message it could not read, with no amounts, names or numbers. " +
         "Backups are files you save yourself.",
     "Android says the SMS permission is restricted" to
         "Android blocks SMS access for apps installed from a file. Open Settings → Apps → Fils → ⋮ (top right) → Allow restricted settings, " +

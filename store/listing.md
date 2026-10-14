@@ -35,7 +35,7 @@ BUDGETS, GOALS & RECURRING PAYMENTS
 • Log cash spending by typing, e.g. "lunch 45"
 
 BUILT AROUND YOUR PRIVACY
-• No internet permission — Fils cannot send data anywhere, even if it wanted to
+• Your messages, amounts and cards stay on your phone. Fils can optionally share the anonymous shape of messages it can't read (no amounts, names or numbers) to learn new banks; you can switch this off any time
 • Everything is stored only in your phone's local database
 • No account, no login, no ads
 • One-time passcodes (OTPs) are never stored
@@ -63,14 +63,11 @@ were checked against Google's own definitions on 29 September 2026.
   every content question — violence, fear, sexuality, language, controlled substances, gambling, crude humour —
   and **No** to user-to-user interaction, sharing the user's location, digital purchases, and unrestricted web access.
 - **Target audience and content:** 18 and over only. Not designed to appeal to children.
-- **Data safety:** "Does your app collect or share any of the required user data types?" → **No.**
-  Why this is correct (Google's definitions, Play Console Help answer 10787469):
-  - *"'Collect' means transmitting data from your app off a user's device."* Fils never does — it has no internet permission.
-  - *"User data accessed by your app that is only processed locally on the user's device and not sent off device
-    does not need to be disclosed."*
-  - Backups, PDF/Excel reports and the "share text" buttons only leave the phone when the user taps them and picks
-    the destination app — Google exempts *"a specific user-initiated action, where the user reasonably expects the data to be shared."*
-  - The store listing will then show "No data collected · No data shared".
+- **Data safety:** "Does your app collect or share any of the required user data types?" → **Yes (collects, does not share).**
+  Use the table in the project doc "Build 8 (v2.3) - Play Data safety and privacy wording": Messages → SMS (masked
+  message shape only), Approximate location (country only), App info (app version); all optional (switch in
+  More → Settings → Help Fils learn), purpose App functionality, encrypted in transit, not shared. Transactions,
+  amounts, merchants, card digits, balances and PDFs are never collected. Notification access is read on the phone only.
 - **Financial features:** "My app doesn't provide any financial features." Fils offers no loans, payments, banking,
   trading, insurance, credit reporting or financial advice — it only shows the user's own bank SMS, on the device.
 - **Advertising ID:** No — the app doesn't use it (no `AD_ID` permission in the built APK, verified).
@@ -94,12 +91,12 @@ Record this on a real phone with the Play-bound build installed (screen recorder
 4. **(10s)** Switch to Fils, tap **Sync**, and show the new transaction appear in **Activity** — same amount,
    merchant and card as the SMS.
 5. **(10s)** Open **More → Help & questions**, tap **"Is my data safe?"** to show the on-device-only,
-   no-internet-permission answer on screen.
+   answer on screen (on-device, optional masked-shape sharing).
 6. **(5s)** End on the **Home** tab showing the updated "Spent this month" total.
 
 Narration (captions or voiceover) to include, matching the declared use case almost word for word: *"Fils reads
 SMS from your bank to automatically log your spending and track your budget. It doesn't read personal messages,
-doesn't store OTPs, has no internet permission, and never sends data anywhere."*
+doesn't store OTPs, and keeps your transactions on your phone."*
 
 Upload the recording (unlisted YouTube link or direct file, per Play Console's current option) alongside the
 declaration form, and pick **"SMS-based money management — apps that track and manage budget"** as the use case.

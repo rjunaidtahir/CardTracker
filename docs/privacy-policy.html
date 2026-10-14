@@ -26,12 +26,13 @@
 </head>
 <body>
   <h1>Privacy Policy — Fils</h1>
-  <div class="updated">Last updated: 29 September 2026</div>
+  <div class="updated">Last updated: 7 October 2026</div>
 
   <div class="callout">
     <strong>In short:</strong> Fils reads your bank's SMS messages, on your phone, to show you your own spending.
-    It has no internet permission, has no account or sign-in, shows no ads, and never sends your data anywhere —
-    to us or to anyone else.
+    It has no account or sign-in, shows no ads, and keeps your messages, amounts and cards on your phone. The app uses
+    the internet for only two things: downloading a list of banks and reading rules, and (unless you switch it off)
+    sharing the anonymous <em>shape</em> of a message it could not read, with no amounts, names or numbers.
   </div>
 
   <h2>Who this policy covers</h2>
@@ -62,12 +63,32 @@
 
   <h2>What Fils never does</h2>
   <ul>
-    <li><strong>No internet access.</strong> The Android app does not request the internet permission at all, so no data can be transmitted off the device, even if the app wanted to.</li>
+    <li><strong>No upload of your messages or transactions.</strong> The text of your SMS, your amounts, merchants, card numbers and balances are never uploaded. The only things that leave the phone are described in "Helping Fils learn" below.</li>
     <li><strong>No account or sign-in.</strong> Fils does not ask for your name, email, phone number, or any other identifying information.</li>
     <li><strong>No advertising or analytics SDKs.</strong> Fils contains no third-party trackers, ad networks, or analytics services.</li>
-    <li><strong>No sharing or selling of data.</strong> Nothing Fils reads or stores is shared with, sold to, or processed by any third party, including the developer.</li>
+    <li><strong>No selling of data, no advertising.</strong> Nothing Fils reads or stores is sold, or used for advertising. Apart from the masked shapes described below, nothing is shared with anyone.</li>
     <li><strong>No access to banking apps, banking credentials, or full card numbers.</strong> Fils only reads the text of SMS messages (or content you explicitly share with it); it never connects to your bank, requests your banking login, or has access to any banking app on your device.</li>
   </ul>
+
+  <h2>Helping Fils learn</h2>
+  <p>
+    Banks around the world write their messages differently. To teach Fils new formats, the app can send the
+    <strong>shape</strong> of a bank message it could not read, or that you corrected. The shape is the wording of the
+    message with everything personal replaced by a label. For example, the message "Your Visa card ending 1234 was used
+    for AED 45.50 at NOON on 03-10-2026" is sent only as "Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at
+    {TEXT} on {DATE}".
+  </p>
+  <ul>
+    <li>Amounts, currencies, card and account numbers, dates, times, links, e-mail addresses, phone numbers, names and merchants are removed on your phone before anything is sent. If anything personal would remain, nothing is sent.</li>
+    <li>With each shape the app also sends the bank's name (only if it is a bank in the app's public list), your country, the kind of message, and the app version. No account, phone number, device identifier or IP address is stored by the developer.</li>
+    <li>One-time passcodes are never sent. At most 10 shapes are sent per day, and the same shape is never sent twice.</li>
+    <li>You are asked once, when you first open the app. You can switch this off at any time in More &rarr; Settings &rarr; Help Fils learn, where you can also see the last shapes that were sent. Nothing is sent before you have been asked, or while the switch is off.</li>
+    <li>The shapes are received in a form owned by the developer (hosted by Google Forms) and used only to write new reading rules for banks. They are not sold or shared.</li>
+  </ul>
+  <p>
+    The app also downloads, about once a day, a signed list of banks and reading rules from a public web page. This is
+    data only (never program code) and the download contains nothing about you.
+  </p>
 
   <h2>Where your data is stored</h2>
   <p>
@@ -93,15 +114,17 @@
   <table style="width:100%; border-collapse: collapse; margin: 12px 0;">
     <tr style="text-align:left; border-bottom:1px solid #ddd;"><th style="padding:8px 4px;">Permission</th><th style="padding:8px 4px;">Why</th></tr>
     <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>READ_SMS</code>, <code>RECEIVE_SMS</code></td><td style="padding:8px 4px;">To read bank SMS and turn them into transactions. Fils is an SMS-based money-management tool: this is its core function, and only bank-sender messages are processed.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;">Notification access (<code>BIND_NOTIFICATION_LISTENER_SERVICE</code>)</td><td style="padding:8px 4px;">Optional, off until you turn it on in More → Settings → Bank app notifications. It lets Fils read spend notifications from the bank apps you tick, for banks that announce spends only inside their app. Notifications from every other app are ignored, and their text is never read or stored. What is read is processed on your phone like an SMS and never uploaded.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>INTERNET</code></td><td style="padding:8px 4px;">To download the signed list of banks and reading rules, and to send masked message shapes if you allow it (see "Helping Fils learn"). It is not used to send your messages or transactions.</td></tr>
     <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>POST_NOTIFICATIONS</code></td><td style="padding:8px 4px;">To show due-date reminders and spending alerts you turn on.</td></tr>
     <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>USE_BIOMETRIC</code> (<code>USE_FINGERPRINT</code> on older Android versions)</td><td style="padding:8px 4px;">To let you lock the app with your fingerprint or face.</td></tr>
-    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>RECEIVE_BOOT_COMPLETED</code>, <code>WAKE_LOCK</code>, <code>FOREGROUND_SERVICE</code>, <code>ACCESS_NETWORK_STATE</code></td><td style="padding:8px 4px;">Added automatically by Android's standard background-task library (WorkManager) so scheduled work such as due-date reminders keeps running, including after the phone restarts. <code>ACCESS_NETWORK_STATE</code> only lets the system check whether the phone is online — it does not let Fils use the internet.</td></tr>
+    <tr style="border-bottom:1px solid #eee;"><td style="padding:8px 4px;"><code>RECEIVE_BOOT_COMPLETED</code>, <code>WAKE_LOCK</code>, <code>FOREGROUND_SERVICE</code>, <code>ACCESS_NETWORK_STATE</code></td><td style="padding:8px 4px;">Added automatically by Android's standard background-task library (WorkManager) so scheduled work such as due-date reminders keeps running, including after the phone restarts. <code>ACCESS_NETWORK_STATE</code> only lets the system check whether the phone is online.</td></tr>
   </table>
 
   <h2>Deleting your data</h2>
   <p>
-    Because everything is stored only on your device, uninstalling Fils permanently deletes all of its data. There
-    is no server-side copy to separately request deletion of.
+    Your transactions are stored only on your device, so uninstalling Fils permanently deletes them. The masked shapes
+    contain no personal information and cannot be linked back to you, so there is nothing to delete on a server for you.
   </p>
 
   <h2>Children's privacy</h2>
