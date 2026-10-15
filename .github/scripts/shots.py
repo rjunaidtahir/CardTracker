@@ -57,21 +57,21 @@ for cmd in (["-e", "command", "enter"], ["-e", "command", "clock", "-e", "hhmm",
 for p in ("READ_SMS", "RECEIVE_SMS", "POST_NOTIFICATIONS"):
     adb("shell", "pm", "grant", PKG, "android.permission." + p)
 
-adb("shell", "am", "start", "-n", ACT); time.sleep(4)
+adb("shell", "settings", "put", "global", "hide_error_dialogs", "1")
 adb("shell", "am", "force-stop", PKG)
 first = True
 for th in THEMES:
     extra = ["--ez", "seed", "true"] if first else []
     print(adb("shell", "am", "broadcast", "-n", SEED, "--es", "theme", th, *extra).strip()[:80])
     if first:
-        time.sleep(45)  # reading ~600 messages through the real pipeline
+        time.sleep(60)  # reading ~600 messages through the real pipeline
         first = False
     else:
         time.sleep(4)
     adb("shell", "am", "force-stop", PKG)
     adb("shell", "am", "start", "-n", ACT); time.sleep(6)
     # dismiss anything that sits on top on a fresh start
-    for s in ("Allow", "Not now", "Skip", "OK", "Got it", "Later"):
+    for s in ("No thanks", "Wait", "Not now", "Skip", "OK", "Got it", "Later"):
         find(s) and tap(s)
     tap("Home"); swipe_down(); time.sleep(2)
     shot(f"{th}-home-1")

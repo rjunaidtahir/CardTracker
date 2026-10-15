@@ -28,7 +28,7 @@ class DemoSeed : BroadcastReceiver() {
             try {
                 intent.getStringExtra("theme")?.let { app.prefs.themeId = it; AppThemes.current = AppThemes.byId(it) }
                 app.prefs.onboarded = true
-                if (app.prefs.homeCountry == null) app.prefs.homeCountry = "AE"
+                app.prefs.homeCountry = "AE"; app.prefs.homeCurrency = "AED"; app.prefs.dateRegion = "AE"
                 com.uaefinancial.tracker.data.Region.apply(app, app.prefs)
                 app.repo.ensureDefaults()
                 if (intent.getBooleanExtra("seed", false)) seed(app)
