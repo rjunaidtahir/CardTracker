@@ -208,15 +208,18 @@ fun MoreScreen(
                         modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
                     )
                     val q = query.trim().lowercase()
+                    // No app looks like a bank: show them all rather than an empty list.
+                    val noLikely = installed.none { (pkg, label) -> pkg in pickedPkgs || com.uaefinancial.tracker.notify.NotifApps.looksLikeBank(pkg, label) }
+                    val everything = showAll || noLikely
                     val rows = installed.filter { (pkg, label) ->
                         when {
                             q.isNotEmpty() -> label.lowercase().contains(q)
-                            showAll -> true
+                            everything -> true
                             else -> pkg in pickedPkgs || com.uaefinancial.tracker.notify.NotifApps.looksLikeBank(pkg, label)
                         }
                     }.sortedWith(compareByDescending<Pair<String, String>> { it.first in pickedPkgs }.thenBy { it.second.lowercase() })
                     Text(
-                        if (q.isNotEmpty()) "Matching apps" else if (showAll) "All your apps" else "Likely bank and wallet apps",
+                        if (q.isNotEmpty()) "Matching apps" else if (everything) "All your apps" else "Likely bank and wallet apps",
                         style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp),
                     )
                     if (rows.isEmpty()) {
@@ -229,7 +232,7 @@ fun MoreScreen(
                             Text(label, modifier = Modifier.weight(1f))
                         }
                     }
-                    if (q.isEmpty()) {
+                    if (q.isEmpty() && !noLikely) {
                         TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Show only likely bank apps" else "Show all my apps") }
                     }
                 }

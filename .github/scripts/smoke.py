@@ -115,8 +115,12 @@ if found:
     shot("notif-section")
     ns = nodes()
     check(any("search your apps" in t.lower() for t, *_ in ns), "the notification list has a search box")
-    boxes = [1 for t, x, y, c, ck in ns if ck]
-    check(len(boxes) >= 1, "the notification list shows apps to tick (%d rows)" % len(boxes))
+    check(not any("no match" in t.lower() for t, *_ in ns), "the default list is not empty")
+    scroll_to("Security")
+    ns2 = nodes()
+    names = [t for t, x, y, c, ck in ns2 if t and t not in ("Security",)]
+    check(any(t in ("Settings", "Chrome", "Phone", "Messages", "Camera", "Clock", "Contacts", "Files") for t in names),
+          "the list shows installed apps")
     check(not any(t.startswith("com.") for t, *_ in ns), "no raw package names are shown")
     # search works
     p = find("Search your apps")
