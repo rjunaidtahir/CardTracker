@@ -362,7 +362,11 @@ object SmartParser {
         if (total != null && minimum != null) return null // a statement without a due date: let the user review it
 
         // ---- transaction
-        if (notDone.containsMatchIn(text) || notDoneIntl.containsMatchIn(text)) return null
+        // "Debit for the failed transfer has been reversed and PKR 500 credited to your account": money came back.
+        val reversedBack = reversedAndCredited.containsMatchIn(text)
+        // "Your account has been successfully credited with PKR 1,000. ... fee will be deducted": the credit is done.
+        val creditedWith = creditedWithAmount.containsMatchIn(text)
+        if (!reversedBack && !creditedWith && (notDone.containsMatchIn(text) || notDoneIntl.containsMatchIn(text))) return null
         // Only a fee in the message ("Annual fee of AED 300 has been charged"): the fee is the transaction.
         val feeOnly = all.none { it.role == Role.TXN } && takenWord.containsMatchIn(text)
         val txnAmount = all.firstOrNull { it.role == Role.TXN } ?: all.firstOrNull { feeOnly && it.role == Role.FEE } ?: return null
@@ -386,6 +390,7 @@ object SmartParser {
         val returnMatch = returnWord.find(near)
         val repayment = repaymentWord.containsMatchIn(text) && !isDue.containsMatchIn(text)
         when {
+            reversedBack -> { type = TxnType.TRANSFER_IN; fixed = "Reversed transfer" }
             // Interest / profit / dividend paid to you (not charged).
             returnMatch != null && paidToYou.containsMatchIn(near) && !takenWord.containsMatchIn(near) -> {
                 type = TxnType.TRANSFER_IN
@@ -426,6 +431,9 @@ object SmartParser {
             standingDone.containsMatchIn(text) && BankRules.completedAction.containsMatchIn(text) -> {
                 type = TxnType.TRANSFER_OUT; fixed = "Standing instruction"
             }
+            // "<anything> an <anything> of PKR 5,000 from A/C 1234 to 5678": the words that say what was done differ
+            // from bank to bank, but money named "from <your account> to <somewhere>" is a transfer out.
+            transferFromAccount(text, txnAmount.start, txnAmount.end) -> type = TxnType.TRANSFER_OUT
             else -> return null
         }
 
@@ -516,6 +524,18 @@ object SmartParser {
     }
 
     private val standingDone = Regex("""\bstanding\s+(?:instruction|order)s?\b""", I)
+
+    private val reversedAndCredited = Regex(
+        """\b(?:has|have|had)\s+been\s+(?:successfully\s+)?(?:reversed|refunded)\b.{0,60}\bcredited\b|\bcredited\b.{0,60}\b(?:reversal|reversed)\b""",
+        I,
+    )
+    private val creditedWithAmount = Regex("""\b(?:has|have)\s+been\s+(?:successfully\s+)?credited\s+(?:with|by)\b""", I)
+    private val fromAccountTo = Regex("""^\s*(?:/-)?\s*(?:has\s+been\s+|was\s+)?from\s+(?:your\s+)?(?:a/c|ac|acc|acct|account|iban)\b.{0,100}?\bto\b""", I)
+    private val ofBefore = Regex("""\b(?:of|for)\s*$""", I)
+
+    /** True for "... of <amount> from A/C <number> ... to ...": the amount is taken from the account and sent on. */
+    private fun transferFromAccount(text: String, start: Int, end: Int): Boolean =
+        ofBefore.containsMatchIn(text.substring(maxOf(0, start - 6), start)) && fromAccountTo.containsMatchIn(text.substring(end))
 
     /**
      * A best guess for a message [read] could not settle, only to pre-fill the Fix form (never stored by itself):
