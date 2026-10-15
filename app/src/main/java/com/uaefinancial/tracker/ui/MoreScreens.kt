@@ -1,5 +1,6 @@
 package com.uaefinancial.tracker.ui
 
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -229,6 +231,8 @@ fun MoreScreen(
                         val on = pkg in pickedPkgs
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { vm.setNotifApp("$pkg\t$label", !on) }) {
                             Checkbox(checked = on, onCheckedChange = { vm.setNotifApp("$pkg\t$label", it) })
+                            AppLogo(pkg)
+                            Spacer(Modifier.width(12.dp))
                             Text(label, modifier = Modifier.weight(1f))
                         }
                     }
@@ -827,4 +831,30 @@ fun HomeCurrencyDialog(current: String, onPick: (String) -> Unit, onDismiss: () 
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
+}
+
+
+/** The app's own launcher icon (so a bank app is recognised at a glance); a neutral dot if it can't be loaded. */
+@Composable
+fun AppLogo(pkg: String, size: androidx.compose.ui.unit.Dp = 36.dp) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val bmp = remember(pkg) {
+        runCatching {
+            ctx.packageManager.getApplicationIcon(pkg).let { d ->
+                androidx.core.graphics.drawable.DrawableCompat.wrap(d.mutate()).let { w ->
+                    val px = 96
+                    val b = android.graphics.Bitmap.createBitmap(px, px, android.graphics.Bitmap.Config.ARGB_8888)
+                    val c = android.graphics.Canvas(b)
+                    w.setBounds(0, 0, px, px)
+                    w.draw(c)
+                    b.asImageBitmap()
+                }
+            }
+        }.getOrNull()
+    }
+    if (bmp != null) {
+        androidx.compose.foundation.Image(bmp, null, Modifier.size(size).clip(RoundedCornerShape(10.dp)))
+    } else {
+        Box(Modifier.size(size).clip(RoundedCornerShape(10.dp)).background(Ink.surfaceHigh))
+    }
 }

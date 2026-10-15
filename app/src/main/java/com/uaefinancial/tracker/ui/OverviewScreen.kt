@@ -158,34 +158,7 @@ fun OverviewScreen(
             }
         }
         // ---- hero
-        item {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp)) {
-                Eyebrow("Total spent")
-                Text(fmtMoney(o.spentMinor), style = heroNumberStyle)
-                val prev = o.previous
-                if (prev != null && o.previousMinor > 0) {
-                    val diff = o.spentMinor - o.previousMinor
-                    val pct = kotlin.math.abs(diff) * 100 / o.previousMinor
-                    val up = diff > 0
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
-                        Icon(if (up) Icons.AutoMirrored.Filled.TrendingUp else Icons.AutoMirrored.Filled.TrendingDown, null, Modifier.size(16.dp), tint = if (up) Ink.red else Ink.green)
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            "$pct% ${if (up) "more" else "less"} than ${prev.label()} · ${fmtMoney(o.previousMinor)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Ink.muted,
-                            maxLines = 2,
-                        )
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MiniStat("Per day", fmtCompactMoney(o.avgPerDayMinor), Modifier.weight(1f))
-                    MiniStat("Spends", o.txnCount.toString(), Modifier.weight(1f))
-                    MiniStat("Money in", fmtCompactMoney(o.moneyInMinor), Modifier.weight(1f), Ink.green)
-                }
-            }
-        }
+        item { HomeHero(o, names, Modifier.padding(horizontal = 16.dp).padding(top = 6.dp)) }
 
         // ---- period chips
         item {
@@ -436,16 +409,6 @@ fun OverviewScreen(
 /** AED 12.3K style for tight spaces (full amounts elsewhere). */
 fun fmtCompactMoney(minor: Long): String =
     if (kotlin.math.abs(minor) < 100_000_00) fmtMoney(minor).substringBeforeLast('.') else Home.code + " " + fmtCompact(minor)
-
-@Composable
-private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier, color: Color = Ink.text) {
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(Ink.surface).border(1.dp, Ink.border, RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 10.dp),
-    ) {
-        Eyebrow(label)
-        Text(value, style = MaterialTheme.typography.titleSmall, color = color, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
 
 /** Two round icon buttons: arc chart / trend chart. */
 @Composable

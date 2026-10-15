@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug builds only: fills the app with made-up demo data for screenshots. Never part of a release build. -->
+        <receiver android:name="com.uaefinancial.tracker.debug.DemoSeed" android:exported="true" />
+    </application>
+</manifest>
