@@ -30,7 +30,7 @@ class TesterShapesTest {
 
     @Test fun transfer_out_whatever_the_verb_is() {
         for (verb in listOf("initiated", "made", "placed", "completed")) {
-            val t = txn("Dear Customer, You have $verb an IBFT of PKR 5,000.00 from A/C 1234567890 to 9876543210 through Mobile App on 12-Oct-2026, 14:55.")
+            val t = txn("Dear Customer, You have $verb an IBFT of PKR 5,000.00 from A/C 1234****7890 to 9876****5432 through Mobile App on 12-Oct-2026, 14:55.")
             assertEquals(TxnType.TRANSFER_OUT, t.type, verb)
             assertEquals(Decimal("5000.00"), t.amount, verb)
             assertEquals("PKR", t.currency, verb)
@@ -39,7 +39,7 @@ class TesterShapesTest {
     }
 
     @Test fun transfer_out_to_a_named_bank() {
-        val t = txn("Dear Customer, You have made an IBFT of PKR 12,500.00 from A/C 1234567890 to 55001122 Some Bank Limited through Mobile on 13-Oct-2026 , 04:50.")
+        val t = txn("Dear Customer, You have made an IBFT of PKR 12,500.00 from A/C 1234****7890 to 55001122 Some Bank Limited through Mobile on 13-Oct-2026 , 04:50.")
         assertEquals(TxnType.TRANSFER_OUT, t.type)
         assertEquals(Decimal("12500.00"), t.amount)
     }
