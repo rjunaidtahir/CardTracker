@@ -37,7 +37,7 @@ object Masker {
     }
     private val longDigits = Regex("""\d[\d\s-]{4,}\d""")
     private val anyDigits = Regex("""\d+""")
-    private val wordOrToken = Regex("""\{[A-Z]+\}|\p{L}+(?:['’]\p{L}+)?""")
+    private val wordOrToken = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+(?:['’]\p{L}+)?""")
     private val tokenText = Regex("""(?:\{TEXT\}[\s,.:;!?()\-]*){2,}""")
 
     /** Words that carry the structure of a bank message. Everything else is {TEXT}. */
@@ -65,7 +65,19 @@ object Masker {
         "txns ending end begin c ac pre one auto x starting from till until " +
         "pre-authorised preauthorised authorised authorized hold held release released " +
         "emirates dubai abu dhabi sharjah uae pakistan india saudi qatar kuwait bahrain oman " +
-        "ltd limited plc llc inc pjsc psc"
+        "ltd limited plc llc inc pjsc psc " +
+        // everyday verbs and words banks use around a transfer or a payment (the wording that tells what happened)
+        "made make makes making initiated initiate initiating placed place requested request requests done performed perform raised raise " +
+        "authorised confirm confirmed confirmation notified notify informed inform advised advise update credited debited " +
+        "ibft raast iban one-link 1link bill utility utilities topup top-up top up recharge mobile prepaid postpaid " +
+        "fund funds title mobile/internet internet/mobile mobile/ibanking ibanking app application online net " +
+        "beneficiary beneficiaries registered added removed deleted created opened closed " +
+        "reversed reverse reversal returned return refunding adjusted adjustment correction " +
+        "failed fail unable cannot can could should would may might must shall " +
+        "transaction transactions transfer transfers sent send sending received receive receiving " +
+        "dear sir madam team regards thanks thank greetings welcome " +
+        "announce announced pleased profit dividend dividends credit crediting crediting disbursed disburse maturity matured " +
+        "home work office branch branches atm atms counter cheque cheques deposit deposits"
         ).split(' ', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 
     fun mask(body: String, bankName: String? = null): Result {
@@ -76,10 +88,13 @@ object Masker {
         t = t.replace(cardRef) { m ->
             // Keep the words in front of the number ("card ending"); a bare "xx"/"**"/"#" prefix is dropped.
             val lead = m.groups["lead"]?.value?.trim().orEmpty()
-            if (lead.all { it in "xX*•·#" }) "{CARD}" else "$lead {CARD}"
+            // How long the number is (digits and mask characters) shows how this bank prints it, and says nothing about the number.
+            val len = m.groups["num"]?.value?.length ?: 0
+            if (lead.all { it in "xX*•·#" }) "{CARD:$len}" else "$lead {CARD:$len}"
         }
         t = t.replace(money, "{CUR} {AMOUNT}")
-        t = t.replace(longDigits, "{NUM}").replace(anyDigits, "{NUM}")
+        // Only how many digits, never which: "{NUM:10}" for an account or reference, "{NUM:2}" for a day.
+        t = t.replace(longDigits) { m -> "{NUM:${m.value.count { it.isDigit() }}}" }.replace(anyDigits) { m -> "{NUM:${m.value.length}}" }
 
         val keep = bankName.orEmpty().split(Regex("""[^\p{L}\d]+""")).map { it.lowercase() }.filter { it.length >= 2 }.toSet()
         t = t.replace(wordOrToken) { m ->
@@ -91,16 +106,16 @@ object Masker {
             }
         }
         // Count unknown words before neighbours are merged, so a message full of them is recognised as such.
-        val rawWords = Regex("""\{[A-Z]+\}|\p{L}+""").findAll(t).map { it.value }.toList()
+        val rawWords = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
         val textShare = rawWords.count { it == "{TEXT}" }.toDouble() / maxOf(1, rawWords.size)
         t = t.replace(tokenText, "{TEXT} ")
         t = t.replace(Regex("""\s+"""), " ").trim()
 
         if (t.length > MAX_LEN) return Result(t.take(MAX_LEN), false, "too long")
         // Final guard: nothing personal may remain.
-        if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+\}"""), ""))) return Result(t, false, "digits left")
+        if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), ""))) return Result(t, false, "digits left")
         if (t.contains('@')) return Result(t, false, "address left")
-        val words = Regex("""\{[A-Z]+\}|\p{L}+""").findAll(t).map { it.value }.toList()
+        val words = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
         if (words.size < MIN_WORDS) return Result(t, false, "too short")
         if (textShare > MAX_TEXT_SHARE) return Result(t, false, "mostly unknown words")
         if (words.none { it == "{AMOUNT}" }) return Result(t, false, "no amount")

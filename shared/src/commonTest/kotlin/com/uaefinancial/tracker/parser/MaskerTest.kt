@@ -9,7 +9,7 @@ class MaskerTest {
     @Test fun masksAPurchase() {
         val r = Masker.mask("Your Visa card ending 1234 was used for AED 45.50 at NOON on 03-10-2026 14:22. Avl bal AED 9,876.00", "Emirates NBD")
         assertTrue(r.safe, r.reason ?: r.shape)
-        assertEquals("Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at {TEXT} on {DATE} {TIME}. Avl bal {CUR} {AMOUNT}", r.shape)
+        assertEquals("Your Visa card ending {CARD:4} was used for {CUR} {AMOUNT} at {TEXT} on {DATE} {TIME}. Avl bal {CUR} {AMOUNT}", r.shape)
     }
 
     @Test fun keepsNothingPersonal() {
@@ -19,7 +19,15 @@ class MaskerTest {
         assertFalse(r.shape.contains("0123"))
         assertFalse(r.shape.contains("0501"))
         assertFalse(r.shape.contains("http"))
-        assertFalse(r.shape.any { it.isDigit() })
+        assertFalse(r.shape.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), "").any { it.isDigit() })
+    }
+
+    @Test fun keepsHowLongNumbersAreButNotTheNumbers() {
+        val r = Masker.mask("Dear Customer, You have made an IBFT of PKR 5,000.00 from A/C 1234****7890 to 9876543210 on 12-Oct-2026, 14:55.", null)
+        assertTrue(r.safe, r.reason ?: r.shape)
+        assertTrue(r.shape.contains("{CARD:12}"), r.shape)
+        assertTrue(r.shape.contains("made an IBFT"), r.shape)
+        assertFalse(r.shape.contains("7890"))
     }
 
     @Test fun neverContainsDigitsOrAddresses() {
@@ -30,7 +38,7 @@ class MaskerTest {
         )
         for (s in samples) {
             val r = Masker.mask(s, "HDFC Bank")
-            assertFalse(r.shape.replace(Regex("""\{[A-Z]+\}"""), "").any { it.isDigit() }, r.shape)
+            assertFalse(r.shape.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), "").any { it.isDigit() }, r.shape)
             assertFalse(r.shape.contains('@'), r.shape)
         }
     }
