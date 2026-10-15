@@ -31,8 +31,9 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_LAST_SYNC, -1L).takeIf { it >= 0 }
         set(v) { sp.edit { putLong(KEY_LAST_SYNC, v ?: -1L) } }
 
+    /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
-        get() = sp.getBoolean(KEY_LIVE, false)
+        get() = sp.getBoolean(KEY_LIVE, true)
         set(v) { sp.edit { putBoolean(KEY_LIVE, v) } }
 
     /** Bank apps whose notifications are read, as "package<TAB>app name". Empty = notifications are ignored. */

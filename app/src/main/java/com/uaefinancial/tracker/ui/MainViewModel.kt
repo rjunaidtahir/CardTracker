@@ -148,7 +148,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Goes up by one each time a Sync ends (success or not), so screens can wait for "the next one finished". */
     val syncsFinished = MutableStateFlow(0)
     val lastSyncAt = MutableStateFlow(prefs.lastSyncAt)
-    val liveListening = MutableStateFlow(prefs.liveListening)
+    val liveListening = MutableStateFlow(LiveListening.effective(getApplication(), prefs))
     val remindersOn = MutableStateFlow(prefs.remindersEnabled)
 
     // ------------------------------------------------------------ app lock
@@ -758,7 +758,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Caller must make sure RECEIVE_SMS is granted before passing true. */
     fun setLiveListening(on: Boolean) {
         LiveListening.setEnabled(getApplication(), prefs, on)
-        liveListening.value = prefs.liveListening
+        liveListening.value = LiveListening.effective(getApplication(), prefs)
+    }
+
+    /** Automatic recording is on by default: once SMS permission exists, switch it on unless you turned it off. */
+    fun applyLiveDefault() {
+        if (prefs.liveListening && LiveListening.hasPermission(getApplication())) setLiveListening(true)
     }
 
     // ------------------------------------------------- accuracy checks

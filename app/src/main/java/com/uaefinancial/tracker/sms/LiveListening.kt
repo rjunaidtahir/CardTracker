@@ -22,8 +22,11 @@ object LiveListening {
             if (on) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
             PackageManager.DONT_KILL_APP,
         )
-        prefs.liveListening = on
+        prefs.liveListening = enabled
     }
+
+    /** What the switch shows: wanted, and actually possible (permission granted). */
+    fun effective(context: Context, prefs: Prefs) = prefs.liveListening && hasPermission(context)
 
     /** On app start: keep the component state in line with the setting (e.g. permission revoked in Settings). */
     fun reconcile(context: Context, prefs: Prefs) = setEnabled(context, prefs, prefs.liveListening)

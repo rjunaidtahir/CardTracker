@@ -72,7 +72,7 @@ fun OnboardingFlow(
     var step by rememberSaveable { mutableIntStateOf(0) }
     var denied by rememberSaveable { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
-        if (ok) { denied = false; step = 4 } else denied = true
+        if (ok) { denied = false; vm.applyLiveDefault(); step = 4 } else denied = true
     }
 
     Box(Modifier.fillMaxSize().background(screenBrush)) {
@@ -284,6 +284,7 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
 
 @Composable
 private fun DoneStep(vm: MainViewModel, onLiveToggle: (Boolean) -> Unit, onRemindersToggle: (Boolean) -> Unit) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { vm.applyLiveDefault() }
     val live by vm.liveListening.collectAsStateWithLifecycle()
     val reminders by vm.remindersOn.collectAsStateWithLifecycle()
     val summary by vm.lastSyncSummary.collectAsStateWithLifecycle()
