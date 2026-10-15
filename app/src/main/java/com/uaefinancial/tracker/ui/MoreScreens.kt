@@ -198,7 +198,6 @@ fun MoreScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 ) { Text(if (access) "Notification access: on (change)" else "Turn on notification access") }
                 if (access) {
-                    val ctx = androidx.compose.ui.platform.LocalContext.current
                     val installed = remember { com.uaefinancial.tracker.notify.NotifApps.installed(ctx) }
                     var query by remember { mutableStateOf("") }
                     var showAll by remember { mutableStateOf(false) }
