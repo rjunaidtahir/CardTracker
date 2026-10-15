@@ -27,7 +27,7 @@ class DemoSeed : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 intent.getStringExtra("theme")?.let { app.prefs.themeId = it; AppThemes.current = AppThemes.byId(it) }
-                app.prefs.onboarded = true
+                app.prefs.onboarded = true; app.prefs.shareConsent = 2
                 app.prefs.homeCountry = "AE"; app.prefs.homeCurrency = "AED"; app.prefs.dateRegion = "AE"
                 com.uaefinancial.tracker.data.Region.apply(app, app.prefs)
                 app.repo.ensureDefaults()
