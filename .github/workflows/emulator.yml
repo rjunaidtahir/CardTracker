@@ -1,0 +1,53 @@
+name: Emulator smoke test
+
+# Installs the debug app on a virtual phone, walks the first run, every tab and the bank-app notification list,
+# and keeps screenshots on the `ci-screens` branch so they can be looked at.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['app/**', 'shared/**', '.github/workflows/emulator.yml', '.github/scripts/smoke.py']
+
+permissions:
+  contents: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Build debug APK
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - name: Run on emulator
+        id: smoke
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
+            python3 .github/scripts/smoke.py
+      - name: Publish screenshots
+        if: always()
+        run: |
+          if [ -d shots ]; then
+            git config user.name "ci"; git config user.email "ci@users.noreply.github.com"
+            mkdir -p /tmp/s && cp -r shots /tmp/s/
+            git checkout --orphan ci-screens && git rm -rf . >/dev/null 2>&1 || true
+            cp -r /tmp/s/shots . && git add shots && git commit -qm "Emulator screenshots for ${GITHUB_SHA::7}" && git push -f origin ci-screens
+          fi
+      - name: Fail if the smoke test failed
+        if: steps.smoke.outcome != 'success'
+        run: exit 1
