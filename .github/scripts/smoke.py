@@ -77,15 +77,22 @@ shot("first-screen")
 
 # ---- first run: walk the onboarding until the tab bar shows
 steps = ["Get started", "Continue", "Allow", "Looking", "Skip", "Start"]
-for _ in range(14):
+picked_country = False
+for _ in range(24):
     if find("Cards", exact=True) and find("More", exact=True) and find("Activity", exact=True):
         break
+    if not picked_country and find("Where do you bank"):
+        if tap("United Arab Emirates", wait=2):
+            picked_country = True
+            shot("onboarding-country")
     for s in ["Continue", "Allow", "Start", "Skip", "Get started"]:
         if tap(s, exact=True, wait=2):
             shot("onboarding-" + s.lower().replace(" ", "-"))
             break
     else:
-        time.sleep(2)
+        # the button may be below the visible part of the screen
+        adb("shell", "input", "swipe", "540", "1700", "540", "600", "300")
+        time.sleep(1.5)
 check(bool(find("Cards", exact=True)), "reached the main screen after first run")
 
 # ---- every tab opens
