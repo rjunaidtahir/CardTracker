@@ -11,6 +11,14 @@
     <!-- Used only for (1) downloading the signed rules file and (2) the opt-out "help Fils learn" reports of masked message shapes. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- So the "Bank app notifications" list can show the apps on the phone (those with a launcher icon). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".TrackerApp"
         android:allowBackup="false"

@@ -81,6 +81,25 @@ object NotifApps {
         pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
     }.getOrDefault(pkg)
 
+    /** Every app with a launcher icon (needs the <queries> entry in the manifest, not the all-packages permission). Label first, own app left out. */
+    fun installed(context: Context): List<Pair<String, String>> = runCatching {
+        val pm = context.packageManager
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_LAUNCHER)
+        pm.queryIntentActivities(intent, 0)
+            .map { it.activityInfo.packageName to it.loadLabel(pm).toString() }
+            .filter { it.first != context.packageName }
+            .distinctBy { it.first }
+            .sortedBy { it.second.lowercase() }
+    }.getOrDefault(emptyList())
+
+    private val bankish = Regex(
+        "bank|mashreq|wio|enbd|emirates nbd|adcb|hsbc|rakbank|\\bcbd\\b|\\bdib\\b|\\bfab\\b|\\bliv\\b|wallet|samsung pay|\\bpay\\b|card|finance|money|islamic|credit|hbl|meezan|\\bubl\\b|alfalah|jazzcash|easypaisa|sadapay|nayapay|hdfc|icici|\\bsbi\\b|axis|kotak|paytm|phonepe|revolut|monzo|wise|chase|citi|barclays|lloyds|natwest|santander|payit|ruya|nbf|nbad|noor|carrefour|mclaren",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** A guess at which apps are banks or wallets, only to list them first. */
+    fun looksLikeBank(pkg: String, label: String): Boolean = bankish.containsMatchIn(label) || bankish.containsMatchIn(pkg)
+
     fun noteSeen(prefs: Prefs, pkg: String, label: String) {
         val seen = prefs.seenNotifApps
         if (seen.any { it.substringBefore('\t') == pkg }) return

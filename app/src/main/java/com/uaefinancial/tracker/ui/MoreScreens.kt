@@ -198,22 +198,40 @@ fun MoreScreen(
                     modifier = Modifier.padding(top = 8.dp),
                 ) { Text(if (access) "Notification access: on (change)" else "Turn on notification access") }
                 if (access) {
-                    if (seen.isEmpty()) {
-                        Text(
-                            "Apps appear here after they show a notification. Make a small card spend, then come back.",
-                            style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 8.dp),
-                        )
-                    } else {
-                        Text("Your bank apps", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp))
-                        val pickedPkgs = picked.map { it.substringBefore('\t') }.toSet()
-                        seen.sortedWith(compareByDescending<String> { it.substringBefore('\t') in pickedPkgs }
-                            .thenBy { it.substringAfter('\t').lowercase() }).forEach { e ->
-                            val on = e.substringBefore('\t') in pickedPkgs
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { vm.setNotifApp(e, !on) }) {
-                                Checkbox(checked = on, onCheckedChange = { vm.setNotifApp(e, it) })
-                                Text(e.substringAfter('\t'), modifier = Modifier.weight(1f))
-                            }
+                    val ctx = androidx.compose.ui.platform.LocalContext.current
+                    val installed = remember { com.uaefinancial.tracker.notify.NotifApps.installed(ctx) }
+                    var query by remember { mutableStateOf("") }
+                    var showAll by remember { mutableStateOf(false) }
+                    val pickedPkgs = picked.map { it.substringBefore('\t') }.toSet()
+                    OutlinedTextField(
+                        value = query, onValueChange = { query = it }, singleLine = true,
+                        label = { Text("Search your apps (Mashreq, Samsung Wallet…)") },
+                        modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    )
+                    val q = query.trim().lowercase()
+                    val rows = installed.filter { (pkg, label) ->
+                        when {
+                            q.isNotEmpty() -> label.lowercase().contains(q)
+                            showAll -> true
+                            else -> pkg in pickedPkgs || com.uaefinancial.tracker.notify.NotifApps.looksLikeBank(pkg, label)
                         }
+                    }.sortedWith(compareByDescending<Pair<String, String>> { it.first in pickedPkgs }.thenBy { it.second.lowercase() })
+                    Text(
+                        if (q.isNotEmpty()) "Matching apps" else if (showAll) "All your apps" else "Likely bank and wallet apps",
+                        style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp),
+                    )
+                    if (rows.isEmpty()) {
+                        Text("No match. Try another name, or show all apps.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                    }
+                    rows.forEach { (pkg, label) ->
+                        val on = pkg in pickedPkgs
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { vm.setNotifApp("$pkg\t$label", !on) }) {
+                            Checkbox(checked = on, onCheckedChange = { vm.setNotifApp("$pkg\t$label", it) })
+                            Text(label, modifier = Modifier.weight(1f))
+                        }
+                    }
+                    if (q.isEmpty()) {
+                        TextButton(onClick = { showAll = !showAll }) { Text(if (showAll) "Show only likely bank apps" else "Show all my apps") }
                     }
                 }
             }
