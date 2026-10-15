@@ -80,6 +80,10 @@ object Masker {
         "home work office branch branches atm atms counter cheque cheques deposit deposits"
         ).split(' ', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 
+    // Lengths are carried as letters (a=0 … j=9) while the digit replacing runs, so it cannot touch them.
+    private fun enc(n: Int) = n.toString().map { 'a' + (it - '0') }.joinToString("")
+    private fun dec(s: String) = s.map { '0' + (it - 'a') }.joinToString("")
+
     fun mask(body: String, bankName: String? = null): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
@@ -90,11 +94,13 @@ object Masker {
             val lead = m.groups["lead"]?.value?.trim().orEmpty()
             // How long the number is (digits and mask characters) shows how this bank prints it, and says nothing about the number.
             val len = m.groups["num"]?.value?.length ?: 0
-            if (lead.all { it in "xX*•·#" }) "{CARD:$len}" else "$lead {CARD:$len}"
+            if (lead.all { it in "xX*•·#" }) "{CARD:${enc(len)}}" else "$lead {CARD:${enc(len)}}"
         }
         t = t.replace(money, "{CUR} {AMOUNT}")
         // Only how many digits, never which: "{NUM:10}" for an account or reference, "{NUM:2}" for a day.
-        t = t.replace(longDigits) { m -> "{NUM:${m.value.count { it.isDigit() }}}" }.replace(anyDigits) { m -> "{NUM:${m.value.length}}" }
+        t = t.replace(longDigits) { m -> "{NUM:${enc(m.value.count { it.isDigit() })}}" }.replace(anyDigits) { m -> "{NUM:${enc(m.value.length)}}" }
+        // Turn the letter-coded lengths back into digits now that no digit replacing is left.
+        t = t.replace(Regex("""\{(CARD|NUM):([a-j]+)\}""")) { m -> "{${m.groupValues[1]}:${dec(m.groupValues[2])}}" }
 
         val keep = bankName.orEmpty().split(Regex("""[^\p{L}\d]+""")).map { it.lowercase() }.filter { it.length >= 2 }.toSet()
         t = t.replace(wordOrToken) { m ->
