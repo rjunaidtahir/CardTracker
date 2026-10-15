@@ -457,8 +457,11 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
                 if (sharing == com.uaefinancial.tracker.learn.Learning.ON) {
                     val shape = remember(sms.id) { com.uaefinancial.tracker.learn.Learning.previewShape(sms.sender, sms.bank, sms.body) }
                     Text("Helping Fils learn", style = MaterialTheme.typography.labelMedium, color = Ink.muted, modifier = Modifier.padding(top = 4.dp))
+                    val senderTag = remember(sms.id) {
+                        if (com.uaefinancial.tracker.learn.Learning.publicBankName(sms.sender, sms.bank) == null) com.uaefinancial.tracker.learn.Learning.publicSender(sms.sender) else null
+                    }
                     Text(
-                        if (shape != null) "Only this shape is shared (turn off in More → Settings): $shape"
+                        if (shape != null) "Only this shape" + (senderTag?.let { " and the bank's sender name ($it)" } ?: "") + " is shared (turn off in More → Settings): $shape"
                         else "Nothing from this message is shared: it has details that can't be hidden.",
                         style = MaterialTheme.typography.bodySmall, color = Ink.faint,
                     )

@@ -54,6 +54,16 @@ object Learning {
         return bankName?.let { n -> GlobalBanks.all().firstOrNull { it.name.equals(n, ignoreCase = true) }?.name }
     }
 
+    private val senderId = Regex("""[A-Za-z][A-Za-z0-9._&-]{2,39}""")
+
+    /** The sender ID as a bank prints it (letters, digits, - . & _), or null for a phone number, a contact name or anything odd. */
+    fun publicSender(sender: String): String? {
+        val s = sender.trim()
+        if (!senderId.matches(s)) return null
+        if (s.count { it.isDigit() } > s.length / 2) return null
+        return s.uppercase()
+    }
+
     /** What would be sent for [body], for the preview. Null when it would not be sent. */
     fun previewShape(sender: String, bankName: String?, body: String): String? {
         val r = Masker.mask(body, publicBankName(sender, bankName))
@@ -67,9 +77,12 @@ object Learning {
         val r = Masker.mask(body, bank)
         if (!r.safe) return false
         val country = prefs.homeCountry ?: Region.detect(context) ?: ""
-        val hash = hash("${bank.orEmpty()}|${r.shape}")
+        // A bank we do not know yet: send its sender ID as the bank's own name for its messages ("HBL", "AX-HDFCBK-S").
+        // That is public (every customer sees it); a phone number or a contact name is never sent.
+        val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+        val hash = hash("$label|${r.shape}")
         if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
-        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, bank ?: "Other", country, kind, r.shape).joinToString(US.toString()))
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, kind, r.shape).joinToString(US.toString()))
         schedule(context)
         return true
     }
