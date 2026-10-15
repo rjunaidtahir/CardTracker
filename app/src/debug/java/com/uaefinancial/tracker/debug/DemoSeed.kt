@@ -71,9 +71,9 @@ class DemoSeed : BroadcastReceiver() {
                 val at = d.atTime(8 + rnd.nextInt(0, 14), rnd.nextInt(0, 60), rnd.nextInt(0, 60)).atZone(zone)
                 val ms = at.toInstant().toEpochMilli()
                 val body = when (rnd.nextInt(0, 3)) {
-                    0 -> "Purchase of AED ${"%.2f".format(Locale.ENGLISH, amt)} with Credit Card ending 3944 at ${m.name}, DUBAI. Avl Cr. Limit is AED ${"%.2f".format(Locale.ENGLISH, 18000 - amt)}"
-                    1 -> "Credit Card XX3538 was used for AED${"%.2f".format(Locale.ENGLISH, amt)} on ${at.format(dmy)} at ${m.name}, DUBAI-AE. Available limit AED${"%.2f".format(Locale.ENGLISH, 22000 - amt)}"
-                    else -> "Purchase of AED ${"%.2f".format(Locale.ENGLISH, amt)} with Credit Card ending 3944 at ${m.name}, DUBAI. Avl Cr. Limit is AED ${"%.2f".format(Locale.ENGLISH, 15000 - amt)}"
+                    0 -> "Purchase of AED ${"%.2f".format(Locale.ENGLISH, amt)} with Credit Card ending 3944 at ${m.name}, DUBAI."
+                    1 -> "Credit Card XX3538 was used for AED${"%.2f".format(Locale.ENGLISH, amt)} on ${at.format(dmy)} at ${m.name}, DUBAI-AE"
+                    else -> "Purchase of AED ${"%.2f".format(Locale.ENGLISH, amt)} with Credit Card ending 3944 at ${m.name}, DUBAI."
                 }
                 val sender = if (body.startsWith("Credit Card XX")) "ADCBAlert" else "EmiratesNBD"
                 repo.ingestSms(sender, body, ms, ms, SmsSource.SYNC)
@@ -84,7 +84,7 @@ class DemoSeed : BroadcastReceiver() {
             val d = today.minusMonths(mo.toLong()).withDayOfMonth(1).plusDays(24)
             if (d.isAfter(today)) continue
             val ms = d.atTime(9, 12).atZone(zone).toInstant().toEpochMilli()
-            repo.ingestSms("EmiratesNBD", "AED 18,500.00 credited to your Account ending 1122 on ${d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))}. Salary transfer.", ms, ms, SmsSource.SYNC)
+            repo.ingestSms("FAB", "Salary Credit\nAccount XXXX8001\nAED 18500.00\n${d.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"))}\nAvailable Balance AED 31240.55", ms, ms, SmsSource.SYNC)
         }
         // A statement with a due date soon, so Payments due has something to show.
         val due = today.plusDays(6)

@@ -39,7 +39,7 @@ def tap(text):
     return False
 
 def swipe_up(px=1100):
-    adb("shell", "input", "swipe", "540", str(1900), "540", str(1900 - px), "500"); time.sleep(1.6)
+    adb("shell", "input", "swipe", "540", str(1900), "540", str(1900 - px), "500"); time.sleep(3)
 
 def swipe_down(times=6):
     for _ in range(times):
