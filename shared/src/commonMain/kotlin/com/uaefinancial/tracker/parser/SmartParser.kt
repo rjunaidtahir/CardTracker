@@ -375,8 +375,8 @@ object SmartParser {
 
         val cardCtx = cardWord.containsMatchIn(text)
         val accountCtx = accountWord.containsMatchIn(text)
-        val credit = creditWord.find(text)
-        val debit = debitWord.find(text)
+        val credit = creditWord.find(text) ?: extraCredit?.find(text)
+        val debit = debitWord.find(text) ?: extraDebit?.find(text)
         // "credited to your account" vs "debited from": whichever the message says first.
         val creditFirst = (credit != null && (debit == null || credit.range.first < debit.range.first)) ||
             creditSignal.containsMatchIn(text)
@@ -425,7 +425,7 @@ object SmartParser {
                 else -> type = TxnType.REFUND
             }
             debit != null && strongTransfer.containsMatchIn(text) && !spendWord.containsMatchIn(text) -> type = TxnType.TRANSFER_OUT
-            debit != null && !cardCtx && transferWord.containsMatchIn(text) -> type = TxnType.TRANSFER_OUT
+            debit != null && !cardCtx && (transferWord.containsMatchIn(text) || extraTransfer?.containsMatchIn(text) == true) -> type = TxnType.TRANSFER_OUT
             debit != null -> type = TxnType.PURCHASE
             // "Your standing instruction ... has been executed successfully for AED 8000": money left the account, no debit word.
             standingDone.containsMatchIn(text) && BankRules.completedAction.containsMatchIn(text) -> {
@@ -521,6 +521,16 @@ object SmartParser {
             ),
             "auto-" + type.name.lowercase(),
         )
+    }
+
+    // Extra wording from the signed rules file (single words a bank uses that the built-in lists do not know yet).
+    @kotlin.concurrent.Volatile private var extraDebit: Regex? = null
+    @kotlin.concurrent.Volatile private var extraCredit: Regex? = null
+    @kotlin.concurrent.Volatile private var extraTransfer: Regex? = null
+
+    internal fun setExtraWords(debit: List<String>, credit: List<String>, transfer: List<String>) {
+        fun re(w: List<String>) = if (w.isEmpty()) null else Regex("""\b(?:${w.joinToString("|")})\b""", I)
+        extraDebit = re(debit); extraCredit = re(credit); extraTransfer = re(transfer)
     }
 
     private val standingDone = Regex("""\bstanding\s+(?:instruction|order)s?\b""", I)

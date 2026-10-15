@@ -4,6 +4,10 @@ package com.uaefinancial.tracker.parser
  * The signed rules file: new banks (names, sender IDs) and reading rules, as DATA. The apps download it, check its
  * signature (platform code), and hand the text to [parse]; nothing in it is ever run as code.
  *
+ * Beyond bank rules the file can carry "ignore" (label + pattern: kinds of messages that are not transactions, refused
+ * if they would hide an ordinary purchase) and "words" ({"debit":[…],"credit":[…],"transfer":[…]}: single words a bank
+ * uses that the built-in wording lists do not know). Both are optional.
+ *
  * Format (all fields below are required unless marked optional):
  * ```
  * { "version": 7, "minEngine": 5,
@@ -21,9 +25,22 @@ object RulesPack {
     private const val MAX_BANKS = 600
     private const val MAX_RULES = 3000
     private const val MAX_PATTERN = 700
+    private const val MAX_IGNORE = 200
+    private const val MAX_WORDS = 100
+
+    /** Ordinary purchase and debit messages that no ignore rule may swallow. */
+    private val canaries = listOf(
+        "Your Visa card ending 1234 was used for AED 45.50 at NOON on 03-10-2026. Avl bal AED 9,876.00",
+        "AED 100.00 debited from your account XXXX1234 on 12/10/2026",
+        "Dear Customer, You have made an IBFT of PKR 5,000.00 from A/C 1234****7890 to 9876****5432 on 12-Oct-2026",
+    )
 
     data class PackRule(val bank: String, val rule: Rule)
-    data class Pack(val version: Int, val banks: List<GlobalBanks.DirBank>, val rules: List<PackRule>)
+    class Words(val debit: List<String> = emptyList(), val credit: List<String> = emptyList(), val transfer: List<String> = emptyList())
+    data class Pack(
+        val version: Int, val banks: List<GlobalBanks.DirBank>, val rules: List<PackRule>,
+        val ignore: List<IgnoreRule> = emptyList(), val words: Words = Words(),
+    )
 
     sealed class Outcome {
         data class Ok(val pack: Pack) : Outcome()
@@ -75,7 +92,34 @@ object RulesPack {
             val fixed = if (m["fixedMerchant"] == null) null else cleanText(m["fixedMerchant"], 60) ?: return Outcome.Rejected("rule $id: bad merchant")
             rules += PackRule(bank, Rule(id = "pack:$id", kind = kind, pattern = pattern, type = type, fixedMerchant = fixed, cardType = cardType))
         }
-        return Outcome.Ok(Pack(version, banks, rules))
+        // ---- ignore rules: "this kind of message is not a transaction"
+        val ignore = mutableListOf<IgnoreRule>()
+        val ignoreList = o["ignore"] as? List<*> ?: emptyList<Any?>()
+        if (ignoreList.size > MAX_IGNORE) return Outcome.Rejected("too many ignore rules")
+        for (r in ignoreList) {
+            val m = r as? Map<*, *> ?: return Outcome.Rejected("bad ignore entry")
+            val label = cleanText(m["label"], 40) ?: return Outcome.Rejected("ignore rule without a label")
+            val pattern = m["pattern"] as? String ?: return Outcome.Rejected("ignore rule $label: no pattern")
+            if (pattern.length < 8 || pattern.length > 300) return Outcome.Rejected("ignore rule $label: bad length")
+            if (Regex("""\((?:[^()]|\([^()]*\))*[+*}](?:\?)?\)[+*{]""").containsMatchIn(pattern)) return Outcome.Rejected("ignore rule $label: nested repetition")
+            val re = try { Regex(pattern, RegexOption.IGNORE_CASE) } catch (e: Exception) { return Outcome.Rejected("ignore rule $label: does not compile") }
+            if (canaries.any { re.containsMatchIn(it) }) return Outcome.Rejected("ignore rule $label: would hide ordinary transactions")
+            ignore += IgnoreRule(label, pattern)
+        }
+
+        // ---- extra wording
+        val wordsObj = o["words"] as? Map<*, *>
+        fun wordList(key: String): List<String>? {
+            val l = wordsObj?.get(key) ?: return emptyList()
+            val list = l as? List<*> ?: return null
+            if (list.size > MAX_WORDS) return null
+            return list.map { w -> (w as? String)?.trim()?.lowercase()?.takeIf { it.length in 3..20 && it.all(Char::isLetter) } ?: return null }
+        }
+        val debitW = wordList("debit") ?: return Outcome.Rejected("bad debit words")
+        val creditW = wordList("credit") ?: return Outcome.Rejected("bad credit words")
+        val transferW = wordList("transfer") ?: return Outcome.Rejected("bad transfer words")
+
+        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW)))
     }
 
     /** Null when the pattern is acceptable, otherwise why not. */
@@ -105,5 +149,7 @@ object RulesPack {
     fun apply(pack: Pack?) {
         GlobalBanks.setExtra(pack?.banks.orEmpty())
         SmsParser.setPackRules(pack?.rules.orEmpty().groupBy({ it.bank.trim().lowercase() }, { it.rule }))
+        SmsParser.setPackIgnore(pack?.ignore.orEmpty())
+        SmartParser.setExtraWords(pack?.words?.debit.orEmpty(), pack?.words?.credit.orEmpty(), pack?.words?.transfer.orEmpty())
     }
 }

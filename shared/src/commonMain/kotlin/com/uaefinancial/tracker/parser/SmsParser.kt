@@ -123,6 +123,14 @@ object SmsParser {
         packRules = byBank.mapValues { (_, rs) -> rs.mapNotNull { r -> runCatching { r to compile(r.pattern) }.getOrNull() } }
     }
 
+    /** Ignore rules from the signed rules file ("this kind of message is not a transaction"). Checked after the bank's own ignore rules. */
+    @kotlin.concurrent.Volatile
+    private var packIgnore: List<Pair<IgnoreRule, Regex>> = emptyList()
+
+    internal fun setPackIgnore(rules: List<IgnoreRule>) {
+        packIgnore = rules.mapNotNull { r -> runCatching { r to Regex(r.pattern, RegexOption.IGNORE_CASE) }.getOrNull() }
+    }
+
     /** How many rules from the rules file are active. */
     fun packRuleCount(): Int = packRules.values.sumOf { it.size }
 
@@ -344,6 +352,7 @@ object SmsParser {
         cb.ignore.firstOrNull { it.second.containsMatchIn(text) && !(done && it.first.label in BankRules.SOFT_IGNORE_LABELS) }?.let {
             return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store)
         }
+        packIgnore.firstOrNull { it.second.containsMatchIn(text) }?.let { return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store) }
         if (!looksFinancial.containsMatchIn(text)) return ParseResult.Ignored(cb.bank.name, "Informational (no amount)")
         // No bank rule: let the smart reader try, by the message's wording.
         runCatching { SmartParser.read(cb.bank.name, text, receivedAt, zone) }.getOrNull()?.let { return it }

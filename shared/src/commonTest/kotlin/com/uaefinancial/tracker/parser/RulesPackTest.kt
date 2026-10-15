@@ -70,4 +70,42 @@ class RulesPackTest {
         assertEquals(null, GlobalBanks.match("DBX"))
         assertEquals(null, GlobalBanks.match("MOM"))
     }
+
+    private fun packWith(extra: String) = """{"version":9,"banks":[],"rules":[],$extra"minEngine":5}"""
+
+    @Test fun ignoreRulesFromThePackStopANoticeBeingRead() {
+        SmsParser.setCustomSenders(mapOf("PKBANK" to "Some Bank"))
+        val body = "Dear Customer, kindly pay PKR 500.00 fee to keep your locker, visit your branch by Friday"
+        val before = SmsParser.parse("PKBANK", body, 0L)
+        val out = RulesPack.parse(packWith(""""ignore":[{"label":"Locker notice","pattern":"keep your locker"}],"""))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        val after = SmsParser.parse("PKBANK", body, 0L)
+        assertIs<ParseResult.Ignored>(after)
+        assertEquals("Locker notice", after.reason)
+        RulesPack.apply(null)
+        assertEquals(before::class, SmsParser.parse("PKBANK", body, 0L)::class)
+        SmsParser.setCustomSenders(emptyMap())
+    }
+
+    @Test fun anIgnoreRuleThatWouldHideTransactionsIsRefused() {
+        val out = RulesPack.parse(packWith(""""ignore":[{"label":"Too wide","pattern":"AED|PKR|debited"}],"""))
+        assertIs<RulesPack.Outcome.Rejected>(out)
+        val nested = RulesPack.parse(packWith(""""ignore":[{"label":"Slow","pattern":"(a+)+b notice"}],"""))
+        assertIs<RulesPack.Outcome.Rejected>(nested)
+    }
+
+    @Test fun extraWordsTeachTheReaderANewVerb() {
+        SmsParser.setCustomSenders(mapOf("PKBANK" to "Some Bank"))
+        val body = "Dear Customer, You have zorbed an item of PKR 700.00 from A/C 1234****7890 to 9876****5432 on 12-Oct-2026"
+        val out = RulesPack.parse(packWith(""""words":{"debit":["zorbed"],"transfer":["zorbed"]},"""))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        val r = SmsParser.parse("PKBANK", body, 0L)
+        assertIs<ParseResult.Transaction>(r)
+        assertEquals(TxnType.TRANSFER_OUT, r.txn.type)
+        val bad = RulesPack.parse(packWith(""""words":{"debit":["not a word!"]},"""))
+        assertIs<RulesPack.Outcome.Rejected>(bad)
+        SmsParser.setCustomSenders(emptyMap())
+    }
 }
