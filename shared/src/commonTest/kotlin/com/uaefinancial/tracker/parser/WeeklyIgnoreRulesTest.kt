@@ -10,7 +10,6 @@ class WeeklyIgnoreRulesTest {
     @AfterTest fun reset() { RulesPack.apply(null); SmsParser.setCustomSenders(emptyMap()) }
 
     private val pack = """{"version":2,"minEngine":5,"banks":[],"rules":[],"ignore":[
-      {"label":"Insufficient balance","pattern":"transaction of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+\\w+\\s+be processed due to insufficient balance"},
       {"label":"Document request","pattern":"Emirates ID.{0,60}\\sto\\s+\\S+@\\S+\\s+from your registered"},
       {"label":"Branch notice","pattern":"/-,\\s*[A-Z]{3}\\s*[\\d,.]+/-,\\s*[A-Z]{3}\\s*[\\d,.]+/-\\s+and\\s+[A-Z]{3}\\s*[\\d,.]+/-\\s+in your account"}]}"""
 
@@ -23,11 +22,6 @@ class WeeklyIgnoreRulesTest {
 
     private fun label(body: String): String? =
         (SmsParser.parse("TESTBANK", body, 0L) as? ParseResult.Ignored)?.reason
-
-    @Test fun insufficientBalanceIsNotATransaction() {
-        setup()
-        assertEquals("Insufficient balance", label("Dear Customer, Your Raast transaction of PKR 2,500.00 could not be processed due to insufficient balance in your account. For queries please call 111"))
-    }
 
     @Test fun documentRequestIsNotATransaction() {
         setup()
