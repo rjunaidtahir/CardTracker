@@ -5,10 +5,6 @@
   "rules": [],
   "ignore": [
     {
-      "label": "Document request (Emirates ID)",
-      "pattern": "Emirates ID .{1,60} to \\S+@\\S+ from your registered"
-    },
-    {
       "label": "Declined: insufficient balance",
       "pattern": "cannot be processed due to insufficient balance"
     },
