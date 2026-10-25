@@ -1,6 +1,36 @@
 {
-  "version": 1,
+  "version": 2,
   "minEngine": 5,
   "banks": [],
-  "rules": []
+  "rules": [],
+  "ignore": [
+    {
+      "label": "Document request (Emirates ID)",
+      "pattern": "Emirates ID .{1,60} to \\S+@\\S+ from your registered"
+    },
+    {
+      "label": "Declined: insufficient balance",
+      "pattern": "cannot be processed due to insufficient balance"
+    },
+    {
+      "label": "Notice: transfer limit raised",
+      "pattern": "is pleased to .{1,120} in your account\\. For .{1,30} call .{1,20} or visit your .{1,30} branch"
+    },
+    {
+      "label": "Notice: IBFT limit advert",
+      "pattern": "now .{1,30} IBFT transactions up to [A-Z]{3} [\\d,.]+/-"
+    },
+    {
+      "label": "Advert: instant credit branches",
+      "pattern": "branches for instant credit to your account"
+    },
+    {
+      "label": "Telecom bill reminder",
+      "pattern": "Total payable are [A-Z]{3} [\\d,.]+"
+    },
+    {
+      "label": "Telecom bill due notice",
+      "pattern": "Your total bill for .{1,40} is [A-Z]{3} [\\d,.]+, Please pay by"
+    }
+  ]
 }
