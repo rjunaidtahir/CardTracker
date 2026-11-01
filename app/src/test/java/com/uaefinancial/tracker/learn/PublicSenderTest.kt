@@ -19,4 +19,11 @@ class PublicSenderTest {
         assertNull(Learning.publicSender("Ahmed Khan"))
         assertNull(Learning.publicSender("12"))
     }
+
+    @Test fun failure_reason_comes_from_the_masked_shape() {
+        assertEquals("no-amount", Learning.reason("Your account is {TEXT} {DATE}"))
+        assertEquals("no-currency", Learning.reason("You {TEXT} {AMOUNT} from A/C {CARD}"))
+        assertEquals("no-account", Learning.reason("You {TEXT} {CUR} {AMOUNT} at {TEXT}"))
+        assertEquals("wording", Learning.reason("You {TEXT} {CUR} {AMOUNT} from A/C {CARD:4}"))
+    }
 }

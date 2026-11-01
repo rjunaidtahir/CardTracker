@@ -69,6 +69,12 @@ import kotlinx.coroutines.launch
 class MainActivity : FragmentActivity() {
     private val vm: MainViewModel by viewModels()
     private lateinit var biometricPrompt: BiometricPrompt
+    private val forcedUpdate = com.uaefinancial.tracker.update.ForcedUpdate(this)
+
+    override fun onResume() {
+        super.onResume()
+        forcedUpdate.check()
+    }
 
     // Android 9+ only: older versions would need an AppCompat theme for the library's own dialog.
     private fun biometricAvailable(): Boolean =
@@ -302,7 +308,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 Text(
                     "We send only the shape of a message: no amounts, names or numbers. For example, \"Your Visa card ending 1234 was used for AED 45.50 at NOON\" " +
                         "is shared only as \"Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at {TEXT}\".\n\n" +
-                        "Only messages the app could not read, or that you fix, are shared. Never OTPs, and nothing is tied to you. " +
+                        "Only messages the app could not read (including any already waiting in Needs review), or that you fix, are shared this way. Never OTPs, and nothing is tied to you. " +
                         "You can turn this off any time in More → Settings → Help Fils learn.",
                 )
             },

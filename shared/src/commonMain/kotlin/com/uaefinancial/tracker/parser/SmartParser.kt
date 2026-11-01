@@ -434,6 +434,9 @@ object SmartParser {
             // "<anything> an <anything> of PKR 5,000 from A/C 1234 to 5678": the words that say what was done differ
             // from bank to bank, but money named "from <your account> to <somewhere>" is a transfer out.
             transferFromAccount(text, txnAmount.start, txnAmount.end) -> type = TxnType.TRANSFER_OUT
+            // "You have made a Fund Transfer of PKR 4,000 from Bank X A/C 1234 on 20-Oct": a named transfer taken from an
+            // account, where the message does not say where it went.
+            transferNamedFromAccount(text, txnAmount.start, txnAmount.end) -> type = TxnType.TRANSFER_OUT
             else -> return null
         }
 
@@ -542,6 +545,13 @@ object SmartParser {
     private val creditedWithAmount = Regex("""\b(?:has|have)\s+been\s+(?:successfully\s+)?credited\s+(?:with|by)\b""", I)
     private val fromAccountTo = Regex("""^\s*(?:/-)?\s*(?:has\s+been\s+|was\s+)?from\s+(?:your\s+)?(?:a/c|ac|acc|acct|account|iban)\b.{0,100}?\bto\b""", I)
     private val ofBefore = Regex("""\b(?:of|for)\s*$""", I)
+
+    private val fromAccountOnly = Regex("""^\s*from\s+(?:[\p{L}.&'-]+\s+){0,4}?(?:a/c|acc(?:ount)?|iban)\b""", I)
+
+    /** True for "<a fund transfer / IBFT / ...> of <amount> from <bank> A/C <number>" when no "to" follows: money left that account. */
+    private fun transferNamedFromAccount(text: String, start: Int, end: Int): Boolean =
+        strongTransfer.containsMatchIn(text) && ofBefore.containsMatchIn(text.substring(maxOf(0, start - 6), start)) &&
+            fromAccountOnly.containsMatchIn(text.substring(end))
 
     /** True for "... of <amount> from A/C <number> ... to ...": the amount is taken from the account and sent on. */
     private fun transferFromAccount(text: String, start: Int, end: Int): Boolean =

@@ -68,6 +68,17 @@ object Learning {
         return s.uppercase()
     }
 
+    /**
+     * Why a message could not be read, worked out from its masked shape only (so it is as private as the shape).
+     * Lets the daily accuracy check tell "no amount in it" from "has an amount but the wording is new".
+     */
+    fun reason(shape: String): String = when {
+        !shape.contains("{AMOUNT}") -> "no-amount"
+        !shape.contains("{CUR}") -> "no-currency"
+        !shape.contains("{CARD") -> "no-account"
+        else -> "wording"
+    }
+
     /** What would be sent for [body], for the preview. Null when it would not be sent. */
     fun previewShape(sender: String, bankName: String?, body: String): String? {
         val r = Masker.mask(body, publicBankName(sender, bankName))
@@ -84,9 +95,10 @@ object Learning {
         // A bank we do not know yet: send its sender ID as the bank's own name for its messages ("HBL", "AX-HDFCBK-S").
         // That is public (every customer sees it); a phone number or a contact name is never sent.
         val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+        val sentKind = if (kind == "unread") "unread/" + reason(r.shape) else kind
         val hash = hash("$label|${r.shape}")
         if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
-        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, kind, r.shape).joinToString(US.toString()))
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, sentKind, r.shape).joinToString(US.toString()))
         schedule(context)
         return true
     }
@@ -105,13 +117,14 @@ object Learning {
         val (day, n) = prefs.sentToday.split(':').let { (it.getOrNull(0)?.toLongOrNull() ?: -1L) to (it.getOrNull(1)?.toIntOrNull() ?: 0) }
         var sentCount = if (day == today) n else 0
         val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
+        val appVersion = "$version/e${SmsParser.ENGINE_VERSION}"
         var queue = prefs.shapeQueue
         var ok = true
         for (item in queue.toList()) {
             if (sentCount >= DAILY_CAP) break
             val p = item.split(US)
             if (p.size < 5) { queue = queue - item; continue }
-            if (post(p[4], p[1], p[2], p[3], version)) {
+            if (post(p[4], p[1], p[2], p[3], appVersion)) {
                 sentCount++
                 queue = queue - item
                 prefs.sentShapeHashes = prefs.sentShapeHashes + p[0]
