@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "minEngine": 5,
   "banks": [],
   "rules": [],
@@ -27,6 +27,10 @@
     {
       "label": "Telecom bill due notice",
       "pattern": "Your total bill for .{1,40} is [A-Z]{3} [\\d,.]+, Please pay by"
+    },
+    {
+      "label": "Failed payment notice",
+      "pattern": "Your payment of [A-Z]{3} [\\d,.]+ is failed"
     }
   ]
 }
