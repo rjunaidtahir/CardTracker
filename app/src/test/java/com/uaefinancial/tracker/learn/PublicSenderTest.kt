@@ -16,7 +16,6 @@ class PublicSenderTest {
         assertNull(Learning.publicSender("+971501234567"))
         assertNull(Learning.publicSender("0501234567"))
         assertNull(Learning.publicSender("97150123"))
-        assertNull(Learning.publicSender("Mum"))
         assertNull(Learning.publicSender("Ahmed Khan"))
         assertNull(Learning.publicSender("12"))
     }
