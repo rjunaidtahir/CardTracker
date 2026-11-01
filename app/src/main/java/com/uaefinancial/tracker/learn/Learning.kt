@@ -54,11 +54,15 @@ object Learning {
         return bankName?.let { n -> GlobalBanks.all().firstOrNull { it.name.equals(n, ignoreCase = true) }?.name }
     }
 
+    private val shortCode = Regex("""[0-9]{3,6}""")
     private val senderId = Regex("""[A-Za-z][A-Za-z0-9._&-]{2,39}""")
 
     /** The sender ID as a bank prints it (letters, digits, - . & _), or null for a phone number, a contact name or anything odd. */
     fun publicSender(sender: String): String? {
         val s = sender.trim()
+        // Banks in Pakistan, India and elsewhere often text from a short numeric code (3-6 digits, e.g. "8258"). Every
+        // customer sees it and it is not a phone number, so it is as public as "HBL". Longer digit strings stay out.
+        if (shortCode.matches(s)) return s
         if (!senderId.matches(s)) return null
         if (s.count { it.isDigit() } > s.length / 2) return null
         return s.uppercase()
