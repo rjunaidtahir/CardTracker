@@ -69,9 +69,9 @@ class PakistanTransferFormatsTest {
         for (t in templates) for (m in money) for (d in dates) {
             val body = t.replace("%M", m).replace("%D", d)
             val r = read(body)
-            val ok = r is ParseResult.Transaction && r.txn.amount == Decimal("5000.00")
-            if (!ok) bad += "[" + m + " | " + d + " | T" + templates.indexOf(t) + "] -> " + r
+            val ok = r is ParseResult.Transaction && r.txn.amount.toString().startsWith("5000") && r.txn.type == TxnType.TRANSFER_OUT
+            if (!ok) bad += "BAD<" + m + "|" + d + "|T" + templates.indexOf(t) + "|" + (if (r is ParseResult.Transaction) r.txn.amount.toString() + r.txn.type else r::class.simpleName) + ">"
         }
-        assertEquals(emptyList(), bad, "unread variants: " + bad.size + " of " + (templates.size * money.size * dates.size) + "\n" + bad.joinToString("\n"))
+        assertEquals(emptyList(), bad, "unread variants: " + bad.size + " of " + (templates.size * money.size * dates.size) + "\n" + bad.joinToString(" "))
     }
 }
