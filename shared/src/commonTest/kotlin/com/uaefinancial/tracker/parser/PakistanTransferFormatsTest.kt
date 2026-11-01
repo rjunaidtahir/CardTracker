@@ -56,4 +56,22 @@ class PakistanTransferFormatsTest {
         assertEquals(Decimal("1000.00"), r.txn.amount)
         assertEquals(TxnType.TRANSFER_IN, r.txn.type)
     }
+
+    @Test fun currency_and_date_variants_are_all_read() {
+        val money = listOf("PKR 5,000.00", "PKR 5,000", "PKR5,000.00", "Rs. 5,000.00", "Rs 5,000.00", "Rs.5,000", "Rs. 5,000/-", "PKR. 5,000.00", "RS 5,000.00")
+        val dates = listOf("12-Oct-2026 14:20", "12-OCT-26 14:20:11", "12/10/2026 14:20", "12-10-2026, 14:20", "2026-10-12 14:20:11")
+        val templates = listOf(
+            "You have made an IBFT of %M from A/C 1234****7890 to *4321 via Mobile App on %D",
+            "Dear Customer, You made an IBFT of %M from A/C 12345678901234567 to 12AB Bank Limited through ABC MOBILE on %D.",
+            "Dear Customer, you have made a Fund Transfer of %M from IBAN PK12ABCD0000001234567890 through ABC Raast to Ali on %D.",
+        )
+        val bad = mutableListOf<String>()
+        for (t in templates) for (m in money) for (d in dates) {
+            val body = t.replace("%M", m).replace("%D", d)
+            val r = read(body)
+            val ok = r is ParseResult.Transaction && r.txn.amount == Decimal("5000.00")
+            if (!ok) bad += "[" + m + " | " + d + " | T" + templates.indexOf(t) + "] -> " + r
+        }
+        assertEquals(emptyList(), bad, "unread variants: " + bad.size + " of " + (templates.size * money.size * dates.size) + "\n" + bad.joinToString("\n"))
+    }
 }
