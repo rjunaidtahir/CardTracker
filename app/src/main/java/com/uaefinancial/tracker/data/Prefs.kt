@@ -172,6 +172,14 @@ class Prefs(context: Context) {
         get() = sp.getInt("share_consent", 0)
         set(v) { sp.edit { putInt("share_consent", v) } }
 
+    /** When Needs review last offered sharing to someone who said no (0 = never offered), and whether they chose "Never". */
+    var shareNudgeAt: Long
+        get() = sp.getLong("share_nudge_at", 0L)
+        set(v) { sp.edit { putLong("share_nudge_at", v) } }
+    var shareNudgeNever: Boolean
+        get() = sp.getBoolean("share_nudge_never", false)
+        set(v) { sp.edit { putBoolean("share_nudge_never", v) } }
+
     /** Hashes of shapes already sent (so the same shape is never sent twice), newest last, capped. */
     var sentShapeHashes: List<String>
         get() = (sp.getString("sent_shapes", "") ?: "").split(',').filter { it.isNotEmpty() }

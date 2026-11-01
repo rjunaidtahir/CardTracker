@@ -372,6 +372,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     val counts by vm.smsCounts.collectAsStateWithLifecycle()
     var fixing by remember { mutableStateOf<SmsEntity?>(null) }
     var notTxn by remember { mutableStateOf<SmsEntity?>(null) }
+    var nudge by remember { mutableStateOf(vm.shareNudgeDue()) }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
 
@@ -389,6 +390,24 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                         "not transactions ${counts["IGNORED"] ?: 0}",
                     style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 8.dp),
                 )
+            }
+        }
+        if (nudge && failed.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("Help Fils read these next time", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "${failed.size} message${if (failed.size == 1) "" else "s"} here couldn't be read. If you share just their format (no amounts, names, " +
+                            "numbers or card digits, never the message itself), Fils can learn them for you and for everyone with the same bank. " +
+                            "You can turn this off any time in More → Settings → Help Fils learn.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        TextButton(onClick = { vm.setShareConsent(true); nudge = false }) { Text("Share formats") }
+                        TextButton(onClick = { vm.snoozeShareNudge(); nudge = false }) { Text("Not now", color = Ink.muted) }
+                        TextButton(onClick = { vm.neverShareNudge(); nudge = false }) { Text("Never", color = Ink.muted) }
+                    }
+                }
             }
         }
         if (failed.isEmpty()) {

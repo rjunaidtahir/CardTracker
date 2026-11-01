@@ -297,17 +297,18 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
         AlertDialog(
             onDismissRequest = {},
             containerColor = Ink.surface,
-            title = { Text("Help Fils learn new banks") },
+            title = { Text("Fils learns from messages it can't read") },
             text = {
                 Text(
-                    "We send only the shape of a message: no amounts, names or numbers. For example, \"Your Visa card ending 1234 was used for AED 45.50 at NOON\" " +
-                        "is shared only as \"Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at {TEXT}\".\n\n" +
-                        "Only messages the app could not read (including any already waiting in Needs review), or that you fix, are shared this way. Never OTPs, and nothing is tied to you. " +
-                        "You can turn this off any time in More → Settings → Help Fils learn.",
+                    "To fix messages the app reads wrongly, Fils sends the format of any bank message it can't read, so it can be fixed for you and for everyone " +
+                        "with the same bank. Only the format is sent, with amounts, names, numbers and card digits removed: for example, \"Your Visa card ending 1234 was used for AED 45.50 at NOON\" " +
+                        "is sent as \"Your Visa card ending {CARD} was used for {CUR} {AMOUNT} at {TEXT}\". This includes any messages already waiting in Needs review. " +
+                        "Never the message itself, never OTPs, and nothing is tied to you.\n\n" +
+                        "You can turn this off now, or any time in More → Settings → Help Fils learn.",
                 )
             },
-            confirmButton = { androidx.compose.material3.Button(onClick = { vm.setShareConsent(true) }) { Text("Allow") } },
-            dismissButton = { TextButton(onClick = { vm.setShareConsent(false) }) { Text("No thanks") } },
+            confirmButton = { androidx.compose.material3.Button(onClick = { vm.setShareConsent(true) }) { Text("Continue") } },
+            dismissButton = { TextButton(onClick = { vm.setShareConsent(false) }) { Text("Turn off sharing") } },
         )
     }
     BackHandler(enabled = nav.canGoBack) { nav.back() }

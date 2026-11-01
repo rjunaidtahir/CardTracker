@@ -1001,6 +1001,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (on) viewModelScope.launch(Dispatchers.IO) { runCatching { repo.queueUnreadForLearning() } }
     }
 
+    /** True when someone who said no to sharing may be offered it again in Needs review: at most once every 30 days, never after "Never". */
+    fun shareNudgeDue(): Boolean =
+        prefs.shareConsent == com.uaefinancial.tracker.learn.Learning.OFF && !prefs.shareNudgeNever &&
+            System.currentTimeMillis() - prefs.shareNudgeAt > 30L * 86_400_000L
+    fun snoozeShareNudge() { prefs.shareNudgeAt = System.currentTimeMillis() }
+    fun neverShareNudge() { prefs.shareNudgeNever = true }
+
     fun refreshShared() { recentShared.value = prefs.recentShared }
 
     // ------------------------------------------------------------ chats that look like banks
