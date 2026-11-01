@@ -69,12 +69,6 @@ import kotlinx.coroutines.launch
 class MainActivity : FragmentActivity() {
     private val vm: MainViewModel by viewModels()
     private lateinit var biometricPrompt: BiometricPrompt
-    private val forcedUpdate = com.uaefinancial.tracker.update.ForcedUpdate(this)
-
-    override fun onResume() {
-        super.onResume()
-        forcedUpdate.check()
-    }
 
     // Android 9+ only: older versions would need an AppCompat theme for the library's own dialog.
     private fun biometricAvailable(): Boolean =

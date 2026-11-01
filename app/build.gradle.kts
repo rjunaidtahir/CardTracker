@@ -130,8 +130,6 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     implementation("androidx.work:work-runtime-ktx:2.10.0")
-    // Google Play in-app updates: a new version is installed straight away, so a fix reaches everyone.
-    implementation("com.google.android.play:app-update:2.1.0")
 
     // Reads the text of bank statement PDFs (incl. password-protected ones) for "Check against statement".
     implementation("com.tom-roush:pdfbox-android:2.0.27.0") {
