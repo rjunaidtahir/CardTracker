@@ -9,7 +9,7 @@ import kotlin.math.abs
  * Kept in `shared/` so both apps check the same way.
  */
 object Checks {
-    enum class Kind { BALANCE, DUPLICATE, UNUSUAL }
+    enum class Kind { BALANCE, DUPLICATE, UNUSUAL, RESIDUAL }
 
     data class Flag(val kind: Kind, val message: String)
 
@@ -25,6 +25,8 @@ object Checks {
         val merchantKey: String?,
         /** Available limit / balance printed in the same message, if any. */
         val availMinor: Long?,
+        /** Placed from a standing-instruction message with no debit message (see [StandingGap]); it has no balance of its own. */
+        val inferred: Boolean = false,
     )
 
     private const val BALANCE_TOLERANCE = 100L            // 1.00: rounding, fees shown to the cent
@@ -46,31 +48,52 @@ object Checks {
         for ((_, list) in byCard) {
             val sorted = list.sortedWith(compareBy({ it.timestamp }, { it.id }))
 
-            // 1. The balance in this message vs the previous one on the same card.
+            // 1. The balance in this message vs the previous one on the same card. Rows without a balance of their own
+            //    (a transaction placed from a standing-instruction message, or a message with no balance) still move the
+            //    balance, so they count towards what the next balance should be.
             var prev: Row? = null
+            var since = 0L                       // net movement of rows without a balance since [prev]
+            var inferredSince = mutableListOf<Row>()
             for (r in sorted) {
+                val delta = when (r.type) {
+                    in moneyOut -> -r.amountMinor
+                    in moneyIn -> r.amountMinor
+                    else -> null
+                }
                 val a = r.availMinor
-                if (a == null) continue
+                if (a == null) {
+                    if (prev != null && delta != null && prev.currency == r.currency) {
+                        since += delta
+                        if (r.inferred) inferredSince += r
+                    }
+                    continue
+                }
                 val p = prev
                 if (p != null && p.currency == r.currency && r.timestamp - p.timestamp <= BALANCE_MAX_GAP_MS) {
-                    val delta = when (r.type) {
-                        in moneyOut -> -r.amountMinor
-                        in moneyIn -> r.amountMinor
-                        else -> null
-                    }
                     val pa = p.availMinor
                     if (delta != null && pa != null) {
-                        val expected = pa + delta
+                        val expected = pa + since + delta
                         val diff = a - expected
                         if (abs(diff) > BALANCE_TOLERANCE) {
+                            val explained = abs(delta + since)
                             add(r.id, Flag(Kind.BALANCE,
-                                "The balance went from ${fmt(pa)} to ${fmt(a)}, but this ${if (delta < 0) "spend" else "credit"} explains " +
-                                    "${fmt(abs(delta))}. ${fmt(abs(diff))} ${if (diff < 0) "more was taken" else "more came in"}: " +
+                                "The balance went from ${fmt(pa)} to ${fmt(a)}, but this ${if (delta < 0) "spend" else "credit"}" +
+                                    (if (since != 0L) " and the transactions placed before it explain " else " explains ") +
+                                    "${fmt(explained)}. ${fmt(abs(diff))} ${if (diff < 0) "more was taken" else "more came in"}: " +
                                     "a message may be missing, or the amount was misread."))
+                        }
+                        // Whatever is still unexplained after placing a standing-instruction row stays visible on that row
+                        // (even when it is small enough for the balance check to pass): it may be a fee.
+                        if (inferredSince.isNotEmpty() && diff != 0L) {
+                            add(inferredSince.first().id, Flag(Kind.RESIDUAL,
+                                if (diff < 0) "${fmt(abs(diff))} unaccounted for between the balances around this transfer, possibly a fee."
+                                else "${fmt(abs(diff))} more came in than the messages around this transfer explain."))
                         }
                     }
                 }
                 prev = r
+                since = 0L
+                inferredSince = mutableListOf()
             }
 
             // 2. The same amount and merchant a moment earlier on the same card.

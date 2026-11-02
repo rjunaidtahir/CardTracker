@@ -450,7 +450,7 @@ internal fun TransactionRow(
                     (t.type == TxnType.TRANSFER_OUT.name || t.type == TxnType.TRANSFER_IN.name) && t.categoryId != null -> "${catNames[t.categoryId] ?: ""} · ${kind ?: ""}"
                     else -> kind ?: ""
                 }
-                val tags = listOfNotNull(first.ifBlank { null }, card, if (t.source == "MANUAL") "typed" else null, if (!counted) "not counted" else null)
+                val tags = listOfNotNull(first.ifBlank { null }, card, if (t.source == "MANUAL") "typed" else null, if (t.inferred) "from standing instruction" else null, if (!counted) "not counted" else null)
                 Text(tags.joinToString(" • "), style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (flags.isNotEmpty()) {
                     Text(
@@ -458,6 +458,7 @@ internal fun TransactionRow(
                             com.uaefinancial.tracker.core.Checks.Kind.BALANCE -> if (t.checkNote != null && flags.first().message == t.checkNote) "amount not in the message" else "balance doesn't add up"
                             com.uaefinancial.tracker.core.Checks.Kind.DUPLICATE -> "possible duplicate"
                             com.uaefinancial.tracker.core.Checks.Kind.UNUSUAL -> "unusually large"
+                            com.uaefinancial.tracker.core.Checks.Kind.RESIDUAL -> "a small amount is unaccounted for"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.amber, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
@@ -512,6 +513,7 @@ internal fun TransactionRow(
             }
             when {
                 t.ruleId?.startsWith("auto-") == true -> Text("Read by the smart reader: check it looks right.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                t.inferred -> Text(com.uaefinancial.tracker.data.Repository.SI_PLACED_NOTE + " If the debit message arrives later, it replaces this.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
                 t.ruleId == com.uaefinancial.tracker.data.Repository.FIX_RULE -> Text("Your fix from Needs review.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
                 t.ruleId == com.uaefinancial.tracker.parser.LearnedFormats.RULE_ID -> Text("Read like a similar message you fixed.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
             }

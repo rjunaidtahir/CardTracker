@@ -773,7 +773,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val checkFlags: StateFlow<Map<Long, List<com.uaefinancial.tracker.core.Checks.Flag>>> =
         combine(dao.txnsBetween(0L, Long.MAX_VALUE), dismissedChecks) { all, dismissed ->
             val rows = all.map {
-                com.uaefinancial.tracker.core.Checks.Row(it.id, it.cardKey, it.timestamp, it.type, it.amountMinor, it.currency, it.merchantKey, it.availableLimitMinor)
+                com.uaefinancial.tracker.core.Checks.Row(it.id, it.cardKey, it.timestamp, it.type, it.amountMinor, it.currency, it.merchantKey, it.availableLimitMinor, inferred = it.inferred)
             }
             val found = com.uaefinancial.tracker.core.Checks.evaluate(rows) { m -> fmtMoney(m) }.toMutableMap()
             for (t in all) {

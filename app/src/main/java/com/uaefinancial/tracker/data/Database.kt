@@ -106,6 +106,11 @@ data class TransactionEntity(
     val merchantKey: String? = null,
     /** Set when a check found something to look at at the time of reading (e.g. the amount isn't written in the message). */
     val checkNote: String? = null,
+    /**
+     * Placed from a "standing instruction processed" message that had no matching debit message: the account and time
+     * come from the balance gap it fills (see core/StandingGap). Replaced by the real debit message if it arrives.
+     */
+    @ColumnInfo(defaultValue = "0") val inferred: Boolean = false,
 )
 
 /** An instalment plan (EPP, easy payment, balance transfer...) read from a card statement. Not spending: the purchase is already counted. */
@@ -345,7 +350,7 @@ interface AppDao {
     /** The other half of a two-SMS transfer: same account, same amount, other rule of the same pair group, ±window. */
     @Query(
         "SELECT * FROM transactions WHERE cardKey = :cardKey AND type IN ('TRANSFER_OUT', 'PURCHASE') AND amountMinor = :amountMinor " +
-            "AND pairedSmsId IS NULL AND ruleId IN (:ruleIds) AND ruleId != :ruleId " +
+            "AND pairedSmsId IS NULL AND inferred = 0 AND ruleId IN (:ruleIds) AND ruleId != :ruleId " +
             "AND timestamp BETWEEN :from AND :to ORDER BY ABS(timestamp - :ts) LIMIT 1",
     )
     suspend fun findTransferPair(
@@ -359,6 +364,46 @@ interface AppDao {
     suspend fun mergePair(
         id: Long, smsId: Long, merchant: String, counterpartyKey: String?, availableLimitMinor: Long?, timestamp: Long, type: String,
     )
+
+    /** Debits that could be the other half of a transfer message that doesn't name the account (any account at the bank). */
+    @Query(
+        "SELECT * FROM transactions WHERE bank = :bank AND type IN ('TRANSFER_OUT', 'PURCHASE') AND amountMinor = :amountMinor " +
+            "AND pairedSmsId IS NULL AND inferred = 0 AND cardKey IS NOT NULL AND ruleId IN (:ruleIds) AND ruleId != :ruleId " +
+            "AND timestamp BETWEEN :from AND :to ORDER BY ABS(timestamp - :ts)",
+    )
+    suspend fun pairCandidates(
+        bank: String, amountMinor: Long, ruleIds: List<String>, ruleId: String, from: Long, to: Long, ts: Long,
+    ): List<TransactionEntity>
+
+    /** A transaction placed from a standing-instruction message that the real debit message now explains. */
+    @Query(
+        "SELECT * FROM transactions WHERE cardKey = :cardKey AND inferred = 1 AND amountMinor = :amountMinor " +
+            "AND timestamp BETWEEN :from AND :to ORDER BY ABS(timestamp - :ts) LIMIT 1",
+    )
+    suspend fun findInferred(cardKey: String, amountMinor: Long, from: Long, to: Long, ts: Long): TransactionEntity?
+
+    @Query(
+        "UPDATE transactions SET inferred = 0, pairedSmsId = :smsId, timestamp = :timestamp, " +
+            "availableLimitMinor = :availableLimitMinor, checkNote = NULL WHERE id = :id",
+    )
+    suspend fun replaceInferred(id: Long, smsId: Long, timestamp: Long, availableLimitMinor: Long?)
+
+    /** Standing-instruction messages waiting for a place (kept in Needs review until one is found). */
+    @Query("SELECT * FROM sms WHERE ruleId = :ruleId AND status = 'FAILED' AND note LIKE :notePrefix || '%' ORDER BY receivedAt ASC")
+    suspend fun pendingStanding(ruleId: String, notePrefix: String): List<SmsEntity>
+
+    @Query("SELECT * FROM transactions WHERE inferred = 1 AND smsId IS NOT NULL")
+    suspend fun inferredTxns(): List<TransactionEntity>
+
+    @Query("DELETE FROM transactions WHERE inferred = 1 AND smsId IN (:smsIds)")
+    suspend fun deleteInferredFor(smsIds: List<Long>)
+
+    /** Saved transactions on a bank's accounts (not cards), without the placed ones: the chain of balances. */
+    @Query(
+        "SELECT t.* FROM transactions t JOIN cards c ON c.cardKey = t.cardKey " +
+            "WHERE t.bank = :bank AND c.cardType = 'ACCOUNT' AND t.inferred = 0 AND t.currency = :currency",
+    )
+    suspend fun accountTxns(bank: String, currency: String): List<TransactionEntity>
 
     @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
     suspend fun deleteAllSmsTxns()
@@ -641,7 +686,7 @@ data class StatusCount(val status: String, val n: Int)
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
         BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {
