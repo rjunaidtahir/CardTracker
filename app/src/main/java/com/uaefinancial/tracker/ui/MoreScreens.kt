@@ -416,6 +416,9 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
         items(failed, key = { it.id }) { s ->
             Panel(Modifier.fillMaxWidth()) {
                 Text("${s.bank ?: s.sender} · ${fmtDateTime(s.receivedAt)}", style = MaterialTheme.typography.titleSmall)
+                if (s.ruleId == com.uaefinancial.tracker.data.Repository.SI_RULE && s.note != null) {
+                    Text("⚠ " + s.note, style = MaterialTheme.typography.bodySmall, color = Ink.amber, modifier = Modifier.padding(top = 4.dp))
+                }
                 Spacer(Modifier.height(6.dp))
                 SelectionContainer {
                     Text(

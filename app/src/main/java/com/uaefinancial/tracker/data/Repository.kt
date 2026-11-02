@@ -1,6 +1,7 @@
 package com.uaefinancial.tracker.data
 
 import com.uaefinancial.tracker.toJava
+import com.uaefinancial.tracker.core.StandingGap
 import com.uaefinancial.tracker.core.toDecimalOrNull
 import com.uaefinancial.tracker.core.Decimal
 import androidx.room.withTransaction
@@ -148,9 +149,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     /** Set by the app: gets (sender, bank, body, kind) for messages worth learning from. The app masks before storing anything. */
     var onShape: ((String, String?, String, String) -> Unit)? = null
 
+    /** True while the message just read is a standing-instruction message waiting for its account (not an unread format). */
+    private var parkedStanding = false
+
     /** Offers the masked shape of every message waiting in Needs review (nothing is sent unless sharing is on). */
     suspend fun queueUnreadForLearning() {
-        for (m in dao.failedSmsList()) onShape?.invoke(m.sender, m.bank, m.body, "unread")
+        for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, "unread")
     }
 
     suspend fun ingestSms(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): IngestOutcome =
@@ -185,10 +189,17 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                     ),
                 )
                 val dedupKey = SmsKey.of(sender, sent, receivedAt, body)
-                if (id == -1L) IngestOutcome.DUPLICATE else applyParse(id, dedupKey, parsed, receivedAt, bank.name)
+                if (id == -1L) IngestOutcome.DUPLICATE else {
+                    parkedStanding = false
+                    val o = applyParse(id, dedupKey, parsed, receivedAt, bank.name)
+                    // A new balance may settle a waiting standing-instruction message (or this message may be one).
+                    if (o != IngestOutcome.DUPLICATE) resolveStanding()
+                    if (o == IngestOutcome.FAILED && parkedStanding && dao.smsById(id)?.status == SmsStatus.TRANSACTION) IngestOutcome.TRANSACTION else o
+                }
             }.also { outcome ->
-                // Could not be read: offer its masked shape for learning (only if you allowed it).
-                if (outcome == IngestOutcome.FAILED) runCatching { onShape?.invoke(sender, bank.name, body, "unread") }
+                // Could not be read: offer its masked shape for learning (only if you allowed it). A standing-instruction
+                // message waiting for its account is not unread: its format is known.
+                if (outcome == IngestOutcome.FAILED && !parkedStanding) runCatching { onShape?.invoke(sender, bank.name, body, "unread") }
             }
         }
 
@@ -207,6 +218,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 val o = applyParse(s.id, s.dedupKey, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt, s.bank)
                 counts[o] = (counts[o] ?: 0) + 1
             }
+            resolveStanding()
         } } finally { reparsing = false }
         counts
     }
@@ -236,7 +248,13 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     private fun label(c: CardEntity): String = c.nickname?.takeIf { it.isNotBlank() }
         ?: "${c.bank} " + when (c.cardType) { CardTypes.ACCOUNT -> "account"; CardTypes.DEBIT -> "debit card"; else -> "credit card" } + " ·${c.last4 ?: "????"}"
 
-    private suspend fun applyTransaction(smsId: Long, dedupKey: String, r: ParseResult.Transaction): IngestOutcome {
+    /** Where a standing-instruction message goes when no debit message explains it: found from the balance gap. */
+    private class Placement(val cardKey: String, val last4: String?, val timestamp: Long, val residualMinor: Long, val notify: Boolean)
+
+    private suspend fun applyTransaction(
+        smsId: Long, dedupKey: String, r: ParseResult.Transaction,
+        placement: Placement? = null, pairOnly: Boolean = false,
+    ): IngestOutcome {
         var t = r.txn
         // A reference number read as an amount: never let one message break a Sync or a re-read.
         if (t.amount.abs() >= Decimal("100000000000")) {
@@ -244,8 +262,30 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             return IngestOutcome.FAILED
         }
         // The SMS doesn't name the account (e.g. some bill payments): use your only account at that bank.
-        if (t.cardLast4 == null && t.accountNotNamed) {
+        if (placement != null) {
+            t = t.copy(cardLast4 = placement.last4, cardType = CardType.ACCOUNT, timestamp = placement.timestamp)
+        } else if (t.cardLast4 == null && t.accountNotNamed) {
             dao.cardsOfBank(t.bank, CardTypes.ACCOUNT).singleOrNull()?.let { t = t.copy(cardLast4 = it.last4, cardType = CardType.ACCOUNT) }
+        }
+        val amountForPair = Money.toMinor(t.amount)
+        // "Standing instructions ... processed" does not name the account. It belongs with a debit message for the same
+        // amount if exactly one account has one; otherwise it waits (Needs review) until the balances place it.
+        if (r.ruleId == SI_RULE && placement == null) {
+            val day = 24 * 60 * 60 * 1000L
+            val groupRules = BankRules.banks.flatMap { it.rules }.filter { it.pairGroup == "fab-transfer" && !it.namesDestination }.map { it.id }
+            val keys = dao.pairCandidates(t.bank, amountForPair, groupRules, r.ruleId, t.timestamp - day, t.timestamp + day, t.timestamp)
+                .mapNotNull { it.cardKey }.distinct()
+            if (keys.size == 1) {
+                val c = dao.allCards().firstOrNull { it.cardKey == keys[0] }
+                t = t.copy(cardLast4 = c?.last4, cardType = CardType.ACCOUNT)
+            } else if (pairOnly) {
+                dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Already counted from the debit message")
+                return IngestOutcome.DUPLICATE
+            } else {
+                dao.setSmsResult(smsId, SmsStatus.FAILED, t.bank, r.ruleId, SI_PENDING_NOTE)
+                parkedStanding = true
+                return IngestOutcome.FAILED
+            }
         }
         // A card payment that doesn't say which card ("You have made a credit repayment of AED 80.74"): your only
         // credit card at that bank, if you have exactly one.
@@ -279,7 +319,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         val rule = BankRules.ruleById(r.ruleId)
         val group = rule?.pairGroup
         // A generic "amount debited" SMS (PURCHASE, e.g. an EMI) can be the same money as a transfer SMS.
-        if (rule != null && group != null && key != null && (t.type == TxnType.TRANSFER_OUT || t.type == TxnType.PURCHASE)) {
+        if (rule != null && group != null && key != null && placement == null && (t.type == TxnType.TRANSFER_OUT || t.type == TxnType.PURCHASE)) {
             val hasTo = rule.namesDestination
             val groupRules = BankRules.banks.flatMap { it.rules }
                 .filter { it.pairGroup == group && it.namesDestination != hasTo }
@@ -303,6 +343,16 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${other.id} (merged)")
                 return IngestOutcome.MERGED
             }
+            // The real debit message for a transfer that was placed from its standing-instruction message: it replaces
+            // that row (never both).
+            if (!hasTo && placement == null) {
+                val inferred = dao.findInferred(key, amountMinor, t.timestamp - 3 * window, t.timestamp + 3 * window, t.timestamp)
+                if (inferred != null) {
+                    dao.replaceInferred(inferred.id, smsId, t.timestamp, availMinor)
+                    dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${inferred.id} (replaces the one placed from the standing-instruction message)")
+                    return IngestOutcome.MERGED
+                }
+            }
         }
 
         val override = dao.overrideFor(dedupKey)
@@ -325,12 +375,59 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 categoryId = if (family) CategoryRules.FAMILY else resolveCategory(dedupKey, merchantKey, t.merchant, t.type, amountMinor),
                 categoryUserSet = override != null,
                 checkNote = checkNote,
+                inferred = placement != null,
             )
         dao.insertTxn(entity)
-        if (!reparsing) synchronized(fresh) { fresh += entity }
+        if (!reparsing && (placement == null || placement.notify)) synchronized(fresh) { fresh += entity }
         val note = if (aed == null) "No exchange rate for ${t.currency}: add one in More → Exchange rates" else null
-        dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, note)
+        dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, note ?: if (placement != null) SI_PLACED_NOTE else null)
         return IngestOutcome.TRANSACTION
+    }
+
+    /**
+     * Places every waiting "standing instructions processed" message (see core/StandingGap) from the balances of the
+     * bank's accounts. Safe to run any number of times: it first takes back what it placed before and decides again from
+     * the saved messages, so the result depends only on what is stored. A real debit message that has arrived since
+     * has already replaced its row (that row is no longer marked as placed).
+     */
+    private suspend fun resolveStanding() {
+        val pending = dao.pendingStanding(SI_RULE, SI_PENDING_NOTE_PREFIX)
+        val placedBefore = dao.inferredTxns().mapNotNull { it.smsId }.toSet()
+        val ids = (pending.map { it.id } + placedBefore).distinct()
+        if (ids.isEmpty()) return
+        dao.deleteInferredFor(ids)
+        class Item(val sms: SmsEntity, val parsed: ParseResult.Transaction)
+        val items = ids.mapNotNull { id ->
+            val sms = dao.smsById(id) ?: return@mapNotNull null
+            val p = SmsParser.parse(sms.sender, sms.body, sms.receivedAt) as? ParseResult.Transaction ?: return@mapNotNull null
+            if (p.ruleId != SI_RULE) null else Item(sms, p)
+        }
+        for ((group, list) in items.groupBy { it.parsed.txn.bank to it.parsed.txn.currency }) {
+            val accounts = dao.accountTxns(group.first, group.second).filter { it.cardKey != null }.groupBy { it.cardKey!! }
+                .map { (k, v) -> StandingGap.Account(k, v.map { StandingGap.Entry(it.id, it.timestamp, it.type, it.amountMinor, it.availableLimitMinor) }) }
+            val waiting = list.map { StandingGap.Standing(it.sms.id, it.parsed.txn.timestamp, Money.toMinor(it.parsed.txn.amount)) }
+            for (o in StandingGap.resolve(accounts, waiting)) {
+                val item = list.first { it.sms.id == o.standingId }
+                val sms = item.sms
+                when (o) {
+                    is StandingGap.Outcome.AlreadyCounted -> applyTransaction(sms.id, sms.dedupKey, item.parsed, pairOnly = true)
+                    is StandingGap.Outcome.Place -> {
+                        val last4 = dao.allCards().firstOrNull { it.cardKey == o.accountKey }?.last4
+                        applyTransaction(
+                            sms.id, sms.dedupKey, item.parsed,
+                            placement = Placement(o.accountKey, last4, o.timestamp, o.residualMinor, notify = sms.id !in placedBefore),
+                        )
+                    }
+                    is StandingGap.Outcome.Unplaced -> {
+                        val t = item.parsed.txn
+                        val what = "${t.currency} ${t.amount.toPlainString()} to ${t.merchant}"
+                        val why = if (o.why == StandingGap.Why.AMBIGUOUS) "the messages fit more than one account, so the app can't tell which."
+                        else "no account's balances show it yet. It is placed automatically if a later message settles it."
+                        dao.setSmsResult(sms.id, SmsStatus.FAILED, t.bank, SI_RULE, "$SI_PENDING_NOTE_PREFIX ($what): $why")
+                    }
+                }
+            }
+        }
     }
 
     private suspend fun applyParse(smsId: Long, dedupKey: String, r: ParseResult, receivedAt: Long, bank: String?): IngestOutcome {
@@ -472,6 +569,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     companion object {
         const val FIX_IGNORE = "IGNORE"
         const val FIX_RULE = "fixed-by-you"
+        /** The FAB "standing instructions ... processed" rule (names the payee, not the account). */
+        const val SI_RULE = "fab-standing-instruction"
+        const val SI_PENDING_NOTE_PREFIX = "Money left one of your accounts"
+        const val SI_PENDING_NOTE = "$SI_PENDING_NOTE_PREFIX, but the messages can't tell which one or when yet. It is placed automatically if a later message settles it; otherwise check your statement and use Fix."
+        const val SI_PLACED_NOTE = "Placed from the standing-instruction message: no debit message arrived. Account and time come from your balances."
     }
 
     suspend fun addManual(entry: ManualEntry, timestamp: Long = System.currentTimeMillis()) {
