@@ -50,6 +50,15 @@ class StandingInstructionDbTest {
     private fun txns() = runBlocking { db.dao().txnsListBetween(0L, Long.MAX_VALUE) }.sortedWith(compareBy({ it.timestamp }, { it.id }))
     private fun waiting() = runBlocking { db.dao().failedSmsList() }
 
+    private fun dump(): String = runBlocking {
+        val cards = db.dao().allCards().joinToString { "${it.cardKey}/${it.cardType}" }
+        val t = db.dao().txnsListBetween(0L, Long.MAX_VALUE).joinToString("\n") {
+            "  txn ${it.id} ${it.cardKey} ${it.type} ${it.amountMinor} ts=${it.timestamp} bal=${it.availableLimitMinor} inf=${it.inferred} bank=${it.bank} cur=${it.currency} rule=${it.ruleId}"
+        }
+        val sms = db.dao().failedSmsList().joinToString("\n") { "  FAILED sms ${it.id} rule=${it.ruleId} bank=${it.bank} note=${it.note}" }
+        "cards: $cards\n$t\n$sms"
+    }
+
     private fun snapshot() = txns().map { listOf(it.amountMinor, it.type, it.cardKey, it.inferred, it.merchant, it.availableLimitMinor) }
 
     /** The 31 Oct 3,160 debit, the 1 Nov standing instruction with no debit message, then the 1 Nov 100 debit. */
@@ -69,7 +78,7 @@ class StandingInstructionDbTest {
         the1805Story()
         ingest(debit("100.00", "01/11/2026", "4477.73"), at(1, 11, 2026, 12))
         val t = txns()
-        assertEquals(3, t.size)
+        assertEquals(dump(), 3, t.size)
         val placed = t.single { it.inferred }
         assertEquals(180_500L, placed.amountMinor)
         assertEquals("FAB ·8001", placed.cardKey)
