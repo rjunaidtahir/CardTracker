@@ -33,6 +33,7 @@ class StandingInstructionDbTest {
         db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).allowMainThreadQueries().build()
         repo = Repository(db)
         SmsParser.setHomeCurrency("AED")
+        SmsParser.setMonthFirstDates(false)   // a UAE phone reads 01/11/2026 as 1 November (the emulator is set to a US region)
     }
 
     @After fun tearDown() { db.close() }
