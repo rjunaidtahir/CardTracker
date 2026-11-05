@@ -533,6 +533,32 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         FixResult(outcome, similar)
     }
 
+    /**
+     * You decided: every standing-instruction message still waiting in Needs review (no debit message, no balance
+     * evidence) is money that left [cardKey]. Each is saved as your own reading (a fix), so it is kept across re-reads.
+     * Returns how many were counted.
+     */
+    suspend fun countWaitingStandingOn(cardKey: String): Int = lock.withLock {
+        ensureLearned()
+        val card = dao.allCards().firstOrNull { it.cardKey == cardKey && it.cardType == CardTypes.ACCOUNT } ?: return@withLock 0
+        var n = 0
+        db.withTransaction {
+            for (sms in dao.pendingStanding(SI_RULE, SI_PENDING_NOTE_PREFIX)) {
+                if ((sms.bank ?: sms.sender) != card.bank) continue
+                val p = SmsParser.parse(sms.sender, sms.body, sms.receivedAt) as? ParseResult.Transaction ?: continue
+                val t = p.txn
+                if (t.amount.abs() >= Decimal("100000000000")) continue
+                dao.upsertFixes(listOf(SmsFixEntity(
+                    dedupKey = sms.dedupKey, type = TxnType.TRANSFER_OUT.name, amountMinor = Money.toMinor(t.amount),
+                    currency = t.currency, merchant = t.merchant, cardLast4 = card.last4, cardType = CardType.ACCOUNT.name,
+                    timestamp = t.timestamp,
+                )))
+                if (applyParse(sms.id, sms.dedupKey, ParseResult.NotBank, sms.receivedAt, sms.bank) != IngestOutcome.FAILED) n++
+            }
+        }
+        n
+    }
+
     /** What saving a fix did: its own outcome, and how many other messages in Needs review it also read. */
     data class FixResult(val outcome: IngestOutcome, val similar: Int)
 

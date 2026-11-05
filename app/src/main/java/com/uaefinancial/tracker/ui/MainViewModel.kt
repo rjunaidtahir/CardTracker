@@ -1085,6 +1085,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
+    /** Counts every waiting standing-instruction message as money out from this account (your decision, one tap). */
+    fun countWaitingStandingOn(cardKey: String) = viewModelScope.launch {
+        val n = repo.countWaitingStandingOn(cardKey)
+        message.value = if (n == 0) "Nothing to count." else "Counted $n transfer${if (n == 1) "" else "s"} from this account."
+        refreshWidget()
+    }
+
     fun markNotTransaction(sms: SmsEntity, applyToSimilar: Boolean = false) = viewModelScope.launch {
         val r = repo.saveFix(sms.id, null, 0, "AED", "", null, CardType.CREDIT, sms.receivedAt, applyToSimilar)
         message.value = fixMessage(r, "Marked as not a transaction.")

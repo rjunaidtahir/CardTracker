@@ -392,6 +392,27 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 )
             }
         }
+        val waiting = failed.filter { it.ruleId == com.uaefinancial.tracker.data.Repository.SI_RULE }
+        val accountsByBank = vm.cards.value.filter { it.cardType == com.uaefinancial.tracker.data.CardTypes.ACCOUNT }
+        if (waiting.size > 1) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${waiting.size} transfers waiting for an account", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "These standing-instruction messages don't say which account the money left, and the balances don't settle it. " +
+                            "If you know it was one account, count them all there in one tap. Each becomes a transfer out (not spending).",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                    val banks = waiting.map { it.bank ?: it.sender }.distinct()
+                    accountsByBank.filter { it.bank in banks }.forEach { c ->
+                        val n = waiting.count { (it.bank ?: it.sender) == c.bank }
+                        TextButton(onClick = { vm.countWaitingStandingOn(c.cardKey) }) {
+                            Text("Count all $n on ${c.nickname?.takeIf { it.isNotBlank() } ?: (c.bank + " ·" + (c.last4 ?: "????"))}")
+                        }
+                    }
+                }
+            }
+        }
         if (nudge && failed.isNotEmpty()) {
             item {
                 Panel(Modifier.fillMaxWidth()) {
