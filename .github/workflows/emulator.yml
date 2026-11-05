@@ -37,8 +37,17 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
+            ./gradlew connectedDebugAndroidTest --no-daemon || touch db-tests-failed.flag
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             python3 .github/scripts/smoke.py
+            test ! -f db-tests-failed.flag
+      - name: Keep the database test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-test-report
+          path: app/build/reports/androidTests
+          if-no-files-found: ignore
       - name: Publish screenshots
         if: always()
         run: |
