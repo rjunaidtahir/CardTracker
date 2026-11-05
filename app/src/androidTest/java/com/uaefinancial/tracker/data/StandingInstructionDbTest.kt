@@ -52,11 +52,11 @@ class StandingInstructionDbTest {
 
     private fun dump(): String = runBlocking {
         val cards = db.dao().allCards().joinToString { "${it.cardKey}/${it.cardType}" }
-        val t = db.dao().txnsListBetween(0L, Long.MAX_VALUE).joinToString("\n") {
-            "  txn ${it.id} ${it.cardKey} ${it.type} ${it.amountMinor} ts=${it.timestamp} bal=${it.availableLimitMinor} inf=${it.inferred} bank=${it.bank} cur=${it.currency} rule=${it.ruleId}"
+        val t = db.dao().txnsListBetween(0L, Long.MAX_VALUE).joinToString(" ; ") {
+            "txn${it.id} ${it.cardKey} ${it.type} ${it.amountMinor} ts=${it.timestamp} bal=${it.availableLimitMinor} inf=${it.inferred} bank=${it.bank} cur=${it.currency}"
         }
-        val sms = db.dao().failedSmsList().joinToString("\n") { "  FAILED sms ${it.id} rule=${it.ruleId} bank=${it.bank} note=${it.note}" }
-        "cards: $cards\n$t\n$sms"
+        val sms = db.dao().smsForReparse().joinToString(" ; ") { "sms${it.id} ${it.status} rule=${it.ruleId} bank=${it.bank} note=${it.note?.take(50)}" }
+        "cards: $cards || $t || $sms ||"
     }
 
     private fun snapshot() = txns().map { listOf(it.amountMinor, it.type, it.cardKey, it.inferred, it.merchant, it.availableLimitMinor) }
