@@ -24,6 +24,7 @@ android {
         // back to a fixed placeholder, which is fine since those aren't distributed.
         versionCode = (System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 21)
         versionName = "2.5"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     // Fixed debug key (committed) so every cloud build can install over the previous one.
@@ -146,4 +147,7 @@ dependencies {
 
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
+
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test:runner:1.5.2")
 }

@@ -348,7 +348,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             if (!hasTo && placement == null) {
                 val inferred = dao.findInferred(key, amountMinor, t.timestamp - 3 * window, t.timestamp + 3 * window, t.timestamp)
                 if (inferred != null) {
-                    dao.replaceInferred(inferred.id, smsId, t.timestamp, availMinor)
+                    // Same time as when the two messages pair up the other way round: the standing-instruction message's own
+                    // time (so a re-read of everything ends exactly where the live message did).
+                    val siTime = inferred.smsId?.let { dao.smsById(it) }?.let { m ->
+                        (SmsParser.parse(m.sender, m.body, m.receivedAt) as? ParseResult.Transaction)?.txn?.timestamp
+                    } ?: inferred.timestamp
+                    dao.replaceInferred(inferred.id, smsId, siTime, availMinor)
                     dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${inferred.id} (replaces the one placed from the standing-instruction message)")
                     return IngestOutcome.MERGED
                 }
