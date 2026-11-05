@@ -119,8 +119,9 @@ class StandingInstructionDbTest {
         // and once the late debit is in, a re-read still ends with one row for it
         ingest(debit("1805.00", "01/11/2026", "4578.71"), at(1, 11, 2026, 14))
         val withLate = snapshot()
+        val dumpLive = dump()
         runBlocking { repo.reparseAll() }
-        assertEquals(withLate, snapshot())
+        assertEquals("LIVE: $dumpLive  REREAD: ${dump()}", withLate, snapshot())
         assertEquals(1, txns().count { it.amountMinor == 180_500L })
     }
 
