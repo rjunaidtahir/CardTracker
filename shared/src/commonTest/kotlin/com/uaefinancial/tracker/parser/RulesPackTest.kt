@@ -109,3 +109,23 @@ class RulesPackTest {
         SmsParser.setCustomSenders(emptyMap())
     }
 }
+
+class RulesPackFabStandingTest {
+    @kotlin.test.AfterTest fun reset() { RulesPack.apply(null) }
+
+    @Test fun fabStandingInstructionIsATransferOut() {
+        val json = """{"version":4,"minEngine":5,"banks":[],"rules":[{"bank":"FAB","id":"fab-standing-instruction-transfer","kind":"TRANSACTION","type":"TRANSFER_OUT","cardType":"ACCOUNT","pattern":"Domestic Fund transfer standing\\s+\\S+\\s+of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+.+?\\s*{TO}\\s+has been processed on\\s+{DATETIME}"}]}"""
+        val out = RulesPack.parse(json)
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        for (msg in listOf(
+            "Dear Customer, your Domestic Fund transfer standing instruction of AED 1,200.00 to Ahmed Ali 4521 has been processed on 05/11/2026.",
+            "Dear Customer, your Domestic Fund transfer standing order of AED 300.00 to savings account 12345678 has been processed on 05/11/2026.",
+        )) {
+            val r = SmsParser.parseAsBank("FAB", msg, 0L)
+            assertIs<ParseResult.Transaction>(r, msg)
+            assertEquals(TxnType.TRANSFER_OUT, r.txn.type, msg)
+            assertEquals("pack:fab-standing-instruction-transfer", r.ruleId)
+        }
+    }
+}

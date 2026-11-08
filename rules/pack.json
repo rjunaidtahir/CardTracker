@@ -1,8 +1,17 @@
 {
-  "version": 3,
+  "version": 4,
   "minEngine": 5,
   "banks": [],
-  "rules": [],
+  "rules": [
+    {
+      "bank": "FAB",
+      "id": "fab-standing-instruction-transfer",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Domestic Fund transfer standing\\s+\\S+\\s+of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+.+?\\s*{TO}\\s+has been processed on\\s+{DATETIME}"
+    }
+  ],
   "ignore": [
     {
       "label": "Declined: insufficient balance",
