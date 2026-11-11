@@ -443,6 +443,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     },
                     summary = summaries.firstOrNull { it.card.cardKey == route.cardKey },
                     periodLabel = period.label(),
+                    homePeriod = period,
+                    figuresFor = { p -> vm.cardFigures(route.cardKey, p) },
                     onSetType = { vm.setCardType(route.cardKey, it) },
                     onToggleCounted = { vm.setCardCounted(route.cardKey, it) },
                     onShowTransactions = { vm.selectCategory(null); vm.selectCard(route.cardKey); nav.selectTab(Tab.ACTIVITY) },

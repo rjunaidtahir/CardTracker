@@ -79,6 +79,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -957,6 +959,8 @@ fun CardDetailScreen(
     plans: List<InstalmentPlanEntity> = emptyList(),
     recent: List<TransactionEntity> = emptyList(),
     recentRow: @Composable (TransactionEntity) -> Unit = {},
+    figuresFor: ((Period) -> kotlinx.coroutines.flow.Flow<CardFigures>)? = null,
+    homePeriod: Period? = null,
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -980,7 +984,46 @@ fun CardDetailScreen(
     var reminders by rememberSaveable(c.cardKey) { mutableStateOf(c.remindersEnabled) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { CardTile(summary, periodLabel, onClick = null, onToggle = null) }
+        // The card's own period: Home's period by default, or any of these (and, for credit cards, since the last statement).
+        item {
+            val today = remember { LocalDate.now() }
+            val options = remember(c.cardKey, summary.sinceStatementStart, homePeriod) {
+                buildList {
+                    if (homePeriod != null) add("Home period" to homePeriod)
+                    add("This month" to Period.month(YearMonth.from(today)))
+                    add("Last month" to Period.month(YearMonth.from(today).minusMonths(1)))
+                    add("3M" to Period.of(PeriodKind.M3, today))
+                    add("6M" to Period.of(PeriodKind.M6, today))
+                    add("12M" to Period.of(PeriodKind.M12, today))
+                    add("All" to Period.all())
+                    summary.sinceStatementStart?.let { add("Since statement" to Period.custom(it, today)) }
+                }
+            }
+            var picked by rememberSaveable(c.cardKey) { mutableStateOf(0) }
+            val sel = picked.coerceIn(0, options.lastIndex)
+            val chosen = options[sel].second
+            val useHome = homePeriod != null && sel == 0
+            val figures by remember(c.cardKey, sel, options.size) {
+                if (figuresFor != null && !useHome) figuresFor(chosen) else kotlinx.coroutines.flow.flowOf<CardFigures?>(null)
+            }.collectAsStateWithLifecycle(initialValue = null)
+            val shown = figures?.let {
+                summary.copy(
+                    monthSpendAedMinor = it.spendMinor, monthTxnCount = it.txnCount, monthPaidInMinor = it.paidInMinor,
+                    monthInMinor = it.inMinor, monthOutMinor = it.outMinor,
+                )
+            } ?: summary
+            val label = if (shown === summary) periodLabel else if (options[sel].first == "Since statement") "since ${chosen.start?.format(dateFmt)}" else chosen.label()
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CardTile(shown, label, onClick = null, onToggle = null)
+                if (figuresFor != null) {
+                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        options.forEachIndexed { i, (name, _) ->
+                            FilterChip(selected = i == sel, onClick = { picked = i }, label = { Text(name, maxLines = 1) })
+                        }
+                    }
+                }
+            }
+        }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onShowTransactions, shape = RoundedCornerShape(50)) { Text("Transactions", maxLines = 1) }

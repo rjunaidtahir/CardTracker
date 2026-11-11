@@ -94,6 +94,9 @@ data class CardSummary(
     val sinceStatementCount: Int = 0,
 )
 
+/** Figures of one card over a chosen period (see [MainViewModel.cardFigures]). */
+data class CardFigures(val spendMinor: Long, val txnCount: Int, val paidInMinor: Long, val inMinor: Long, val outMinor: Long)
+
 data class OverviewState(
     val period: Period,
     val spentMinor: Long = 0,
@@ -786,6 +789,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun dismissCheck(id: Long) {
         prefs.dismissedChecks = prefs.dismissedChecks + id.toString()
         dismissedChecks.value = prefs.dismissedChecks
+    }
+
+    /** One card's figures over any period (the card page's own period picker; independent of Home's period). */
+    fun cardFigures(cardKey: String, p: Period): kotlinx.coroutines.flow.Flow<CardFigures> {
+        val (from, to) = range(p)
+        return dao.txns(from, to, cardKey).map { t ->
+            CardFigures(
+                spendMinor = spendingTotal(t, emptySet()),
+                txnCount = t.size,
+                paidInMinor = CardDues.paymentsByCard(t, zone)[cardKey].orEmpty().sumOf { it.amountMinor },
+                inMinor = t.filter { it.type == TxnType.TRANSFER_IN.name || it.type == TxnType.REFUND.name }.sumOf { it.amountAedMinor ?: 0L },
+                outMinor = t.filter { it.type == TxnType.TRANSFER_OUT.name || it.type == TxnType.PURCHASE.name }.sumOf { it.amountAedMinor ?: 0L },
+            )
+        }
     }
 
     /** The ten newest transactions of one card, for its page. */
