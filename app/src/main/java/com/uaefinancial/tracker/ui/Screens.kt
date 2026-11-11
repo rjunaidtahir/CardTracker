@@ -92,6 +92,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.uaefinancial.tracker.data.CardEntity
 import com.uaefinancial.tracker.data.InstalmentPlanEntity
+import com.uaefinancial.tracker.data.StatementEntity
 import com.uaefinancial.tracker.data.CategoryEntity
 import com.uaefinancial.tracker.data.CardTypes
 import com.uaefinancial.tracker.data.SmsEntity
@@ -961,6 +962,8 @@ fun CardDetailScreen(
     recentRow: @Composable (TransactionEntity) -> Unit = {},
     figuresFor: ((Period) -> kotlinx.coroutines.flow.Flow<CardFigures>)? = null,
     homePeriod: Period? = null,
+    statements: List<StatementEntity> = emptyList(),
+    onShowStatementPeriod: (LocalDate, LocalDate) -> Unit = { _, _ -> },
 ) {
     if (summary == null) {
         Text("Card not found.", Modifier.padding(24.dp))
@@ -1088,6 +1091,32 @@ fun CardDetailScreen(
                         style = MaterialTheme.typography.bodySmall, color = Ink.muted,
                     )
                     TextButton(onClick = { onShowSinceStatement(start) }) { Text("Show these transactions") }
+                }
+            }
+        }
+        // --- the statements read so far, each with the period it covers
+        if (statements.isNotEmpty()) item {
+            Panel(Modifier.fillMaxWidth()) {
+                Text("Statements", style = MaterialTheme.typography.titleMedium)
+                Text("Each statement and the period it covers. Tap Show to see that period's transactions.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                val dated = statements.map { st ->
+                    st to (st.statementDateEpochDay?.let { LocalDate.ofEpochDay(it) }
+                        ?: Instant.ofEpochMilli(st.receivedAt).atZone(ZoneId.systemDefault()).toLocalDate())
+                }
+                dated.forEachIndexed { i, (st, end) ->
+                    // From the day after the previous statement (or about a month before this one when it's the oldest read).
+                    val start = dated.getOrNull(i + 1)?.second?.plusDays(1) ?: end.minusMonths(1).plusDays(1)
+                    Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${start.format(shortDate)} – ${end.format(dateFmt)}", style = MaterialTheme.typography.bodyMedium, maxLines = 1)
+                            Text(
+                                "Total ${fmtMoney(st.balanceMinor)}" + (st.minimumDueMinor?.let { " · min ${fmtMoney(it)}" } ?: "") +
+                                    " · due ${LocalDate.ofEpochDay(st.dueDateEpochDay).format(shortDate)}",
+                                style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 2,
+                            )
+                        }
+                        TextButton(onClick = { onShowStatementPeriod(start, end) }) { Text("Show") }
+                    }
                 }
             }
         }

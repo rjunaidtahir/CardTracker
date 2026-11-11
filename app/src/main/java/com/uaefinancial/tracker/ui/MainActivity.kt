@@ -433,6 +433,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 val recentFlow = remember(route.cardKey) { vm.recentFor(route.cardKey) }
                 val recent by recentFlow.collectAsStateWithLifecycle(initialValue = emptyList())
                 val checks by vm.checkFlags.collectAsStateWithLifecycle()
+                val statementList by remember(route.cardKey) { vm.statementsFor(route.cardKey) }.collectAsStateWithLifecycle(initialValue = emptyList())
                 val catNames = categories.associate { it.id to it.name }
                 val cardNames = cards.associate { it.cardKey to com.uaefinancial.tracker.ui.CardArts.displayName(it) }
                 CardDetailScreen(
@@ -444,6 +445,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     summary = summaries.firstOrNull { it.card.cardKey == route.cardKey },
                     periodLabel = period.label(),
                     homePeriod = period,
+                    statements = statementList,
+                    onShowStatementPeriod = { a, b -> vm.showStatementPeriod(route.cardKey, a, b); nav.selectTab(Tab.ACTIVITY) },
                     figuresFor = { p -> vm.cardFigures(route.cardKey, p) },
                     onSetType = { vm.setCardType(route.cardKey, it) },
                     onToggleCounted = { vm.setCardCounted(route.cardKey, it) },

@@ -791,6 +791,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         dismissedChecks.value = prefs.dismissedChecks
     }
 
+    /** One card's saved statements, newest first (the card page's Statements list). */
+    fun statementsFor(cardKey: String): kotlinx.coroutines.flow.Flow<List<StatementEntity>> =
+        dao.statements().map { all ->
+            all.filter { it.cardKey == cardKey }
+                .sortedByDescending { it.statementDateEpochDay ?: Instant.ofEpochMilli(it.receivedAt).atZone(zone).toLocalDate().toEpochDay() }
+        }
+
+    /** Shows the Activity list for one card over a statement's period. */
+    fun showStatementPeriod(cardKey: String, start: LocalDate, end: LocalDate) {
+        cardFilter.value = cardKey
+        categoryFilter.value = null
+        period.value = Period.custom(start, end)
+    }
+
     /** One card's figures over any period (the card page's own period picker; independent of Home's period). */
     fun cardFigures(cardKey: String, p: Period): kotlinx.coroutines.flow.Flow<CardFigures> {
         val (from, to) = range(p)
