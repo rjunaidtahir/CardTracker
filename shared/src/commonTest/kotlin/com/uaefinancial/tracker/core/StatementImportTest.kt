@@ -63,6 +63,31 @@ class StatementImportTest {
         assertEquals(listOf(3L), r.extra.map { it.id })
     }
 
+    @Test fun app_only_list_stays_inside_the_statement_period_even_with_an_old_line_on_it() {
+        // Statement dated 10 Nov covers 11 Oct - 10 Nov, but an instalment-plan line on it is dated 15 Jun.
+        val stmt = CalendarDate.of(2026, 11, 10)
+        val lines = listOf(
+            StatementLine(CalendarDate.of(2026, 6, 15), "INSTALLMENT PLAN EMI", 104158, false, ""),
+            StatementLine(CalendarDate.of(2026, 10, 20), "LULU", 10745, false, ""),
+        )
+        val app = listOf(
+            AppTxnRef(1, CalendarDate.of(2026, 10, 20), 10745, false, false, "lulu"),            // matched
+            AppTxnRef(2, CalendarDate.of(2026, 10, 25), 4725, false, false, "in period, not on statement"),
+            AppTxnRef(3, CalendarDate.of(2026, 10, 3), 3240, false, false, "previous statement"),
+            AppTxnRef(4, CalendarDate.of(2026, 9, 18), 2500, false, false, "two statements ago"),
+            AppTxnRef(5, CalendarDate.of(2026, 11, 15), 900, false, false, "after the statement date"),
+        )
+        val period = StatementImport.periodOf(lines, StatementSummary(statementDate = stmt), CalendarDate.of(2026, 10, 10))!!
+        assertEquals(CalendarDate.of(2026, 10, 11), period.first)
+        assertEquals(stmt, period.second)
+        val r = StatementImport.reconcile(lines, app, periodFrom = period.first, periodTo = period.second)
+        assertEquals(listOf(2L), r.extra.map { it.id })
+        assertEquals(listOf(1L), r.matched.map { it.second.id })
+        // With no previous statement and no printed period, the lines within 45 days of the end decide, not the June one.
+        val p2 = StatementImport.periodOf(lines, StatementSummary(statementDate = stmt), null)!!
+        assertEquals(CalendarDate.of(2026, 10, 20), p2.first)
+    }
+
     @Test fun summary_figures() {
         val text = """
             Emirates Islamic Credit Card Statement

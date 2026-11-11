@@ -108,14 +108,34 @@ object StatementImport {
         StatementReader.analyze(StatementReader.linesFromText(text), year).summary
 
     /**
+     * The period a statement covers: up to its statement date, from the day after the previous statement (or the period
+     * printed on it). Without those, the lines within 45 days before the end, so a stray old line doesn't count.
+     */
+    fun periodOf(lines: List<StatementLine>, summary: StatementSummary?, previousStatementDate: CalendarDate?): Pair<CalendarDate, CalendarDate>? {
+        if (lines.isEmpty()) return null
+        val to = summary?.statementDate ?: summary?.periodTo ?: lines.maxOf { it.date }
+        val from = summary?.periodFrom ?: previousStatementDate?.takeIf { it.isBefore(to) }?.plusDays(1)
+            ?: lines.map { it.date }.filter { !it.isBefore(to.minusDays(45)) && !it.isAfter(to) }.minOrNull()
+            ?: lines.minOf { it.date }
+        return from to to
+    }
+
+    /**
      * Matches each statement line to one app transaction: same direction, same amount (within 3% when the
      * app's AED figure is an exchange-rate estimate), within [days] days; nearest date wins.
      */
-    fun reconcile(lines: List<StatementLine>, app: List<AppTxnRef>, days: Long = 3): Reconciliation {
+    fun reconcile(
+        lines: List<StatementLine>, app: List<AppTxnRef>, days: Long = 3,
+        periodFrom: CalendarDate? = null, periodTo: CalendarDate? = null,
+    ): Reconciliation {
         if (lines.isEmpty()) return Reconciliation(emptyList(), emptyList(), emptyList(), null, null)
-        val from = lines.minOf { it.date }
-        val to = lines.maxOf { it.date }
-        val pool = app.filter { !it.date.isBefore(from.minusDays(days)) && !it.date.isAfter(to.plusDays(days)) }.toMutableList()
+        val linesFrom = lines.minOf { it.date }
+        val linesTo = lines.maxOf { it.date }
+        // What counts as "in the app but not on the statement" is the statement's own period, not the span of its lines:
+        // one old line (an instalment posted months ago) must not stretch it back to earlier statements.
+        val from = periodFrom ?: linesFrom
+        val to = periodTo ?: linesTo
+        val pool = app.filter { !it.date.isBefore(linesFrom.minusDays(days)) && !it.date.isAfter(linesTo.plusDays(days)) }.toMutableList()
         val matched = mutableListOf<Pair<StatementLine, AppTxnRef>>()
         val missing = mutableListOf<StatementLine>()
         for (l in lines.sortedBy { it.date }) {

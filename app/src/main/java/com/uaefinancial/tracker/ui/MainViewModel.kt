@@ -563,8 +563,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     t.amountAedMinor ?: t.amountMinor, credit, t.fxEstimated, t.merchant,
                 )
             }
+        // Only this statement's own period counts for "in the app, not on the statement".
+        val previous = dao.statements().first().filter { it.cardKey == key }
+            .mapNotNull { it.statementDateEpochDay?.let { d -> com.uaefinancial.tracker.core.CalendarDate.ofEpochDay(d) } }
+        val stDate = cur.summary?.statementDate
+        val period = com.uaefinancial.tracker.core.StatementImport.periodOf(
+            lines, cur.summary, previous.filter { stDate == null || it.isBefore(stDate) }.maxOrNull(),
+        )
         statementCheck.value = statementCheck.value?.copy(
-            result = com.uaefinancial.tracker.core.StatementImport.reconcile(lines, appTxns),
+            result = com.uaefinancial.tracker.core.StatementImport.reconcile(lines, appTxns, periodFrom = period?.first, periodTo = period?.second),
             otherCards = others,
         )
     }
