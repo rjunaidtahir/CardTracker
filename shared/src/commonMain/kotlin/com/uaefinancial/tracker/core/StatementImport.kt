@@ -135,7 +135,9 @@ object StatementImport {
         // one old line (an instalment posted months ago) must not stretch it back to earlier statements.
         val from = periodFrom ?: linesFrom
         val to = periodTo ?: linesTo
-        val pool = app.filter { !it.date.isBefore(linesFrom.minusDays(days)) && !it.date.isAfter(linesTo.plusDays(days)) }.toMutableList()
+        val poolFrom = if (from.isBefore(linesFrom)) from else linesFrom
+        val poolTo = if (to.isAfter(linesTo)) to else linesTo
+        val pool = app.filter { !it.date.isBefore(poolFrom.minusDays(days)) && !it.date.isAfter(poolTo.plusDays(days)) }.toMutableList()
         val matched = mutableListOf<Pair<StatementLine, AppTxnRef>>()
         val missing = mutableListOf<StatementLine>()
         for (l in lines.sortedBy { it.date }) {
