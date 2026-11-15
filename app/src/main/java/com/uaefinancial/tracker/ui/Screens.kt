@@ -607,7 +607,8 @@ fun CardsScreen(
         if (arranging) {
             item { ArrangeCards(summaries.map { it.card }, onReorder) }
         } else {
-            items(summaries, key = { it.card.cardKey }) { s ->
+            // Cards that count in spending come first; each group keeps the order you arranged (the sort is stable).
+            items(summaries.sortedByDescending { it.card.countInSpending }, key = { it.card.cardKey }) { s ->
                 CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
             }
         }
