@@ -60,6 +60,14 @@ object BankRules {
                     cardType = CardType.ACCOUNT,
                     pattern = """Debit Card Purchase\s*/?\s*Debit\s+Account\s+{CARD}\s+Card\s+[X*\d]+\s+{CUR}\s*{AMOUNT}\s+{MERCHANT}\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
                 ),
+                // Real sample (public set, 7 Mar 2026): Debit Card Purchase   Card XXXX5207 AED 100.00 SmartDXBGov-PRKN      DUBAI           AE
+                // 07/03/26 19:51  Balance AED 85019.44   (no "Debit Account" line: the account is not named)
+                Rule(
+                    id = "fab-debit-card-purchase-card-only",
+                    kind = RuleKind.TRANSACTION,
+                    cardType = CardType.DEBIT,
+                    pattern = """Debit Card Purchase\s*/?\s*Card\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+{MERCHANT}\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
                 Rule(
                     id = "fab-purchase",
                     kind = RuleKind.TRANSACTION,
