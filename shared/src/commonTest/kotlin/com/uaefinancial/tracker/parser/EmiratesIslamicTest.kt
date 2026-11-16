@@ -25,11 +25,39 @@ class EmiratesIslamicTest {
         }
     }
 
-    @Test fun card_purchase_multiline() {
-        val t = txn("EI SMS", "Credit Card Purchase\nCard Ending: 1534\nAt: carrefouruae.com, Dubai\nAmount: AED 172.94\nDate: 01/09/2026, 20:03\nAvailable Limit: AED -1,270.88")
+    // Real shapes from users' reports (Fils shape reports); words the reports mask are filled with the likely wording.
+    @Test fun purchase_one_line_5_digit_card() {
+        val t = txn("EISMS", "Purchase for CARREFOUR DUBAI of AED 172.94 has been made using Credit Card 71534.Avl.limit AED 4,120.50.")
         assertEquals("Emirates Islamic", t.bank)
         assertEquals(TxnType.PURCHASE, t.type)
         assertEquals(CardType.CREDIT, t.cardType)
+        assertEquals("1534", t.cardLast4)
+        assertEquals(Decimal("172.94"), t.amount)
+        assertEquals("CARREFOUR DUBAI", t.merchant)
+        assertEquals(Decimal("4120.50"), t.availableLimit)
+    }
+
+    @Test fun payment_for_merchant_ending_with() {
+        val t = txn("EISMS", "Payment for SPINNEYS LLC of AED 88.10 has been made using Credit Card ending with 1534. Available limit AED 3,900.00.")
+        assertEquals(TxnType.PURCHASE, t.type)
+        assertEquals("1534", t.cardLast4)
+        assertEquals(Decimal("88.10"), t.amount)
+        assertEquals("SPINNEYS LLC", t.merchant)
+        assertEquals(Decimal("3900.00"), t.availableLimit)
+    }
+
+    @Test fun merchant_containing_of_and_a_url() {
+        val a = txn("EISMS", "Payment for BANK OF SHARJAH SHOP of AED 20.00 has been made using Credit Card ending with 1534. Available limit AED 100.00.")
+        assertEquals("BANK OF SHARJAH SHOP", a.merchant)
+        val b = txn("EISMS", "Purchase for WWW.ADNOCDISTRIBUTION.AE of AED 120.00 has been made using Credit Card 71534.Avl.limit AED 3,759.00.")
+        assertEquals("WWW.ADNOCDISTRIBUTION.AE", b.merchant)
+        assertEquals(Decimal("120.00"), b.amount)
+    }
+
+    @Test fun multiline_card_purchase_from_public_samples() {
+        val t = txn("EI SMS", "Credit Card Purchase\nCard Ending: 1534\nAt: carrefouruae.com, Dubai\nAmount: AED 172.94\nDate: 01/09/2026, 20:03\nAvailable Limit: AED -1,270.88")
+        assertEquals("Emirates Islamic", t.bank)
+        assertEquals(TxnType.PURCHASE, t.type)
         assertEquals("1534", t.cardLast4)
         assertEquals(Decimal("172.94"), t.amount)
         assertTrue(t.merchant.contains("carrefouruae", ignoreCase = true), "merchant was '${t.merchant}'")
