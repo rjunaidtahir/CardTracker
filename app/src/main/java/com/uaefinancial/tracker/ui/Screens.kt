@@ -608,7 +608,15 @@ fun CardsScreen(
             item { ArrangeCards(summaries.map { it.card }, onReorder) }
         } else {
             // Cards that count in spending come first; each group keeps the order you arranged (the sort is stable).
-            items(summaries.sortedByDescending { it.card.countInSpending }, key = { it.card.cardKey }) { s ->
+            // Cards first, then bank accounts, each under its own heading (only when you have both).
+            val (accounts, plainCards) = summaries.partition { it.card.cardType == com.uaefinancial.tracker.data.CardTypes.ACCOUNT }
+            val showHeadings = accounts.isNotEmpty() && plainCards.isNotEmpty()
+            if (showHeadings) item(key = "heading-cards") { Text("Cards", style = MaterialTheme.typography.titleSmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)) }
+            items(plainCards.sortedByDescending { it.card.countInSpending }, key = { it.card.cardKey }) { s ->
+                CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
+            }
+            if (showHeadings) item(key = "heading-accounts") { Text("Accounts", style = MaterialTheme.typography.titleSmall, color = Ink.muted, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)) }
+            items(accounts.sortedByDescending { it.card.countInSpending }, key = { it.card.cardKey }) { s ->
                 CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
             }
         }
