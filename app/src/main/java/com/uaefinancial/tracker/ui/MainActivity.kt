@@ -461,6 +461,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                     },
                     onDelete = { vm.deleteCard(route.cardKey) { nav.back() } },
+                    mergeTargets = cards.filter { it.cardKey != route.cardKey && !it.archived },
+                    onMerge = { to -> vm.mergeCard(route.cardKey, to) { nav.back() } },
                 )
                 }
                 Route.Rates -> RatesScreen(rates, inHome = { vm.rateInHome(it) }, onSave = { c, r -> vm.setRate(c, r) })

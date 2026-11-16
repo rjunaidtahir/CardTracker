@@ -1178,6 +1178,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
+    /** "These two are one card": moves everything from [from] onto [to] and goes back. */
+    fun mergeCard(from: String, to: String, onDone: () -> Unit) = viewModelScope.launch {
+        if (repo.mergeCards(from, to)) { message.value = "Cards merged"; onDone() }
+        else message.value = "Couldn't merge these cards."
+    }
+
     /** Returns via [message]; navigates back only on success (caller checks [cards]). */
     fun deleteCard(key: String, onDone: () -> Unit) = viewModelScope.launch {
         if (repo.deleteEmptyCard(key)) { message.value = "Card removed"; onDone() }

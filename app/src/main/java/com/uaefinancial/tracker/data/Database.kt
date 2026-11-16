@@ -197,6 +197,13 @@ object CardTypes {
     const val ACCOUNT = "ACCOUNT"
 }
 
+/** "These two are one card": messages that would create [fromKey] go to [toKey] (set when you merge two cards). */
+@Entity(tableName = "card_aliases")
+data class CardAliasEntity(
+    @PrimaryKey val fromKey: String,
+    val toKey: String,
+)
+
 @Entity(tableName = "cards")
 data class CardEntity(
     @PrimaryKey val cardKey: String,
@@ -676,6 +683,31 @@ interface AppDao {
 
     @Query("DELETE FROM cards WHERE cardKey = :key")
     suspend fun deleteCard(key: String)
+
+    // ---- merging two cards that are really one
+    @Query("SELECT * FROM card_aliases")
+    suspend fun cardAliases(): List<CardAliasEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCardAlias(alias: CardAliasEntity)
+
+    @Query("UPDATE card_aliases SET toKey = :to WHERE toKey = :from")
+    suspend fun repointAliases(from: String, to: String)
+
+    @Query("UPDATE transactions SET cardKey = :to WHERE cardKey = :from")
+    suspend fun moveTransactions(from: String, to: String)
+
+    @Query("UPDATE transactions SET counterpartyKey = :to WHERE counterpartyKey = :from")
+    suspend fun moveCounterparty(from: String, to: String)
+
+    @Query("UPDATE statements SET cardKey = :to WHERE cardKey = :from")
+    suspend fun moveStatements(from: String, to: String)
+
+    @Query("UPDATE instalment_plans SET cardKey = :to WHERE cardKey = :from")
+    suspend fun movePlans(from: String, to: String)
+
+    @Query("UPDATE fixed_payments SET cardKey = :to WHERE cardKey = :from")
+    suspend fun moveFixedPayments(from: String, to: String)
 }
 
 data class StatusCount(val status: String, val n: Int)
@@ -684,9 +716,9 @@ data class StatusCount(val status: String, val n: Int)
     entities = [
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
-        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class,
+        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

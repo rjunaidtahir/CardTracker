@@ -957,6 +957,8 @@ fun CardDetailScreen(
     onShowSinceStatement: (LocalDate) -> Unit = {},
     onSetFamily: (Boolean) -> Unit = {},
     onDelete: () -> Unit = {},
+    mergeTargets: List<CardEntity> = emptyList(),
+    onMerge: (String) -> Unit = {},
     plans: List<InstalmentPlanEntity> = emptyList(),
     recent: List<TransactionEntity> = emptyList(),
     recentRow: @Composable (TransactionEntity) -> Unit = {},
@@ -1283,6 +1285,38 @@ fun CardDetailScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = { onSaveProfile(nickname, limit, statementDay, dueDay, reminders) }, shape = RoundedCornerShape(50)) { Text("Save") }
+            }
+        }
+        if (mergeTargets.isNotEmpty()) {
+            item {
+                var pick by remember { mutableStateOf(false) }
+                var chosen by remember { mutableStateOf<CardEntity?>(null) }
+                TextButton(onClick = { pick = true }) { Text("This is the same card as another one…") }
+                if (pick) {
+                    AlertDialog(
+                        onDismissRequest = { pick = false },
+                        title = { Text("Merge into which card?") },
+                        text = {
+                            Column {
+                                Text("Everything on this card moves to the one you pick, and later messages go there too.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                                mergeTargets.forEach { c ->
+                                    TextButton(onClick = { chosen = c; pick = false }) { Text(CardArts.displayName(c)) }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = { TextButton(onClick = { pick = false }) { Text("Cancel") } },
+                    )
+                }
+                chosen?.let { c ->
+                    AlertDialog(
+                        onDismissRequest = { chosen = null },
+                        title = { Text("Merge into ${CardArts.displayName(c)}?") },
+                        text = { Text("All transactions, statements and plans on this card move there, and this card is removed. This can't be undone.") },
+                        confirmButton = { TextButton(onClick = { chosen = null; onMerge(c.cardKey) }) { Text("Merge", color = Ink.red) } },
+                        dismissButton = { TextButton(onClick = { chosen = null }) { Text("Cancel") } },
+                    )
+                }
             }
         }
         if (summary.monthTxnCount == 0 && summary.latestStatement == null && summary.balanceHistory.isEmpty()) {
