@@ -716,6 +716,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val rates: StateFlow<List<FxRateEntity>> =
         dao.rates().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Re-reads that would have changed a reading you already have; waiting for your decision. */
+    val heldReadings: StateFlow<List<com.uaefinancial.tracker.data.SmsReadingEntity>> =
+        repo.heldReadings().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun keepReading(smsId: Long) = viewModelScope.launch {
+        repo.keepCurrentReading(smsId)
+        message.value = "Kept your reading. Re-reads won't change it."
+    }
+
+    fun useNewReading(smsId: Long) = viewModelScope.launch {
+        repo.useNewReading(smsId)
+        runCatching { repo.autoFillCardDays() }
+        message.value = "Updated to the new reading."
+        refreshWidget()
+    }
+
     val failedSms: StateFlow<List<SmsEntity>> =
         dao.failedSms().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

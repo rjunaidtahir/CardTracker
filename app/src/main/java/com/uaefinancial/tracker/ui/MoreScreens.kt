@@ -392,6 +392,30 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 )
             }
         }
+        val held by vm.heldReadings.collectAsStateWithLifecycle()
+        if (held.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${held.size} message${if (held.size == 1) "" else "s"} would be read differently", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "An update reads these differently from before. Nothing was changed: your current reading is still in use. " +
+                            "Keep yours, or switch to the new reading.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            items(held.size) { i ->
+                val h = held[i]
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("Now: ${h.keptSummary}", style = MaterialTheme.typography.bodyMedium)
+                    Text("New reading: ${h.newSummary}", style = MaterialTheme.typography.bodyMedium, color = Ink.muted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        TextButton(onClick = { vm.keepReading(h.smsId) }) { Text("Keep mine") }
+                        TextButton(onClick = { vm.useNewReading(h.smsId) }) { Text("Use new") }
+                    }
+                }
+            }
+        }
         val waiting = failed.filter { it.ruleId == com.uaefinancial.tracker.data.Repository.SI_RULE }
         val accountsByBank = vm.cards.value.filter { it.cardType == com.uaefinancial.tracker.data.CardTypes.ACCOUNT }
         if (waiting.size > 1) {
