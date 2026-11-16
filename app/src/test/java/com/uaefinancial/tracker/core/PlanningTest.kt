@@ -103,3 +103,13 @@ class PlanningTest {
         assertEquals(6000L, SinceStatement.spend(txns, start))
     }
 }
+
+class StaleStatementTest {
+    private fun status(daysLeft: Long) = StatementStatus(DueState.OVERDUE, 0, 10_000, daysLeft)
+
+    @Test fun statements_overdue_for_over_45_days_are_stale() {
+        assertFalse(status(-45).isStale)
+        assertTrue(status(-46).isStale)
+        assertFalse(status(10).isStale)
+    }
+}

@@ -39,7 +39,15 @@ data class StatementStatus(
     val remainingMinor: Long,
     /** Days until the due date (negative = passed). */
     val daysLeft: Long,
-)
+) {
+    /**
+     * A statement whose due date passed over [STALE_AFTER_DAYS] days ago. Whether it was paid can no longer be known
+     * (the payment SMS may never have been read), so it stops nagging in "Payments due" and reminders.
+     */
+    val isStale: Boolean get() = daysLeft < -STALE_AFTER_DAYS
+
+    companion object { const val STALE_AFTER_DAYS = 45L }
+}
 
 object StatementStatusCalc {
     /**

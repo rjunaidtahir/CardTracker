@@ -571,6 +571,21 @@ object BankRules {
                     kind = RuleKind.TRANSACTION,
                     pattern = """{CARDTYPE} Card ending {CARD} was used for a transaction of {CUR}\s*{AMOUNT} at {MERCHANT} on {DATETIME}\.?(?:\s+Available (?:limit|balance):?\s*{ANYCUR}\s*{AVAIL})?""",
                 ),
+                // Reported by many users (Fils shape reports, Nov 2026). The card name varies: "your card ending", "VISA Debit Card Card ending",
+                // "Cashback Credit Card Card ending", "Mashreq Cashback Card ending", "your Debit Card ending". The limit part varies too:
+                // "Avl.Limit is AED 1.00" / "Avl.Limit: AED 1.00" / "Available Balance is AED 1.00" / "Avl. Bal is AED 1.00" / "Avl. limit is AED 1.00".
+                // Thank you for using your card ending 1234 for AED 45.50 at CARREFOUR LLC on 15-NOV-2026 12:30 PM. Avl.Limit is AED 5,000.00.
+                Rule(
+                    id = "mashreq-thank-you-debit",
+                    kind = RuleKind.TRANSACTION,
+                    cardType = CardType.DEBIT,
+                    pattern = """Thank you for\s+\w+\s+(?:your\s+)?(?:[^.]{0,40}?\s)?Debit Card(?: Card)? ending\s+{CARD}\s+for\s+{CUR}\s*{AMOUNT}\s+at\s+{MERCHANT}\s+on\s+{DATETIME}\.?(?:\s+(?:Avl\.?\s*(?:Limit|Bal)|Available (?:Limit|Balance))\s*(?:is|:)?\s*{ANYCUR}\s*{AVAIL})?""",
+                ),
+                Rule(
+                    id = "mashreq-thank-you-purchase",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """Thank you for\s+\w+\s+(?:your\s+)?(?:[^.]{0,40}?\s)?Card ending\s+{CARD}\s+for\s+{CUR}\s*{AMOUNT}\s+at\s+{MERCHANT}\s+on\s+{DATETIME}\.?(?:\s+(?:Avl\.?\s*(?:Limit|Bal)|Available (?:Limit|Balance))\s*(?:is|:)?\s*{ANYCUR}\s*{AVAIL})?""",
+                ),
                 // Your Card ending with 0933 was used for cash withdrawal of AED 2,500.00 at MASHREQ ATM on 02-MAY-2026 07:14 PM. Avl bal AED ...
                 Rule(
                     id = "mashreq-atm",
@@ -595,7 +610,35 @@ object BankRules {
         // real samples, add Rules here exactly like the banks above and put the samples in ParserTest.kt.
         // Sender IDs you find on your phone can also be added in the app (More → Bank senders).
         Bank("Dubai Islamic Bank", listOf("DIB", "DIBAlerts", "DubaiIslamic", "DIB-UAE"), emptyList()),
-        Bank("Emirates Islamic", listOf("EIB", "EmiratesIslamic", "EIBank", "EI-Bank"), emptyList()),
+        // Emirates Islamic. Shapes from real users' reports (Fils shape reports, Nov 2026; sender "EISMS"):
+        //   Purchase for CARREFOUR DUBAI of AED 172.94 has been made using Credit Card 71534.Avl.limit AED 4,120.50.
+        //   Payment for SPINNEYS LLC of AED 88.10 has been made using Credit Card ending with 1534. Available limit AED 3,900.00.
+        // (the first word and "using" are masked in the reports, so they are matched loosely)
+        // "EI SMS" is the sender ID real card alerts arrive from.
+        Bank(
+            name = "Emirates Islamic",
+            senderIds = listOf("EIB", "EmiratesIslamic", "EIBank", "EI-Bank", "EISMS", "EIBSMS", "EmiratesIslamicBank"),
+            rules = listOf(
+                Rule(
+                    id = "ei-card-purchase",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """\b\w+\s+for\s+{MERCHANT}\s+of\s+{CUR}\s*{AMOUNT}\s+has been made\s+\w+\s+Credit Card\s+(?:ending(?: with)?\s+)?{CARD}\.?\s*(?:Avl\.?\s*limit|Available limit)\s*(?:is|:)?\s*{ANYCUR}\s*{AVAIL}""",
+                ),
+                // From a public sample set (older format): Credit Card Purchase / Card Ending: 1534 / At: carrefouruae.com, Dubai / Amount: AED 172.94 / Date: 01/09/2026, 20:03 / Available Limit: AED -1,270.88
+                Rule(
+                    id = "ei-card-purchase-multiline",
+                    kind = RuleKind.TRANSACTION,
+                    pattern = """Credit Card Purchase\s+Card Ending:\s*{CARD}\s+At:\s*{MERCHANT}\s+Amount:\s*{CUR}\s*{AMOUNT}\s+Date:\s*{DATETIME}(?:\s+Available Limit:\s*{ANYCUR}\s*{AVAIL})?""",
+                ),
+                // Dear Customer, Amount of AED 44.99 from Amazon.ae has been credited to your card ending 6268. Available Limit is AED 17,418.16.
+                Rule(
+                    id = "ei-card-refund",
+                    kind = RuleKind.TRANSACTION,
+                    type = TxnType.REFUND,
+                    pattern = """Amount of\s+{CUR}\s*{AMOUNT}\s+from\s+{MERCHANT}\s+has been credited to your card ending\s+{CARD}\.?(?:\s+Available Limit is\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
+            ),
+        ),
         Bank("ADIB", listOf("ADIB", "ADIBAlert", "ADIB-UAE"), emptyList()),
         Bank("RAKBANK", listOf("RAKBANK", "RAKBankUAE", "RAK-BANK"), emptyList()),
         Bank("CBD", listOf("CBD", "CBDBank", "CBD-UAE", "CBDAlerts"), emptyList()),
