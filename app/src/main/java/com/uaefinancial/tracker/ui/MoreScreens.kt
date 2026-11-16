@@ -373,6 +373,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     var fixing by remember { mutableStateOf<SmsEntity?>(null) }
     var notTxn by remember { mutableStateOf<SmsEntity?>(null) }
     var nudge by remember { mutableStateOf(vm.shareNudgeDue()) }
+    val held by vm.heldReadings.collectAsStateWithLifecycle()
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
 
@@ -392,7 +393,6 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 )
             }
         }
-        val held by vm.heldReadings.collectAsStateWithLifecycle()
         if (held.isNotEmpty()) {
             item {
                 Panel(Modifier.fillMaxWidth()) {
@@ -455,7 +455,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 }
             }
         }
-        if (failed.isEmpty()) {
+        if (failed.isEmpty() && held.isEmpty()) {
             item { Muted("Nothing to review. Every bank message was read.", Modifier.padding(8.dp)) }
         }
         items(failed, key = { it.id }) { s ->
