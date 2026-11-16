@@ -595,7 +595,8 @@ object BankRules {
         // real samples, add Rules here exactly like the banks above and put the samples in ParserTest.kt.
         // Sender IDs you find on your phone can also be added in the app (More → Bank senders).
         Bank("Dubai Islamic Bank", listOf("DIB", "DIBAlerts", "DubaiIslamic", "DIB-UAE"), emptyList()),
-        Bank("Emirates Islamic", listOf("EIB", "EmiratesIslamic", "EIBank", "EI-Bank"), emptyList()),
+        // "EI SMS" is the sender ID real card alerts arrive from.
+        Bank("Emirates Islamic", listOf("EIB", "EmiratesIslamic", "EIBank", "EI-Bank", "EISMS", "EIBSMS", "EmiratesIslamicBank"), emptyList()),
         Bank("ADIB", listOf("ADIB", "ADIBAlert", "ADIB-UAE"), emptyList()),
         Bank("RAKBANK", listOf("RAKBANK", "RAKBankUAE", "RAK-BANK"), emptyList()),
         Bank("CBD", listOf("CBD", "CBDBank", "CBD-UAE", "CBDAlerts"), emptyList()),

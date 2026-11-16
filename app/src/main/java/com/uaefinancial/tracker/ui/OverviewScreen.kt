@@ -258,7 +258,7 @@ fun OverviewScreen(
         item { FixedPaymentsPanel(fixed, autoPaid, onManage = onOpenFixed, onPaid = { vm.markFixedPaid(it) }, modifier = Modifier.padding(horizontal = 16.dp)) }
 
         // ---- upcoming dues
-        val open = dues.filter { it.card.countInSpending }.filter { it.status.state == DueState.UNPAID || it.status.state == DueState.OVERDUE || it.status.state == DueState.MIN_PAID }
+        val open = dues.filter { it.card.countInSpending && !it.status.isStale }.filter { it.status.state == DueState.UNPAID || it.status.state == DueState.OVERDUE || it.status.state == DueState.MIN_PAID }
         item { SectionHeader("Payments due", Modifier.padding(horizontal = 20.dp)) }
         // Fixed payments (e.g. car EMI) not yet paid and due within 10 days.
         val today = LocalDate.now()
