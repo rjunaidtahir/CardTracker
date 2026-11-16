@@ -607,7 +607,16 @@ fun CardsScreen(
         if (arranging) {
             item { ArrangeCards(summaries.map { it.card }, onReorder) }
         } else {
-            items(summaries, key = { it.card.cardKey }) { s ->
+            // Cards that count in spending come first; each group keeps the order you arranged (the sort is stable).
+            // Cards first, then bank accounts, each under its own heading (only when you have both).
+            val (accounts, plainCards) = summaries.partition { it.card.cardType == com.uaefinancial.tracker.data.CardTypes.ACCOUNT }
+            val showHeadings = accounts.isNotEmpty() && plainCards.isNotEmpty()
+            if (showHeadings) item(key = "heading-cards") { Text("Cards", style = MaterialTheme.typography.titleSmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)) }
+            items(plainCards.sortedByDescending { it.card.countInSpending }, key = { it.card.cardKey }) { s ->
+                CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
+            }
+            if (showHeadings) item(key = "heading-accounts") { Text("Accounts", style = MaterialTheme.typography.titleSmall, color = Ink.muted, modifier = Modifier.padding(top = 12.dp, bottom = 2.dp)) }
+            items(accounts.sortedByDescending { it.card.countInSpending }, key = { it.card.cardKey }) { s ->
                 CardTile(s, periodLabel, onClick = { onOpenCard(s.card.cardKey) }, onToggle = { onToggleCounted(s.card.cardKey, it) })
             }
         }
@@ -957,6 +966,8 @@ fun CardDetailScreen(
     onShowSinceStatement: (LocalDate) -> Unit = {},
     onSetFamily: (Boolean) -> Unit = {},
     onDelete: () -> Unit = {},
+    mergeTargets: List<CardEntity> = emptyList(),
+    onMerge: (String) -> Unit = {},
     plans: List<InstalmentPlanEntity> = emptyList(),
     recent: List<TransactionEntity> = emptyList(),
     recentRow: @Composable (TransactionEntity) -> Unit = {},
@@ -1283,6 +1294,38 @@ fun CardDetailScreen(
                 }
                 Spacer(Modifier.height(8.dp))
                 Button(onClick = { onSaveProfile(nickname, limit, statementDay, dueDay, reminders) }, shape = RoundedCornerShape(50)) { Text("Save") }
+            }
+        }
+        if (mergeTargets.isNotEmpty()) {
+            item {
+                var pick by remember { mutableStateOf(false) }
+                var chosen by remember { mutableStateOf<CardEntity?>(null) }
+                TextButton(onClick = { pick = true }) { Text("This is the same card as another one…") }
+                if (pick) {
+                    AlertDialog(
+                        onDismissRequest = { pick = false },
+                        title = { Text("Merge into which card?") },
+                        text = {
+                            Column {
+                                Text("Everything on this card moves to the one you pick, and later messages go there too.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                                mergeTargets.forEach { c ->
+                                    TextButton(onClick = { chosen = c; pick = false }) { Text(CardArts.displayName(c)) }
+                                }
+                            }
+                        },
+                        confirmButton = {},
+                        dismissButton = { TextButton(onClick = { pick = false }) { Text("Cancel") } },
+                    )
+                }
+                chosen?.let { c ->
+                    AlertDialog(
+                        onDismissRequest = { chosen = null },
+                        title = { Text("Merge into ${CardArts.displayName(c)}?") },
+                        text = { Text("All transactions, statements and plans on this card move there, and this card is removed. This can't be undone.") },
+                        confirmButton = { TextButton(onClick = { chosen = null; onMerge(c.cardKey) }) { Text("Merge", color = Ink.red) } },
+                        dismissButton = { TextButton(onClick = { chosen = null }) { Text("Cancel") } },
+                    )
+                }
             }
         }
         if (summary.monthTxnCount == 0 && summary.latestStatement == null && summary.balanceHistory.isEmpty()) {

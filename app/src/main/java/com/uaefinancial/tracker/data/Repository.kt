@@ -229,6 +229,35 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         CardType.ACCOUNT -> CardTypes.ACCOUNT
     }
 
+    /** The card a key stands for after merges ("these two are one card"). */
+    suspend fun canonicalKey(key: String): String {
+        var k = key
+        val aliases = dao.cardAliases().associate { it.fromKey to it.toKey }
+        var guard = 0
+        while (guard++ < 10) k = aliases[k] ?: break
+        return k
+    }
+
+    /**
+     * Merges card [from] into [to]: its transactions, statements, plans and fixed payments move over, the card is
+     * removed, and later messages that would create [from] go to [to]. Returns false if the cards can't be merged.
+     * Totals don't change unless the two cards were counted differently (then [to] decides).
+     */
+    suspend fun mergeCards(from: String, to: String): Boolean = db.withTransaction {
+        if (from == to) return@withTransaction false
+        val cards = dao.allCards()
+        if (cards.none { it.cardKey == from } || cards.none { it.cardKey == to }) return@withTransaction false
+        dao.moveTransactions(from, to)
+        dao.moveCounterparty(from, to)
+        dao.moveStatements(from, to)
+        dao.movePlans(from, to)
+        dao.moveFixedPayments(from, to)
+        dao.repointAliases(from, to)
+        dao.insertCardAlias(CardAliasEntity(from, to))
+        dao.deleteCard(from)
+        true
+    }
+
     private suspend fun ensureCard(key: String, bank: String, last4: String?, type: CardType) {
         dao.insertCard(CardEntity(key, bank, last4, type.dbName(), Spending.defaultCountInSpending(type)))
     }
@@ -294,11 +323,17 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         }
         // No card/account number: bank-account money goes on a "Bank ·????" account (not counted as spending by
         // default); anything else has no card, like a typed entry.
-        val key = when {
+        // If the message doesn't name the account but you have exactly one account at that bank, it is that one
+        // (no second "Bank ·????" account).
+        if (t.cardLast4 == null && (t.accountNotNamed || t.cardType == CardType.ACCOUNT)) {
+            dao.cardsOfBank(t.bank, CardTypes.ACCOUNT).singleOrNull { it.last4 != null }?.last4?.let { t = t.copy(cardLast4 = it) }
+        }
+        val rawKey = when {
             t.cardLast4 != null -> cardKeyOf(t.bank, t.cardLast4)
             t.accountNotNamed || t.cardType == CardType.ACCOUNT -> cardKeyOf(t.bank, null)
             else -> null
         }
+        val key = rawKey?.let { canonicalKey(it) }
         if (key != null) ensureCard(key, t.bank, t.cardLast4, t.cardType)
         val card = key?.let { k -> dao.allCards().firstOrNull { it.cardKey == k } }
         val aed = Money.toAedMinor(t.amount, t.currency, rates)
@@ -445,7 +480,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             is ParseResult.Transaction -> applyTransaction(smsId, dedupKey, r)
             is ParseResult.Statement -> {
                 val s = r.statement
-                val key = cardKeyOf(s.bank, s.cardLast4)
+                val key = canonicalKey(cardKeyOf(s.bank, s.cardLast4))
                 ensureCard(key, s.bank, s.cardLast4, s.cardType)
                 dao.insertStatement(
                     StatementEntity(

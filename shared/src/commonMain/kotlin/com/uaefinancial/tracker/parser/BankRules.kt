@@ -60,6 +60,14 @@ object BankRules {
                     cardType = CardType.ACCOUNT,
                     pattern = """Debit Card Purchase\s*/?\s*Debit\s+Account\s+{CARD}\s+Card\s+[X*\d]+\s+{CUR}\s*{AMOUNT}\s+{MERCHANT}\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
                 ),
+                // Real sample (public set, 7 Mar 2026): Debit Card Purchase   Card XXXX5207 AED 100.00 SmartDXBGov-PRKN      DUBAI           AE
+                // 07/03/26 19:51  Balance AED 85019.44   (no "Debit Account" line: the account is not named)
+                Rule(
+                    id = "fab-debit-card-purchase-card-only",
+                    kind = RuleKind.TRANSACTION,
+                    cardType = CardType.DEBIT,
+                    pattern = """Debit Card Purchase\s*/?\s*Card\s+{CARD}\s+{CUR}\s*{AMOUNT}\s+{MERCHANT}\s+{DATETIME}(?:\s+(?:Available\s+)?Balance\s+{ANYCUR}\s*{AVAIL})?""",
+                ),
                 Rule(
                     id = "fab-purchase",
                     kind = RuleKind.TRANSACTION,
@@ -762,6 +770,9 @@ object BankRules {
         IgnoreRule("Declined transaction", """\b(declined|unsuccessful|was not successful|could not be completed|has failed|have failed|insufficient (?:balance|funds))\b"""),
         // "Please pay AED 100 and send your Emirates ID copy to <email>": a request for documents, not money moving.
         IgnoreRule("Document request", """\bEmirates\s*ID\b.{0,120}\be-?mail\b|\be-?mail\b.{0,120}\bEmirates\s*ID\b|\bEmirates\s*ID\b.{0,120}\S+@\S+"""),
+        // "Your installment of AED 3,394.00 for your PERSONAL LOAN No. 6053XXXXXXXX0001 is due on 08/05/2026." (real ENBD sample)
+        // A reminder for a loan, not a card statement: without this the smart reader invents a card "0001" with a due amount.
+        IgnoreRule("Loan instalment reminder", """\b(?:instal?lment|EMI)\b.{0,80}\b(?:loan|financing)\b.{0,100}\bis\s+due\b"""),
         IgnoreRule("Declined transaction", SmartParser.NOT_DONE_INTL), // rechazada, recusada, refusée, abgelehnt, مرفوضة …
         IgnoreRule("Approval request", """\btap to approve\b|\bSecurePass\b|\bapprove it\b"""),
         IgnoreRule("Payment reminder", """Payment for .{0,40}card ending \d{4} is due"""),
