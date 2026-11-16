@@ -1,8 +1,91 @@
 {
-  "version": 3,
+  "version": 4,
   "minEngine": 5,
   "banks": [],
-  "rules": [],
+  "rules": [
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-thank-you-debit-20261116",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Thank you for\\s+\\w+\\s+(?:your\\s+)?(?:[^.]{0,40}?\\s)?Debit Card(?: Card)? ending\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+(?:Avl\\.?\\s*(?:Limit|Bal)|Available (?:Limit|Balance))\\s*(?:is|:)?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-thank-you-purchase-20261116",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "Thank you for\\s+\\w+\\s+(?:your\\s+)?(?:[^.]{0,40}?\\s)?Card ending\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+(?:Avl\\.?\\s*(?:Limit|Bal)|Available (?:Limit|Balance))\\s*(?:is|:)?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "HDFC Bank",
+      "id": "hdfc-aed-card-purchase",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Thanks for\\s+\\w+\\s+HDFC Bank\\s+[^.]{0,40}?Card\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Card Bal:?\\s*{ANYCUR}\\s*[\\d,.]+)?"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-debit-card-funds-transfer",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Liv",
+      "id": "liv-debit-card-funds-transfer",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "ADIB",
+      "id": "adib-trx-approved",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Trx\\.? of\\s+{CUR}\\s*{AMOUNT}\\s+on your card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\s+is approved\\.?(?:\\s+Avl\\.?\\s*card bal(?:ance)? is\\s+[\\d,.]+\\.?)?(?:\\s+Trx\\.? date:?\\s*{DATETIME})?"
+    },
+    {
+      "bank": "Sharjah Islamic Bank",
+      "id": "sib-outward-remit",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "A/C\\s+{CARD}\\s+outward remit\\s+{CUR}\\s*{AMOUNT}\\.?(?:\\s+Available balance is\\s+{ANYCUR}\\s*\\+?{AVAIL})?",
+      "fixedMerchant": "Outward remittance"
+    },
+    {
+      "bank": "Sharjah Islamic Bank",
+      "id": "sib-card-txn-approved",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "A txn on your card\\s+{CARD}\\s+at\\s+{MERCHANT}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}(?:\\s*at\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?\\s+is approved\\.?(?:\\s+Your available balance is\\s+[\\d,.]+)?"
+    },
+    {
+      "bank": "CBD",
+      "id": "cbd-credit-card-payment",
+      "kind": "TRANSACTION",
+      "type": "PAYMENT",
+      "cardType": "CREDIT",
+      "pattern": "thank you for your credit card payment via funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+for card ending\\s+{CARD}(?:\\s+on\\s+{DATETIME})?",
+      "fixedMerchant": "Card payment received"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-debit-card-refund",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "DEBIT",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+has been refunded to your debit card\\s+{CARD}\\s+on\\s+{DATETIME}\\s*by\\s+{MERCHANT}\\.\\s*The amount will be credited"
+    }
+  ],
   "ignore": [
     {
       "label": "Declined: insufficient balance",
@@ -31,6 +114,30 @@
     {
       "label": "Failed payment notice",
       "pattern": "Your payment of [A-Z]{3} [\\d,.]+ is failed"
+    },
+    {
+      "label": "UPI payment request",
+      "pattern": "has requested .{1,40}? from you on your .{1,30}? UPI\\."
+    },
+    {
+      "label": "Payee added notice",
+      "pattern": "Payee .{1,60}? added\\. Transfer funds after"
+    },
+    {
+      "label": "Card spend promo",
+      "pattern": "spend is on us!"
+    },
+    {
+      "label": "Currency rate alert",
+      "pattern": "we have a new update for your currency .{1,20}? alert"
+    },
+    {
+      "label": "Future-dated payment set up",
+      "pattern": "you have .{1,10}? up a .{1,15}? dated (?:payment|transfer) through online/mobile banking"
+    },
+    {
+      "label": "Credit card approved notice",
+      "pattern": "your FAB credit card has been approved with a limit of"
     }
   ]
 }
