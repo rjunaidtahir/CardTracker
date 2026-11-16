@@ -288,13 +288,14 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     suspend fun keepCurrentReading(smsId: Long): Boolean = lock.withLock {
         val s = dao.smsById(smsId) ?: return@withLock false
         val t = dao.txnsForSmsNow(smsId).firstOrNull()
+        val cardType = t?.cardKey?.let { k -> dao.allCards().firstOrNull { it.cardKey == k }?.cardType } ?: CardTypes.CREDIT
         db.withTransaction {
             if (t != null) {
                 dao.upsertFixes(
                     listOf(
                         SmsFixEntity(
                             dedupKey = s.dedupKey, type = t.type, amountMinor = t.amountMinor, currency = t.currency,
-                            merchant = t.merchant, cardLast4 = t.cardLast4, cardType = t.cardType, timestamp = t.timestamp,
+                            merchant = t.merchant, cardLast4 = t.cardLast4, cardType = cardType, timestamp = t.timestamp,
                         ),
                     ),
                 )
