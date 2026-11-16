@@ -173,6 +173,23 @@ data class FxRateEntity(
     val updatedAt: Long,
 )
 
+/**
+ * A re-read of a message that would have changed what you already have (amount, type, currency, or a reading that
+ * disappeared). The old reading is kept; this row asks you to decide. State is HELD until you choose.
+ */
+@Entity(tableName = "sms_readings", indices = [Index(value = ["smsId"])])
+data class SmsReadingEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val smsId: Long,
+    val engineVersion: Int,
+    val createdAt: Long,
+    /** What the app holds now, in words. */
+    val keptSummary: String,
+    /** What the newer reading says, in words. */
+    val newSummary: String,
+    val state: String = "HELD",
+)
+
 @Entity(tableName = "statements", indices = [Index(value = ["smsId"]), Index(value = ["cardKey"])])
 data class StatementEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -414,6 +431,30 @@ interface AppDao {
 
     @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
     suspend fun deleteAllSmsTxns()
+
+    @Query("DELETE FROM sms_readings WHERE smsId = :smsId")
+    suspend fun clearReadings(smsId: Long)
+
+    @Insert
+    suspend fun insertReading(r: SmsReadingEntity)
+
+    @Query("SELECT * FROM sms_readings WHERE state = 'HELD' ORDER BY createdAt DESC")
+    fun heldReadings(): Flow<List<SmsReadingEntity>>
+
+    @Query("SELECT * FROM sms_readings WHERE state = 'HELD'")
+    suspend fun heldReadingsNow(): List<SmsReadingEntity>
+
+    @Query("SELECT * FROM transactions WHERE smsId = :smsId AND inferred = 0")
+    suspend fun txnsForSmsNow(smsId: Long): List<TransactionEntity>
+
+    @Query("SELECT * FROM statements WHERE smsId = :smsId")
+    suspend fun statementsForSmsNow(smsId: Long): List<StatementEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreStatement(s: StatementEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreTxn(t: TransactionEntity)
 
     /** SMS statements only: statements saved from a PDF (smsId = 0) survive Re-parse. */
     @Query("DELETE FROM statements WHERE smsId > 0")
@@ -716,9 +757,9 @@ data class StatusCount(val status: String, val n: Int)
     entities = [
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
-        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class,
+        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class, SmsReadingEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

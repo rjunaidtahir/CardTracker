@@ -50,5 +50,17 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+    /** 2.7: re-reads that would change an existing reading are held for your review; nothing is removed. */
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `sms_readings` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`smsId` INTEGER NOT NULL, `engineVersion` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, " +
+                    "`keptSummary` TEXT NOT NULL, `newSummary` TEXT NOT NULL, `state` TEXT NOT NULL)",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_readings_smsId` ON `sms_readings` (`smsId`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
 }

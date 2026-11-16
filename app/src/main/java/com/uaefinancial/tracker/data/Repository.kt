@@ -1,6 +1,7 @@
 package com.uaefinancial.tracker.data
 
 import com.uaefinancial.tracker.toJava
+import com.uaefinancial.tracker.core.ReadingGuard
 import com.uaefinancial.tracker.core.StandingGap
 import com.uaefinancial.tracker.core.toDecimalOrNull
 import com.uaefinancial.tracker.core.Decimal
@@ -203,13 +204,22 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }
         }
 
-    /** Re-runs the current BankRules over every stored SMS (except dismissed ones). */
-    suspend fun reparseAll(): Map<IngestOutcome, Int> = lock.withLock {
+    /**
+     * Re-runs the current BankRules over every stored SMS (except dismissed ones).
+     *
+     * Nothing you already have is lost by a re-read: if a message was read before and the new reading differs in
+     * amount, type or currency (or finds nothing), the old reading is put back and the change is held on the
+     * Needs review list ([SmsReadingEntity]) for you to decide. [force] applies every change (used by "Use new").
+     */
+    suspend fun reparseAll(force: Boolean = false): Map<IngestOutcome, Int> = lock.withLock {
         ensureLearned()
         val all = dao.smsForReparse()
         val counts = mutableMapOf<IngestOutcome, Int>()
         reparsing = true
+        pendingOtp.clear()
         try { db.withTransaction {
+            val oldTxns = dao.allTxns().filter { it.smsId != null && !it.inferred }.groupBy { it.smsId!! }
+            val oldStmts = dao.allStatements().filter { it.smsId > 0 }.groupBy { it.smsId }
             // Rebuild every SMS-based row from scratch, in time order, so two-SMS transfers pair up cleanly.
             // (Typed entries are untouched; card settings are kept.)
             dao.deleteAllSmsTxns()
@@ -218,10 +228,83 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 val o = applyParse(s.id, s.dedupKey, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt, s.bank)
                 counts[o] = (counts[o] ?: 0) + 1
             }
+            if (!force) guardChanges(all, oldTxns, oldStmts)
+            // OTP messages are only deleted when nothing was ever read from them.
+            for (id in pendingOtp) if (dao.txnsForSmsNow(id).isEmpty() && dao.statementsForSmsNow(id).isEmpty()) dao.deleteSms(id)
+            pendingOtp.clear()
             resolveStanding()
         } } finally { reparsing = false }
         counts
     }
+
+    private val pendingOtp = mutableSetOf<Long>()
+
+    private fun linesOf(t: List<TransactionEntity>, st: List<StatementEntity>) =
+        t.map { ReadingGuard.Line("TXN", it.type, it.amountMinor, it.currency) } +
+            st.map { ReadingGuard.Line("STATEMENT", "STATEMENT", it.balanceMinor, it.currency) }
+
+    /** Puts back the old reading of any message whose new reading changes money figures, and holds the change. */
+    private suspend fun guardChanges(
+        all: List<SmsEntity>, oldTxns: Map<Long, List<TransactionEntity>>, oldStmts: Map<Long, List<StatementEntity>>,
+    ) {
+        val now = System.currentTimeMillis()
+        for (s in all) {
+            val ot = oldTxns[s.id].orEmpty(); val os = oldStmts[s.id].orEmpty()
+            val before = linesOf(ot, os)
+            if (before.isEmpty()) continue
+            val nt = dao.txnsForSmsNow(s.id); val ns = dao.statementsForSmsNow(s.id)
+            val after = linesOf(nt, ns)
+            if (!ReadingGuard.isMaterial(before, after)) continue
+            // Put the old reading back exactly as it was.
+            dao.deleteTxnsForSms(s.id); dao.deleteStatementsForSms(s.id)
+            ot.forEach { dao.restoreTxn(it) }
+            os.forEach { dao.restoreStatement(it) }
+            dao.setSmsResult(s.id, s.status, s.bank, s.ruleId, s.note)
+            dao.clearReadings(s.id)
+            dao.insertReading(
+                SmsReadingEntity(
+                    smsId = s.id, engineVersion = SmsParser.ENGINE_VERSION, createdAt = now,
+                    keptSummary = ReadingGuard.describe(before), newSummary = ReadingGuard.describe(after),
+                ),
+            )
+            pendingOtp.remove(s.id)
+        }
+    }
+
+    /** "Use new": applies the newer reading of one held message. */
+    suspend fun useNewReading(smsId: Long): Boolean = lock.withLock {
+        val s = dao.smsById(smsId) ?: return@withLock false
+        db.withTransaction {
+            val o = applyParse(s.id, s.dedupKey, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt, s.bank)
+            if (s.id in pendingOtp && dao.txnsForSmsNow(s.id).isEmpty()) dao.deleteSms(s.id)
+            pendingOtp.remove(s.id)
+            dao.clearReadings(smsId)
+            o
+        }
+        true
+    }
+
+    /** "Keep mine": the reading you have now is saved as your own, so later re-reads never replace it. */
+    suspend fun keepCurrentReading(smsId: Long): Boolean = lock.withLock {
+        val s = dao.smsById(smsId) ?: return@withLock false
+        val t = dao.txnsForSmsNow(smsId).firstOrNull()
+        db.withTransaction {
+            if (t != null) {
+                dao.upsertFixes(
+                    listOf(
+                        SmsFixEntity(
+                            dedupKey = s.dedupKey, type = t.type, amountMinor = t.amountMinor, currency = t.currency,
+                            merchant = t.merchant, cardLast4 = t.cardLast4, cardType = t.cardType, timestamp = t.timestamp,
+                        ),
+                    ),
+                )
+            }
+            dao.clearReadings(smsId)
+        }
+        true
+    }
+
+    fun heldReadings() = dao.heldReadings()
 
     private fun CardType.dbName() = when (this) {
         CardType.CREDIT -> CardTypes.CREDIT
@@ -496,7 +579,10 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }
             is ParseResult.Ignored -> {
                 if (!r.store) {
-                    dao.deleteSms(smsId) // e.g. an old SMS that a newer rule now recognises as OTP
+                    // An old SMS that a newer rule now recognises as OTP. During a re-read it is only deleted at the
+                    // end, and only if nothing had been read from it (a stored transaction is never deleted by this).
+                    if (reparsing) { dao.setSmsResult(smsId, SmsStatus.IGNORED, r.bank, null, r.reason); pendingOtp += smsId }
+                    else dao.deleteSms(smsId)
                     IngestOutcome.OTP_SKIPPED
                 } else {
                     dao.setSmsResult(smsId, SmsStatus.IGNORED, r.bank, null, r.reason)
