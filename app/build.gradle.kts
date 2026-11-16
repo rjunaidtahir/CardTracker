@@ -50,6 +50,14 @@ android {
     }
 
     buildTypes {
+        // Test build for sideloading next to the Play copy: own app id, own name, same fixed debug key.
+        create("beta") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("debug")
+        }
         release {
             isMinifyEnabled = false
             signingConfigs.findByName("release")?.let { signingConfig = it }
