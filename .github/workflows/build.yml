@@ -56,6 +56,13 @@ jobs:
         if: always()
         run: python3 .github/scripts/report.py
 
+      - name: Keep database schemas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemas
+          path: app/schemas/
+
       - name: Keep reports
         if: always()
         uses: actions/upload-artifact@v4

@@ -70,6 +70,8 @@ android {
     buildFeatures {
         compose = true
     }
+    // Room's exported schemas, so database upgrade tests can start from the real older layout.
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 kotlin {
