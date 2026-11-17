@@ -206,6 +206,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }
         }
 
+    /** Runs [block] as one database transaction (a batch of messages saves in one go instead of one by one). */
+    suspend fun <T> inBatch(block: suspend () -> T): T = db.withTransaction { block() }
+
+    /** After a batch read with deferResolve: settles waiting standing-instruction messages once. */
+    suspend fun finishBatch() = lock.withLock { db.withTransaction { resolveStanding() } }
+
     /**
      * Re-runs the current BankRules over every stored SMS (except dismissed ones).
      *
