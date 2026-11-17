@@ -157,6 +157,7 @@ fun TransactionsScreen(
     excluded: Set<String>,
     txns: List<TransactionEntity>,
     syncing: Boolean,
+    syncProgress: Pair<Int, Int>? = null,
     lastSyncAt: Long?,
     liveOn: Boolean,
     onSync: () -> Unit,
@@ -188,7 +189,7 @@ fun TransactionsScreen(
                 Column(Modifier.weight(1f)) {
                     Text(
                         when {
-                            syncing -> "Importing bank messages…"
+                            syncing -> syncProgress?.takeIf { it.second > 0 }?.let { "Importing: ${it.first} of ${it.second} messages…" } ?: "Importing bank messages…"
                             lastSyncAt == null -> "Not synced yet: tap ↻ to import"
                             else -> "Synced ${fmtDateTime(lastSyncAt)}"
                         },

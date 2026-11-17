@@ -171,6 +171,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     val failed by vm.failedSms.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
+    val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
     val lastSyncAt by vm.lastSyncAt.collectAsStateWithLifecycle()
     val liveOn by vm.liveListening.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
@@ -396,7 +397,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     )
                     Tab.ACTIVITY -> TransactionsScreen(
                         vm, period, cardFilter, cards, excluded, txns,
-                        syncing = syncing, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
+                        syncing = syncing, syncProgress = syncProgress, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
                         categories = categories, categoryFilter = categoryFilter,
                     )
                     Tab.CARDS -> { val ov by vm.overview.collectAsStateWithLifecycle(); CardsScreen(

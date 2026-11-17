@@ -158,7 +158,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, "unread")
     }
 
-    suspend fun ingestSms(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): IngestOutcome =
+    suspend fun ingestSms(
+        sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String, deferResolve: Boolean = false,
+    ): IngestOutcome =
         lock.withLock {
             ensureLearned()
             val bank = SmsParser.bankFor(sender) ?: return IngestOutcome.NOT_BANK
@@ -194,7 +196,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                     parkedStanding = false
                     val o = applyParse(id, dedupKey, parsed, receivedAt, bank.name)
                     // A new balance may settle a waiting standing-instruction message (or this message may be one).
-                    if (o != IngestOutcome.DUPLICATE) resolveStanding()
+                    if (o != IngestOutcome.DUPLICATE && !deferResolve) resolveStanding()
                     if (o == IngestOutcome.FAILED && parkedStanding && dao.smsById(id)?.status == SmsStatus.TRANSACTION) IngestOutcome.TRANSACTION else o
                 }
             }.also { outcome ->

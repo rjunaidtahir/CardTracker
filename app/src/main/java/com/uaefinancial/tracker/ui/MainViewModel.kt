@@ -146,6 +146,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val message = MutableStateFlow<String?>(null)
 
     val syncing = MutableStateFlow(false)
+    /** (messages done, total) while a Sync runs. */
+    val syncProgress get() = ctApp.smsSync.progress
     /** "12 new transactions, 1 statement" from the last Sync in this session. */
     val lastSyncSummary = MutableStateFlow<String?>(null)
     /** Goes up by one each time a Sync ends (success or not), so screens can wait for "the next one finished". */
