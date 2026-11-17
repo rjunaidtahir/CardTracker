@@ -304,6 +304,12 @@ data class SmsFixEntity(
     val cardLast4: String?,
     val cardType: String,
     val timestamp: Long,
+    /**
+     * Which fields you confirmed yourself: "ALL" (the whole reading, also for fixes made before this existed) or a
+     * comma list of TYPE, AMOUNT, CURRENCY, MERCHANT, CARD, TIME. Only these are protected from later readings;
+     * the other fields follow the reader as before.
+     */
+    @ColumnInfo(defaultValue = "ALL") val lockedFields: String = "ALL",
 )
 
 fun cardKeyOf(bank: String, last4: String?) = "$bank ·${last4 ?: "????"}"

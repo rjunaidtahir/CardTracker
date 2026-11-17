@@ -59,6 +59,8 @@ object Migrations {
                     "`keptSummary` TEXT NOT NULL, `newSummary` TEXT NOT NULL, `state` TEXT NOT NULL)",
             )
             db.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_readings_smsId` ON `sms_readings` (`smsId`)")
+            // Fixes made before this keep protecting every field (the old behaviour).
+            db.execSQL("ALTER TABLE sms_fixes ADD COLUMN lockedFields TEXT NOT NULL DEFAULT 'ALL'")
         }
     }
 

@@ -248,8 +248,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     private val pendingOtp = mutableSetOf<Long>()
 
     private fun linesOf(t: List<TransactionEntity>, st: List<StatementEntity>) =
-        t.map { ReadingGuard.Line("TXN", it.type, it.amountMinor, it.currency) } +
-            st.map { ReadingGuard.Line("STATEMENT", "STATEMENT", it.balanceMinor, it.currency) }
+        t.map {
+            ReadingGuard.Line("TXN", it.type, it.amountMinor, it.currency, it.timestamp, it.bank, it.cardKey.orEmpty(), it.cardLast4.orEmpty(), it.merchant)
+        } + st.map {
+            ReadingGuard.Line("STATEMENT", "STATEMENT", it.balanceMinor, it.currency, it.receivedAt, it.bank, it.cardKey, it.cardLast4.orEmpty(), "")
+        }
 
     /** Puts back the old reading of any message whose new reading changes money figures, and holds the change. */
     private suspend fun guardChanges(
@@ -272,7 +275,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             dao.insertReading(
                 SmsReadingEntity(
                     smsId = s.id, engineVersion = SmsParser.ENGINE_VERSION, createdAt = now,
-                    keptSummary = ReadingGuard.describe(before), newSummary = ReadingGuard.describe(after),
+                    keptSummary = ReadingGuard.describe(before),
+                    newSummary = ReadingGuard.describe(after) + ReadingGuard.changedFields(before, after).let { if (it.isEmpty()) "" else " (changes: " + it.joinToString(", ") + ")" },
                 ),
             )
             pendingOtp.remove(s.id)
@@ -567,7 +571,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         dao.deleteStatementsForSms(smsId)
         dao.unpairSms(smsId)
         // Your own reading of this SMS (Needs review → Fix) beats anything the app works out.
-        dao.fixFor(dedupKey)?.let { fix -> return applyFix(smsId, dedupKey, fix, bank ?: "Bank") }
+        dao.fixFor(dedupKey)?.let { fix -> return applyFix(smsId, dedupKey, fix, bank ?: "Bank", r) }
         return when (r) {
             is ParseResult.Transaction -> applyTransaction(smsId, dedupKey, r)
             is ParseResult.Statement -> {
@@ -609,19 +613,52 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         }
     }
 
-    private suspend fun applyFix(smsId: Long, dedupKey: String, fix: SmsFixEntity, bank: String): IngestOutcome {
+    private suspend fun applyFix(smsId: Long, dedupKey: String, fix: SmsFixEntity, bank: String, reading: ParseResult? = null): IngestOutcome {
         if (fix.type == FIX_IGNORE) {
             dao.setSmsResult(smsId, SmsStatus.IGNORED, bank, null, "You marked this as not a transaction")
             return IngestOutcome.IGNORED
         }
         val type = runCatching { TxnType.valueOf(fix.type) }.getOrDefault(TxnType.PURCHASE)
         val cardType = runCatching { CardType.valueOf(fix.cardType) }.getOrDefault(CardType.CREDIT)
-        val txn = ParsedTransaction(
+        val whole = ParsedTransaction(
             bank = bank, cardLast4 = fix.cardLast4, cardType = cardType, merchant = fix.merchant,
             amount = Money.fromMinor(fix.amountMinor), currency = fix.currency, type = type,
             timestamp = fix.timestamp, dateFromSms = true,
         )
+        // Only the fields you confirmed are yours; the rest follow the current reading of the message.
+        val locked = fix.lockedFields.split(',').map { it.trim() }.toSet()
+        val read = (reading as? ParseResult.Transaction)?.txn
+        val txn = if ("ALL" in locked || read == null) whole else read.copy(
+            type = if ("TYPE" in locked) whole.type else read.type,
+            amount = if ("AMOUNT" in locked) whole.amount else read.amount,
+            currency = if ("CURRENCY" in locked) whole.currency else read.currency,
+            merchant = if ("MERCHANT" in locked) whole.merchant else read.merchant,
+            cardLast4 = if ("CARD" in locked) whole.cardLast4 else read.cardLast4,
+            cardType = if ("CARD" in locked) whole.cardType else read.cardType,
+            timestamp = if ("TIME" in locked) whole.timestamp else read.timestamp,
+            dateFromSms = if ("TIME" in locked) true else read.dateFromSms,
+        )
         return applyTransaction(smsId, dedupKey, ParseResult.Transaction(txn, FIX_RULE))
+    }
+
+    /**
+     * The fields you changed from what the reader says; only these are protected. If the reader has no reading, or
+     * you say "not a transaction", or you changed nothing (you confirmed it), the whole reading is yours ("ALL").
+     */
+    private fun lockedFieldsFor(
+        sms: SmsEntity, type: TxnType?, amountMinor: Long, currency: String, merchant: String,
+        cardLast4: String?, cardType: CardType, timestamp: Long,
+    ): String {
+        val read = (SmsParser.parse(sms.sender, sms.body, sms.receivedAt) as? ParseResult.Transaction)?.txn
+        if (type == null || read == null) return "ALL"
+        val d = mutableListOf<String>()
+        if (read.type != type) d += "TYPE"
+        if (Money.toMinor(read.amount) != amountMinor) d += "AMOUNT"
+        if (!read.currency.equals(currency, ignoreCase = true)) d += "CURRENCY"
+        if (!read.merchant.trim().equals(merchant.trim(), ignoreCase = true)) d += "MERCHANT"
+        if (read.cardLast4 != cardLast4?.trim()?.takeIf { it.isNotEmpty() } || read.cardType != cardType) d += "CARD"
+        if (read.timestamp != timestamp) d += "TIME"
+        return if (d.isEmpty()) "ALL" else d.joinToString(",")
     }
 
     /**
@@ -633,6 +670,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         cardLast4: String?, cardType: CardType, timestamp: Long, applyToSimilar: Boolean = false,
     ): FixResult = lock.withLock {
         val sms = dao.smsById(smsId) ?: return@withLock FixResult(IngestOutcome.FAILED, 0)
+        val locked = lockedFieldsFor(sms, type, amountMinor, currency, merchant, cardLast4, cardType, timestamp)
         val outcome = db.withTransaction {
             dao.upsertFixes(
                 listOf(
@@ -640,10 +678,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                         dedupKey = sms.dedupKey, type = type?.name ?: FIX_IGNORE, amountMinor = amountMinor,
                         currency = currency.uppercase(), merchant = merchant.trim().ifEmpty { "Transaction" },
                         cardLast4 = cardLast4?.trim()?.takeIf { it.isNotEmpty() }, cardType = cardType.name, timestamp = timestamp,
+                        lockedFields = locked,
                     ),
                 ),
             )
-            applyParse(sms.id, sms.dedupKey, ParseResult.NotBank, sms.receivedAt, sms.bank ?: sms.sender)
+            applyParse(sms.id, sms.dedupKey, SmsParser.parse(sms.sender, sms.body, sms.receivedAt), sms.receivedAt, sms.bank ?: sms.sender)
         }
         // A fix you made teaches the app: offer the masked shape with what you said it is (only if you allowed it).
         runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:" + (type?.name ?: "NOT_A_TRANSACTION")) }
