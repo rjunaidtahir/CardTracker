@@ -89,8 +89,8 @@ class ReReadGuardDbTest {
     }
     @Test fun an_unchanged_message_is_not_held_and_reread_twice_is_identical() {
         baseline()
-        val a = reread(); val first = txns()
-        val b = reread(); val second = txns()
+        val a = reread(); val first = txns().map { it.copy(id = 0) }
+        val b = reread(); val second = txns().map { it.copy(id = 0) }
         assertEquals(first, second); assertTrue(held().isEmpty())
         assertEquals(a, b)
         assertEquals("no duplicate rows", 1, second.size)

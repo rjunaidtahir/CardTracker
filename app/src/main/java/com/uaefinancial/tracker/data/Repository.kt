@@ -254,32 +254,53 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             ReadingGuard.Line("STATEMENT", "STATEMENT", it.balanceMinor, it.currency, it.receivedAt, it.bank, it.cardKey, it.cardLast4.orEmpty(), "")
         }
 
-    /** Puts back the old reading of any message whose new reading changes money figures, and holds the change. */
+    /**
+     * Puts back the old reading of any message whose new reading changes money figures, and holds the change.
+     * Two messages that describe one transaction (a standing instruction and its debit, an SMS and a notification)
+     * are judged together, because which of them owns the row can change between reads.
+     */
     private suspend fun guardChanges(
         all: List<SmsEntity>, oldTxns: Map<Long, List<TransactionEntity>>, oldStmts: Map<Long, List<StatementEntity>>,
     ) {
         val now = System.currentTimeMillis()
-        for (s in all) {
-            val ot = oldTxns[s.id].orEmpty(); val os = oldStmts[s.id].orEmpty()
+        val newTxns = dao.allTxns().filter { it.smsId != null && !it.inferred }.groupBy { it.smsId!! }
+        val newStmts = dao.allStatements().filter { it.smsId > 0 }.groupBy { it.smsId }
+        // Groups of messages tied together by pairing, in the old or the new reading.
+        val parent = HashMap<Long, Long>()
+        fun find(x: Long): Long { var r = x; while ((parent[r] ?: r) != r) r = parent[r]!!; return r }
+        fun union(a: Long, b: Long) { parent[find(a)] = find(b) }
+        for (t in oldTxns.values.flatten() + newTxns.values.flatten()) {
+            val owner = t.smsId ?: continue
+            parent.putIfAbsent(owner, owner)
+            t.pairedSmsId?.let { parent.putIfAbsent(it, it); union(owner, it) }
+        }
+        val byId = all.associateBy { it.id }
+        val groups = (oldTxns.keys + oldStmts.keys + newTxns.keys + newStmts.keys).filter { it in byId }.groupBy { find(it) }
+        for ((_, ids) in groups) {
+            val ot = ids.flatMap { oldTxns[it].orEmpty() }; val os = ids.flatMap { oldStmts[it].orEmpty() }
             val before = linesOf(ot, os)
             if (before.isEmpty()) continue
-            val nt = dao.txnsForSmsNow(s.id); val ns = dao.statementsForSmsNow(s.id)
+            val nt = ids.flatMap { newTxns[it].orEmpty() }; val ns = ids.flatMap { newStmts[it].orEmpty() }
             val after = linesOf(nt, ns)
             if (!ReadingGuard.isMaterial(before, after)) continue
-            // Put the old reading back exactly as it was.
-            dao.deleteTxnsForSms(s.id); dao.deleteStatementsForSms(s.id)
+            // Put the old reading back exactly as it was, for every message in the group.
+            for (id in ids) { dao.deleteTxnsForSms(id); dao.deleteStatementsForSms(id) }
             ot.forEach { dao.restoreTxn(it) }
             os.forEach { dao.restoreStatement(it) }
-            dao.setSmsResult(s.id, s.status, s.bank, s.ruleId, s.note)
-            dao.clearReadings(s.id)
+            for (id in ids) {
+                val s = byId[id] ?: continue
+                dao.setSmsResult(s.id, s.status, s.bank, s.ruleId, s.note)
+                dao.clearReadings(s.id)
+                pendingOtp.remove(s.id)
+            }
+            val first = ids.minOrNull() ?: continue
             dao.insertReading(
                 SmsReadingEntity(
-                    smsId = s.id, engineVersion = SmsParser.ENGINE_VERSION, createdAt = now,
+                    smsId = first, engineVersion = SmsParser.ENGINE_VERSION, createdAt = now,
                     keptSummary = ReadingGuard.describe(before),
                     newSummary = ReadingGuard.describe(after) + ReadingGuard.changedFields(before, after).let { if (it.isEmpty()) "" else " (changes: " + it.joinToString(", ") + ")" },
                 ),
             )
-            pendingOtp.remove(s.id)
         }
     }
 
