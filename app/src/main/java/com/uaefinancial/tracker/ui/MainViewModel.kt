@@ -734,6 +734,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
+    /** Messages from senders the app doesn't know that could be financial; kept for your review, never posted on their own. */
+    val unknownMessages: StateFlow<List<com.uaefinancial.tracker.data.SmsCandidateEntity>> =
+        repo.openCandidates().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val hiddenSenders: StateFlow<List<com.uaefinancial.tracker.data.SmsCandidateEntity>> =
+        repo.mutedSenders().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** "These are from my bank": the sender is added and every waiting message from it is read. */
+    fun acceptUnknownSender(sender: String, sample: String) = viewModelScope.launch {
+        val name = com.uaefinancial.tracker.parser.GlobalBanks.match(sender, sample, prefs.homeCountry)?.name ?: sender
+        val n = repo.acceptSender(sender, name)
+        runCatching { repo.autoFillCardDays() }
+        resetSyncPointerQuietly()
+        message.value = "Added $name and read $n message${if (n == 1) "" else "s"}. Anything unclear is below."
+        refreshWidget()
+    }
+
+    fun dismissUnknown(id: Long) = viewModelScope.launch { repo.dismissCandidate(id) }
+
+    fun hideUnknownSender(sender: String) = viewModelScope.launch {
+        repo.muteSender(sender)
+        message.value = "Hidden. You can show it again from Needs review."
+    }
+
+    fun showSenderAgain(senderKey: String) = viewModelScope.launch { repo.unmuteSender(senderKey) }
+
     val failedSms: StateFlow<List<SmsEntity>> =
         dao.failedSms().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

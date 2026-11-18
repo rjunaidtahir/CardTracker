@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
+import com.uaefinancial.tracker.parser.CandidateScreen
 import com.uaefinancial.tracker.parser.SmartParser
 import com.uaefinancial.tracker.parser.SmsParser
 
@@ -37,9 +38,12 @@ object InboxReader {
             val iSent = c.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)
             while (c.moveToNext()) {
                 val addr = c.getString(iAddr) ?: continue
-                if (SmsParser.bankFor(addr) == null) continue // only bank senders
+                val body = c.getString(iBody) ?: ""
+                val date = c.getLong(iDate)
+                // Your banks, plus any other sender whose message could be financial (kept for review, never posted).
+                if (SmsParser.bankFor(addr) == null && CandidateScreen.screen(addr, body, date) == null) continue
                 val sent = if (c.isNull(iSent)) null else c.getLong(iSent).takeIf { it > 0 }
-                out += InboxSms(addr, c.getString(iBody) ?: "", c.getLong(iDate), sent)
+                out += InboxSms(addr, body, date, sent)
             }
         }
         return out

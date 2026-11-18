@@ -16,6 +16,7 @@ import com.uaefinancial.tracker.parser.TxnType
 import com.uaefinancial.tracker.parser.ManualEntry
 import com.uaefinancial.tracker.parser.Money
 import com.uaefinancial.tracker.parser.ParseResult
+import com.uaefinancial.tracker.parser.CandidateScreen
 import com.uaefinancial.tracker.parser.SmsParser
 import com.uaefinancial.tracker.parser.CategoryRules
 import com.uaefinancial.tracker.parser.LearnedFormats
@@ -23,6 +24,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Shared by Sync and live listening: same parser, same de-duplication. */
+const val CAND_OPEN = "OPEN"
+const val CAND_ACCEPTED = "ACCEPTED"
+const val CAND_DISMISSED = "DISMISSED"
+const val CAND_MUTED = "MUTED"
+
 class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) {
     val dao = db.dao()
     private val lock = Mutex()
@@ -163,7 +169,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     ): IngestOutcome =
         lock.withLock {
             ensureLearned()
-            val bank = SmsParser.bankFor(sender) ?: return IngestOutcome.NOT_BANK
+            val bank = SmsParser.bankFor(sender) ?: run {
+                // Not one of your banks. If it could be a financial message it is kept for your review (never posted).
+                noteUnknown(sender, body, receivedAt, sentAt, source)
+                return IngestOutcome.NOT_BANK
+            }
             val parsed = SmsParser.parse(sender, body, receivedAt)
             if (parsed is ParseResult.Ignored && !parsed.store) return IngestOutcome.OTP_SKIPPED
 
@@ -339,6 +349,74 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     }
 
     fun heldReadings() = dao.heldReadings()
+
+    // ------------------------------------------------------------ messages from unknown senders (Phase 1d)
+
+    fun openCandidates() = dao.openCandidates()
+
+    fun mutedSenders() = dao.mutedSenders()
+
+    /**
+     * Looks at a message from a sender that is not one of your banks. If it could be financial (an amount, not a
+     * one-time code) it is kept as a candidate for your review; it is never posted to your ledger from here.
+     * Returns true when kept. Open candidates are never removed automatically.
+     */
+    suspend fun noteUnknown(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): Boolean {
+        // A bank you added or unticked is not "unknown": unticked ones were your choice.
+        if (SmsParser.anyBankFor(sender) != null) return false
+        val screened = CandidateScreen.screen(sender, body, receivedAt) ?: return false
+        val senderKey = SmsParser.senderKey(sender)
+        if (dao.senderMutedCount(senderKey) > 0) return false
+        val sent = sentAt?.takeIf { it > 0 }
+        val key = SmsKey.of(sender, sent, receivedAt, body)
+        if (dao.candidateKnown(key) > 0) return false
+        return dao.insertCandidate(
+            SmsCandidateEntity(
+                dedupKey = key, sender = sender.trim(), senderKey = senderKey, body = body,
+                receivedAt = receivedAt, sentAt = sent, source = source,
+                kind = screened.kind.name, reading = screened.reading, shapeKey = screened.shapeKey,
+                createdAt = System.currentTimeMillis(), state = CAND_OPEN,
+            ),
+        ) != -1L
+    }
+
+    /**
+     * "This sender is my bank": adds the sender, then reads every waiting message from it like any other message.
+     * Anything the reader cannot read lands in Needs review as usual. Returns how many messages were read.
+     */
+    suspend fun acceptSender(sender: String, bankName: String): Int {
+        val key = SmsParser.senderKey(sender)
+        val waiting = dao.openCandidatesFor(key)
+        addSender(sender, bankName)
+        db.withTransaction {
+            for (c in waiting) {
+                runCatching { ingestSms(c.sender, c.body, c.receivedAt, c.sentAt, c.source, deferResolve = true) }
+                dao.closeCandidate(c.id, CAND_ACCEPTED)
+            }
+        }
+        finishBatch()
+        return waiting.size
+    }
+
+    /** "Not financial": this one message is dropped (its text is cleared, only its key stays so it isn't offered again). */
+    suspend fun dismissCandidate(id: Long) = dao.closeCandidate(id, CAND_DISMISSED)
+
+    /** "Never show this sender": its waiting messages are dropped and later ones are not kept. Can be undone with [unmuteSender]. */
+    suspend fun muteSender(sender: String) {
+        val key = SmsParser.senderKey(sender)
+        db.withTransaction {
+            dao.closeCandidatesFor(key, CAND_DISMISSED)
+            dao.insertCandidate(
+                SmsCandidateEntity(
+                    dedupKey = "MUTE|$key", sender = sender.trim(), senderKey = key, body = "",
+                    receivedAt = 0, sentAt = null, source = "", kind = "MUTED", reading = null, shapeKey = "",
+                    createdAt = System.currentTimeMillis(), state = CAND_MUTED,
+                ),
+            )
+        }
+    }
+
+    suspend fun unmuteSender(senderKey: String) = dao.deleteMute(senderKey)
 
     private fun CardType.dbName() = when (this) {
         CardType.CREDIT -> CardTypes.CREDIT

@@ -374,6 +374,9 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     var notTxn by remember { mutableStateOf<SmsEntity?>(null) }
     var nudge by remember { mutableStateOf(vm.shareNudgeDue()) }
     val held by vm.heldReadings.collectAsStateWithLifecycle()
+    val unknown by vm.unknownMessages.collectAsStateWithLifecycle()
+    val hidden by vm.hiddenSenders.collectAsStateWithLifecycle()
+    val unknownGroups = remember(unknown) { unknown.groupBy { it.senderKey }.values.toList() }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
 
@@ -412,6 +415,54 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                         TextButton(onClick = { vm.keepReading(h.smsId) }) { Text("Keep mine") }
                         TextButton(onClick = { vm.useNewReading(h.smsId) }) { Text("Use new") }
+                    }
+                }
+            }
+        }
+        if (unknown.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${unknown.size} message${if (unknown.size == 1) "" else "s"} from senders Fils doesn't know", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "These mention an amount but come from a sender that isn't one of your banks yet. Nothing here is counted. " +
+                            "If a sender is your bank, tap \"These are from my bank\" and Fils will read its messages. They stay here until you decide.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            items(unknownGroups.size) { gi ->
+                val msgs = unknownGroups[gi]
+                val first = msgs.first()
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${first.sender} · ${msgs.size} message${if (msgs.size == 1) "" else "s"}", style = MaterialTheme.typography.titleSmall)
+                    msgs.take(3).forEach { m ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (m.kind == "RECOGNISABLE") "Looks like a transaction: ${m.reading ?: "amount found"}" else "Unfamiliar format (has an amount)",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.amber,
+                        )
+                        SelectionContainer {
+                            Text(m.body, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                        }
+                        TextButton(onClick = { vm.dismissUnknown(m.id) }) { Text("Not financial", color = Ink.muted) }
+                    }
+                    if (msgs.size > 3) Text("+ ${msgs.size - 3} more from this sender", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        TextButton(onClick = { vm.acceptUnknownSender(first.sender, first.body) }) { Text("These are from my bank") }
+                        TextButton(onClick = { vm.hideUnknownSender(first.sender) }) { Text("Hide this sender", color = Ink.muted) }
+                    }
+                }
+            }
+        }
+        if (hidden.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("Hidden senders", style = MaterialTheme.typography.titleSmall)
+                    hidden.forEach { h ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(h.sender, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { vm.showSenderAgain(h.senderKey) }) { Text("Show again") }
+                        }
                     }
                 }
             }
@@ -455,7 +506,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 }
             }
         }
-        if (failed.isEmpty() && held.isEmpty()) {
+        if (failed.isEmpty() && held.isEmpty() && unknown.isEmpty()) {
             item { Muted("Nothing to review. Every bank message was read.", Modifier.padding(8.dp)) }
         }
         items(failed, key = { it.id }) { s ->

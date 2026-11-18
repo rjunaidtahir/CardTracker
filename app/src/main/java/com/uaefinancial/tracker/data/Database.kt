@@ -190,6 +190,36 @@ data class SmsReadingEntity(
     val state: String = "HELD",
 )
 
+/**
+ * A message from a sender the app doesn't know yet that could be financial (it has an amount and is not a one-time
+ * code). Kept locally and shown in Needs review until you decide. Open candidates are never removed automatically.
+ * Once accepted (the message is then read like any other) or dismissed, the text is cleared and only the key stays,
+ * so the same message is not offered twice.
+ */
+@Entity(
+    tableName = "sms_candidates",
+    indices = [Index(value = ["dedupKey"], unique = true), Index(value = ["senderKey"])],
+)
+data class SmsCandidateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dedupKey: String,
+    val sender: String,
+    val senderKey: String,
+    val body: String,
+    val receivedAt: Long,
+    val sentAt: Long?,
+    val source: String,
+    /** RECOGNISABLE (the generic reader found a transaction) or UNFAMILIAR (an amount, but no readable format). */
+    val kind: String,
+    /** What the generic reader found, in words (RECOGNISABLE only). */
+    val reading: String?,
+    /** Masked wording with nothing personal in it; lets a verified sender+format pair be recognised later. */
+    val shapeKey: String,
+    val createdAt: Long,
+    /** OPEN until you choose; then ACCEPTED or DISMISSED. */
+    val state: String,
+)
+
 @Entity(tableName = "statements", indices = [Index(value = ["smsId"]), Index(value = ["cardKey"])])
 data class StatementEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -437,6 +467,40 @@ interface AppDao {
 
     @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
     suspend fun deleteAllSmsTxns()
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCandidate(c: SmsCandidateEntity): Long
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' ORDER BY receivedAt DESC")
+    fun openCandidates(): Flow<List<SmsCandidateEntity>>
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey ORDER BY receivedAt ASC")
+    suspend fun openCandidatesFor(senderKey: String): List<SmsCandidateEntity>
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE state = 'OPEN'")
+    suspend fun openCandidateCount(): Int
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE dedupKey = :dedupKey")
+    suspend fun candidateKnown(dedupKey: String): Int
+
+    /** Accepted or dismissed: the text is cleared (only the key stays so it is not offered again). */
+    @Query("UPDATE sms_candidates SET state = :state, body = '', reading = NULL WHERE id = :id")
+    suspend fun closeCandidate(id: Long, state: String)
+
+    @Query("UPDATE sms_candidates SET state = :state, body = '', reading = NULL WHERE senderKey = :senderKey AND state = 'OPEN'")
+    suspend fun closeCandidatesFor(senderKey: String, state: String)
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE senderKey = :senderKey AND state = 'MUTED'")
+    suspend fun senderMutedCount(senderKey: String): Int
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'MUTED' ORDER BY sender")
+    fun mutedSenders(): Flow<List<SmsCandidateEntity>>
+
+    @Query("DELETE FROM sms_candidates WHERE senderKey = :senderKey AND state = 'MUTED'")
+    suspend fun deleteMute(senderKey: String)
+
+    @Query("SELECT * FROM sms_candidates")
+    suspend fun allCandidates(): List<SmsCandidateEntity>
 
     @Query("DELETE FROM sms_readings WHERE smsId = :smsId")
     suspend fun clearReadings(smsId: Long)
@@ -764,8 +828,9 @@ data class StatusCount(val status: String, val n: Int)
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
         BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class, SmsReadingEntity::class,
+        SmsCandidateEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -64,5 +64,19 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+    /** 2.7: messages from senders the app doesn't know yet, kept for your review; nothing is removed. */
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `sms_candidates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`dedupKey` TEXT NOT NULL, `sender` TEXT NOT NULL, `senderKey` TEXT NOT NULL, `body` TEXT NOT NULL, " +
+                    "`receivedAt` INTEGER NOT NULL, `sentAt` INTEGER, `source` TEXT NOT NULL, `kind` TEXT NOT NULL, " +
+                    "`reading` TEXT, `shapeKey` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `state` TEXT NOT NULL)",
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_sms_candidates_dedupKey` ON `sms_candidates` (`dedupKey`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_sms_candidates_senderKey` ON `sms_candidates` (`senderKey`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
 }
