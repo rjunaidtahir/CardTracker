@@ -48,3 +48,8 @@ if (withAndroid) {
         }
     }
 }
+
+// Let tests print accuracy reports into the CI log.
+tasks.withType<Test>().configureEach {
+    testLogging { showStandardStreams = true }
+}

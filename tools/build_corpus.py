@@ -58,7 +58,7 @@ out = ["package com.uaefinancial.tracker.intel", "",
        "// Only raw wording of test messages (invented numbers); nothing from a real user.", "",
        "internal object CorpusData {", "    /** (sender, body); sender is empty when the fixture does not name one. */",
        "    val raw: List<Pair<String, String>> = listOf("]
-for sender, body in rows:
+for body, sender in rows:
     out.append(f"        {esc(sender)} to {esc(body)},")
 out += ["    )", "}", ""]
 open("shared/src/commonMain/kotlin/com/uaefinancial/tracker/intel/CorpusData.kt", "w", encoding="utf-8").write("\n".join(out))
