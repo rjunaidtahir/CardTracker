@@ -6,6 +6,8 @@ import com.uaefinancial.tracker.core.StandingGap
 import com.uaefinancial.tracker.core.toDecimalOrNull
 import com.uaefinancial.tracker.core.Decimal
 import androidx.room.withTransaction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.uaefinancial.tracker.core.IngestOutcome
 import com.uaefinancial.tracker.core.SmsKey
 import com.uaefinancial.tracker.core.Spending
@@ -836,12 +838,55 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     data class FixResult(val outcome: IngestOutcome, val similar: Int)
 
     /** What the smart reader makes of an SMS: used to pre-fill the Fix form. */
+    /**
+     * Compares the small on-device model with what the verified rules concluded, for every read message, and stores
+     * the result in [AiCheckEntity]. Advisory only: it reads transactions and writes nothing but ai_checks, so the
+     * ledger is the same with it on or off. Returns how many messages the model clearly disagrees with the rules on.
+     */
+    suspend fun updateSecondOpinions(): Int {
+        if (prefs?.aiSecondOpinion == false) { dao.clearAiChecks(); return 0 }
+        return withContext(Dispatchers.Default) {
+            val txnBySms = dao.allTxns().filter { it.smsId != null && !it.inferred }.groupBy { it.smsId!! }
+            val stmtSms = dao.allStatements().map { it.smsId }.toSet()
+            val now = System.currentTimeMillis()
+            val rows = ArrayList<AiCheckEntity>()
+            for (s in dao.smsForReparse()) {
+                val rule: com.uaefinancial.tracker.intel.Label = when {
+                    txnBySms[s.id] != null ->
+                        com.uaefinancial.tracker.intel.Label.of(runCatching { TxnType.valueOf(txnBySms[s.id]!!.first().type) }.getOrDefault(TxnType.PURCHASE))
+                    s.id in stmtSms -> com.uaefinancial.tracker.intel.Label.STATEMENT
+                    else -> continue
+                }
+                val body = SmsParser.normalizeBody(s.body)
+                val top = com.uaefinancial.tracker.intel.MessageIntel.top(body) ?: continue
+                val v = com.uaefinancial.tracker.intel.MessageIntel.secondOpinion(body, rule)
+                rows += AiCheckEntity(s.id, rule.name, top.first.name, (top.second * 100).toInt(), v.name, now)
+            }
+            db.withTransaction { dao.pruneAiChecks(); dao.upsertAiChecks(rows) }
+            rows.count { it.verdict == "DISAGREE" }
+        }
+    }
+
+    fun aiDisagreements() = dao.aiDisagreements()
+    fun aiVerdictCounts() = dao.aiVerdictCounts()
+
     fun guess(sms: SmsEntity): ParsedTransaction? {
         val bank = sms.bank ?: sms.sender
         val body = SmsParser.normalizeBody(sms.body)
         val read = (runCatching { com.uaefinancial.tracker.parser.SmartParser.read(bank, body, sms.receivedAt) }.getOrNull() as? ParseResult.Transaction)?.txn
         // Not readable as a whole: still offer what it does say (amount, currency, digits, a likely kind) rather than a blank form.
         return read ?: runCatching { com.uaefinancial.tracker.parser.SmartParser.suggest(bank, body, sms.receivedAt) }.getOrNull()
+    }
+
+    /**
+     * The model's suggestion for a message the rules could not read (null when it is off, or finds nothing usable).
+     * Shown beside the Fix form; it never saves anything by itself.
+     */
+    suspend fun aiSuggestion(sms: SmsEntity): com.uaefinancial.tracker.intel.Suggestion? {
+        if (prefs?.aiSecondOpinion == false) return null
+        return withContext(Dispatchers.Default) {
+            runCatching { com.uaefinancial.tracker.intel.MessageIntel.suggest(sms.bank ?: sms.sender, sms.body, sms.receivedAt) }.getOrNull()
+        }
     }
 
     // -------------------------------------------------------------- cards you add by hand

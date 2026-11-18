@@ -78,5 +78,15 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+    /** 2.5: the small on-device model's second opinion beside each rule reading (advisory; new table only). */
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `ai_checks` (`smsId` INTEGER PRIMARY KEY NOT NULL, `ruleLabel` TEXT NOT NULL, " +
+                    "`aiLabel` TEXT NOT NULL, `confidencePct` INTEGER NOT NULL, `verdict` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+            )
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
 }

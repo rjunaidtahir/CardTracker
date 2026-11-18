@@ -31,6 +31,11 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_LAST_SYNC, -1L).takeIf { it >= 0 }
         set(v) { sp.edit { putLong(KEY_LAST_SYNC, v ?: -1L) } }
 
+    /** The on-device second opinion (advisory, off-line). On unless you turn it off. */
+    var aiSecondOpinion: Boolean
+        get() = sp.getBoolean("ai_second_opinion", true)
+        set(v) { sp.edit { putBoolean("ai_second_opinion", v) } }
+
     /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
         get() = sp.getBoolean(KEY_LIVE, true)

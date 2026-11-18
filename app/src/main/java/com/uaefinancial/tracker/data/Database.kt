@@ -344,6 +344,23 @@ data class SmsFixEntity(
 
 fun cardKeyOf(bank: String, last4: String?) = "$bank ·${last4 ?: "????"}"
 
+/**
+ * The second opinion on a message the rules already read: what the small on-device model thinks it is, beside what the
+ * rules concluded. Advisory only; nothing here changes a transaction. One row per message, rebuilt at any time.
+ */
+@Entity(tableName = "ai_checks")
+data class AiCheckEntity(
+    @PrimaryKey val smsId: Long,
+    /** What the rules concluded: PURCHASE, REFUND, ... */
+    val ruleLabel: String,
+    /** What the model thinks. */
+    val aiLabel: String,
+    val confidencePct: Int,
+    /** AGREE, DISAGREE or UNSURE. */
+    val verdict: String,
+    val createdAt: Long,
+)
+
 @Dao
 interface AppDao {
     // --- SMS
@@ -741,6 +758,23 @@ interface AppDao {
     @Query("SELECT * FROM transactions ORDER BY timestamp")
     suspend fun allTxns(): List<TransactionEntity>
 
+    // ---- second opinion (advisory)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAiChecks(rows: List<AiCheckEntity>)
+
+    @Query("DELETE FROM ai_checks")
+    suspend fun clearAiChecks()
+
+    @Query("DELETE FROM ai_checks WHERE smsId NOT IN (SELECT id FROM sms)")
+    suspend fun pruneAiChecks()
+
+    @Query("SELECT * FROM ai_checks WHERE verdict = 'DISAGREE' ORDER BY confidencePct DESC")
+    fun aiDisagreements(): Flow<List<AiCheckEntity>>
+
+    @Query("SELECT verdict AS status, COUNT(*) AS n FROM ai_checks GROUP BY verdict")
+    fun aiVerdictCounts(): Flow<List<StatusCount>>
+
+
     @Query("SELECT * FROM transactions WHERE source = 'MANUAL' ORDER BY timestamp")
     suspend fun manualTxns(): List<TransactionEntity>
 
@@ -828,9 +862,9 @@ data class StatusCount(val status: String, val n: Int)
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
         BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class, SmsReadingEntity::class,
-        SmsCandidateEntity::class,
+        SmsCandidateEntity::class, AiCheckEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

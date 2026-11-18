@@ -790,6 +790,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 lastSyncSummary.value = r.summary()
                 message.value = r.summary()
                 refreshWidget()
+                refreshSecondOpinions()
             } catch (e: SecurityException) {
                 message.value = "SMS permission missing. Allow it, then tap Sync again."
             } catch (e: Exception) {
@@ -1022,6 +1023,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         message.value = "Re-parsed: ${c[IngestOutcome.TRANSACTION] ?: 0} transactions, " +
             "${c[IngestOutcome.MERGED] ?: 0} merged, ${c[IngestOutcome.STATEMENT] ?: 0} statements, ${c[IngestOutcome.FAILED] ?: 0} need review"
         refreshWidget()
+        refreshSecondOpinions()
     }
 
     /** Grouped text of all unparsed SMS, for sharing. */
@@ -1137,6 +1139,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** What the smart reader makes of an unread SMS, to pre-fill the Fix form. */
     suspend fun guessFor(sms: SmsEntity): com.uaefinancial.tracker.parser.ParsedTransaction? =
         withContext(Dispatchers.Default) { repo.guess(sms) }
+
+    /** The on-device model's suggestion for a message the rules couldn't read (shown beside the Fix form; never saved by itself). */
+    suspend fun aiSuggestionFor(sms: SmsEntity) = repo.aiSuggestion(sms)
+
+    /** Messages where the model clearly disagrees with how the rules read them (advisory; nothing is changed). */
+    val aiDisagreements: StateFlow<List<com.uaefinancial.tracker.data.AiCheckEntity>> =
+        repo.aiDisagreements().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val aiVerdictCounts: StateFlow<Map<String, Int>> =
+        repo.aiVerdictCounts().map { l -> l.associate { it.status to it.n } }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val aiOn = MutableStateFlow(prefs.aiSecondOpinion)
+
+    fun setAiOn(on: Boolean) = viewModelScope.launch {
+        prefs.aiSecondOpinion = on
+        aiOn.value = on
+        runCatching { repo.updateSecondOpinions() }
+    }
+
+    fun refreshSecondOpinions() = viewModelScope.launch { runCatching { repo.updateSecondOpinions() } }
+
+    suspend fun smsFor(id: Long): SmsEntity? = dao.smsById(id)
 
     /** Whether "apply to similar messages" can work for this reading (the Fix form enables the option then). */
     fun canLearn(sms: SmsEntity, type: TxnType?, amountText: String, merchant: String, cardLast4: String, cardType: CardType): Boolean {

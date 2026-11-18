@@ -376,6 +376,9 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     val held by vm.heldReadings.collectAsStateWithLifecycle()
     val unknown by vm.unknownMessages.collectAsStateWithLifecycle()
     val hidden by vm.hiddenSenders.collectAsStateWithLifecycle()
+    val aiDis by vm.aiDisagreements.collectAsStateWithLifecycle()
+    val aiCounts by vm.aiVerdictCounts.collectAsStateWithLifecycle()
+    val aiOn by vm.aiOn.collectAsStateWithLifecycle()
     val unknownGroups = remember(unknown) { unknown.groupBy { it.senderKey }.values.toList() }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
@@ -415,6 +418,49 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                         TextButton(onClick = { vm.keepReading(h.smsId) }) { Text("Keep mine") }
                         TextButton(onClick = { vm.useNewReading(h.smsId) }) { Text("Use new") }
+                    }
+                }
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Second opinion", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (!aiOn) "Off. Fils reads your messages with its verified rules only."
+                            else "A small model on your phone double-checks how the rules read each message " +
+                                "(${aiCounts["AGREE"] ?: 0} agree, ${aiCounts["DISAGREE"] ?: 0} differ, ${aiCounts["UNSURE"] ?: 0} not sure). " +
+                                "It never changes anything. Works offline.",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                    Switch(checked = aiOn, onCheckedChange = { vm.setAiOn(it) })
+                }
+            }
+        }
+        if (aiOn && aiDis.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${aiDis.size} to double-check", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "The rules read these one way and the model is quite sure it is something else. Your ledger uses the rules; open the message and use Fix if the model is right.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            items(aiDis.take(20).size) { i ->
+                val c = aiDis[i]
+                var sms by remember(c.smsId) { mutableStateOf<SmsEntity?>(null) }
+                LaunchedEffect(c.smsId) { sms = vm.smsFor(c.smsId) }
+                sms?.let { s ->
+                    Panel(Modifier.fillMaxWidth()) {
+                        Text("${s.bank ?: s.sender} · ${fmtDateTime(s.receivedAt)}", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            "Rules: ${c.ruleLabel.lowercase().replace('_', ' ')} · Model: ${c.aiLabel.lowercase().replace('_', ' ')} (${c.confidencePct}%)",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.amber, modifier = Modifier.padding(top = 2.dp),
+                        )
+                        Text(s.body, style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
                     }
                 }
             }
@@ -551,6 +597,8 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
     var merchant by remember { mutableStateOf("") }
     var last4 by remember { mutableStateOf("") }
     var cardType by remember { mutableStateOf(CardType.CREDIT) }
+    var aiNote by remember { mutableStateOf<String?>(null) }
+    var aiWarn by remember { mutableStateOf<String?>(null) }
     // "Apply to similar messages": on by default; only offered when it can work for this message.
     var similar by remember { mutableStateOf(true) }
     val canLearn = remember(type, amount, merchant, last4, cardType) { vm.canLearn(sms, type, amount, merchant, last4, cardType) }
@@ -563,6 +611,16 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
             last4 = g.cardLast4 ?: ""
             cardType = g.cardType
         }
+        // The on-device model may add what the keyword reader could not (e.g. the merchant); it only fills blanks.
+        vm.aiSuggestionFor(sms)?.let { a ->
+            aiNote = if (a.usable) "Fils's guess: ${a.label.name.lowercase().replace('_', ' ')} (${(a.confidence * 100).toInt()}% sure)" else null
+            if (a.usable) {
+                if (merchant.isBlank() || merchant == "Money out (transfer)" || merchant == "Money in") a.merchant?.let { merchant = it }
+                if (amount.isBlank()) a.amount?.let { amount = it.stripTrailingZeros().toPlainString() }
+                if (last4.isBlank()) a.last4?.let { last4 = it }
+            }
+            if (a.findings.isNotEmpty()) aiWarn = a.findings.joinToString("; ") { it.text }
+        }
         loaded = true
     }
     AlertDialog(
@@ -573,6 +631,8 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(sms.body, style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 6, overflow = TextOverflow.Ellipsis)
                 if (!loaded) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                aiNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Ink.muted) }
+                aiWarn?.let { Text("Check: $it", style = MaterialTheme.typography.bodySmall, color = Ink.amber) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     fixTypes.forEach { (t, label) -> Pill(label, type == t, onClick = { type = t }) }
                 }
