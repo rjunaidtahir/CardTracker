@@ -81,6 +81,15 @@ object SmartParser {
         Mention(m.range.first, m.range.last + 1, amount, code, role)
     }.toList()
 
+    /** An amount found in a message and what it is: "TXN", "AVAILABLE", "MINIMUM", "TOTAL" or "FEE". Read-only view for the on-device second opinion. */
+    data class AmountMention(val amount: Decimal, val currency: String, val role: String, val start: Int, val end: Int)
+
+    fun amountMentions(text: String): List<AmountMention> =
+        mentions(text).map { AmountMention(it.amount, it.currency, it.role.name, it.start, it.end) }
+
+    /** Card / account digits found in a message (read-only view for the second opinion). */
+    fun cardLast4s(text: String): List<String> = refs(text).map { it.last4 }
+
     // ------------------------------------------------------------ cards/accounts
 
     private data class Ref(val start: Int, val last4: String, val context: String)
