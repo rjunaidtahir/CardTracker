@@ -21,6 +21,8 @@ class IntelTest {
     @Test fun leave_one_bank_out_report() {
         val s = Corpus.samples
         var right = 0; var total = 0; var confidentWrong = 0; var confident = 0
+        val sweep = listOf(0.8, 0.9, 0.95, 0.99, 0.999)
+        val sweepN = sweep.associateWith { 0 }.toMutableMap(); val sweepWrong = sweep.associateWith { 0 }.toMutableMap()
         for (bank in s.map { it.group }.distinct()) {
             val train = s.filter { it.group != bank }
             if (train.size < 50) continue
@@ -32,8 +34,10 @@ class IntelTest {
                 total++
                 if (l == t.label) right++
                 if (pr >= MessageIntel.DISAGREE_AT) { confident++; if (l != t.label) confidentWrong++ }
+                for (th in sweep) { if (pr >= th) { sweepN[th] = sweepN.getValue(th) + 1; if (l != t.label) sweepWrong[th] = sweepWrong.getValue(th) + 1 } }
             }
         }
+        println("INTEL threshold sweep (unseen bank, wrong/confident): " + sweep.joinToString { "${it}: ${sweepWrong[it]}/${sweepN[it]}" })
         val acc = 100.0 * right / total
         println("INTEL leave-one-bank-out: $right/$total = ${acc.toInt()}%; confident(>=0.80) $confident, wrong among them $confidentWrong")
         assertTrue(total > 100)
