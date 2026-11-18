@@ -1100,7 +1100,7 @@ class PackAuditTest {
                 a.startsWith("IGN") && (b.startsWith("T/") || b.startsWith("S/")) -> { unignore++; "UNIGNORE" }
                 else -> { fresh++; "NEW" }
             }
-            if (tag == "NEW" && fresh > 14) continue
+            if (tag == "NEW" && !b.endsWith("/PACK")) continue
             lines.append(tag).append('|').append(i).append('|').append(auditCorpus[i].first).append('|').append(a).append(" => ").append(b).append('|').append(auditCorpus[i].second.take(60)).append('\n')
         }
         fail("BANK=" + bank + " n=" + auditCorpus.size + " same=" + same + " HIDE=" + hide + " CHANGED=" + hijack + " UNIGNORE=" + unignore + " NEW=" + fresh + "\n" + lines)
