@@ -66,7 +66,7 @@ for f in glob.glob("*/build/test-results/testDebugUnitTest/*.xml"):
             msg = (fail.get("message") or "").strip()
             body = (fail.text or "").strip().splitlines()
             where = next((b.strip() for b in body if "cardtracker" in b or "uaefin" in b), "")
-            failed.append(f"{case.get('classname')}.{case.get('name')}: {msg[:600]} @ {where}")
+            failed.append(f"{case.get('classname')}.{case.get('name')}: {msg[:3400]} @ {where}")
 
 # Lint
 lint = []
@@ -89,7 +89,7 @@ for f in glob.glob("app/build/reports/lint-results-debug.xml") + glob.glob("app/
     break
 
 emit("error", "Compile errors", errors)
-emit("error", "Failed tests", failed)
+emit("error", "Failed tests", failed, limit=3800)
 emit("warning", "Kotlin warnings", warnings)
 emit("warning", "Lint", lint)
 summary = [
