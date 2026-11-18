@@ -470,7 +470,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 Panel(Modifier.fillMaxWidth()) {
                     Text("${unknown.size} message${if (unknown.size == 1) "" else "s"} from senders Fils doesn't know", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "These mention an amount but come from a sender that isn't one of your banks yet. Nothing here is counted. " +
+                        "These read like a bank transaction but come from a sender that isn't one of your banks yet. Nothing here is counted. " +
                             "If a sender is your bank, tap \"These are from my bank\" and Fils will read its messages. They stay here until you decide.",
                         style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
                     )

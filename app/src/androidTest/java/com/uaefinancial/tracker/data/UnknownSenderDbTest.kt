@@ -59,9 +59,31 @@ class UnknownSenderDbTest {
         assertEquals(0, runBlocking { db.dao().allSms() }.size)
     }
 
-    @Test fun an_unfamiliar_format_with_an_amount_is_kept_as_unfamiliar() {
+    @Test fun a_message_with_an_amount_but_no_transaction_is_not_kept() {
         ingest("MYBANKX", unfamiliar)
-        assertEquals("UNFAMILIAR", open().single().kind)
+        assertEquals(0, candidates().size)
+    }
+
+    @Test fun a_flood_of_promotions_never_reaches_review() {
+        val promos = listOf(
+            "du recharge offer: Recharge any du prepaid with AED 50+ and get AED 10 back instantly. T&Cs apply.",
+            "Win AED 1,000 every day! Enter now: dupay.app.link/CSM25",
+            "Get 30 GB data for only AED 50. Dial *055*199# to activate.",
+        )
+        for (i in 0 until 600) ingest("AD-Promo${i % 30}", promos[i % 3] + " ref $i", t + i)
+        assertEquals(0, candidates().size)
+        assertEquals(0, runBlocking { db.dao().allSms() }.size)
+    }
+
+    @Test fun real_looking_transactions_are_capped_per_sender_so_review_cannot_be_buried() {
+        for (i in 0 until 40) ingest("MYBANKX", "Your card ending 9090 was used for AED ${10 + i}.00 at SHOP$i on 21/09/2026 12:00.", t + i * 1000L)
+        assertEquals(MAX_OPEN_PER_SENDER, open().size)
+    }
+
+    @Test fun a_sender_declined_at_setup_never_comes_into_review() {
+        runBlocking { repo.declineSenders(listOf("MYBANKX")) }
+        ingest("MYBANKX", purchase)
+        assertEquals(0, open().size)
     }
 
     @Test fun one_time_codes_and_chat_are_never_kept() {
@@ -90,14 +112,6 @@ class UnknownSenderDbTest {
         assertEquals(IngestOutcome.TRANSACTION, ingest("MYBANKX", laterPurchase, t + 86_400_000L))
         assertEquals(2, txns().size)
         assertEquals("ok", integrity())
-    }
-
-    @Test fun accepting_a_sender_whose_message_is_not_a_transaction_keeps_the_message_and_posts_nothing() {
-        ingest("MYBANKX", unfamiliar)
-        runBlocking { repo.acceptSender("MYBANKX", "My Bank") }
-        assertEquals(0, txns().size)
-        val stored = runBlocking { db.dao().allSms() }.single { it.body == unfamiliar }
-        assertTrue("never read as a transaction", stored.status != SmsStatus.TRANSACTION)
     }
 
     @Test fun not_financial_clears_the_text_and_the_message_is_not_offered_again() {

@@ -270,6 +270,8 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
                 val keep = excludedBefore.filterNot { e -> known.any { it.first.equals(e, ignoreCase = true) } }.toSet()
                 vm.setExcludedBanksBeforeImport(keep + off)
             }
+            // Suggested senders you left unticked are never offered again (also not in Needs review).
+            vm.declineSenders(r?.suggestions.orEmpty().filter { !(picked[it.sender] ?: true) }.map { it.sender })
             importFrom = finished
             // Senders first, then one import that includes their older messages.
             if (add.isNotEmpty()) vm.addSenders(add, syncAfter = true) else vm.sync()

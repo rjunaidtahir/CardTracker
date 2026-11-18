@@ -753,6 +753,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissUnknown(id: Long) = viewModelScope.launch { repo.dismissCandidate(id) }
 
+    fun declineSenders(senders: List<String>) { if (senders.isNotEmpty()) viewModelScope.launch { repo.declineSenders(senders) } }
+
     fun hideUnknownSender(sender: String) = viewModelScope.launch {
         repo.muteSender(sender)
         message.value = "Hidden. You can show it again from Needs review."

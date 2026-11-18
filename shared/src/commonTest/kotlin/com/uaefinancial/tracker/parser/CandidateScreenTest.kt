@@ -17,10 +17,23 @@ class CandidateScreenTest {
         assertNotNull(s.reading)
     }
 
-    @Test fun a_message_with_an_amount_but_no_clear_format_is_kept_as_unfamiliar() {
-        val s = assertNotNull(CandidateScreen.screen("MyBank", "Reminder: your invoice of AED 350.00 is waiting for you.", now))
-        assertEquals(CandidateKind.UNFAMILIAR, s.kind)
-        assertNull(s.reading)
+    @Test fun a_message_with_an_amount_but_no_transaction_in_it_is_not_kept() {
+        assertNull(CandidateScreen.screen("MyBank", "Reminder: your invoice of AED 350.00 is waiting for you.", now))
+    }
+
+    @Test fun promotions_and_telecom_offers_are_not_kept() {
+        val promos = listOf(
+            "du recharge offer: Recharge any du prepaid with AED 50+ on du Pay and get AED 10 back instantly. Applicable once per customer. T&Cs apply.",
+            "Know someone who'd love du Pay as much as you do? Invite them today and earn up to AED 2,000 in rewards!",
+            "Get 30 GB data (1 GB per day for 30 days) for only AED 50. Dial *055*199# to activate.",
+            "Win AED 1,000 every day! Send money home or spend with du Pay. Enter now: dupay.app.link/CSM25",
+            "Dear Customer, Thank you for reloading your account with total amount of AED 200.00. Your Current balance is AED 200.00. Thank you, ENOC",
+        )
+        for (p in promos) assertNull(CandidateScreen.screen("AD-duPay", p, now), p)
+        // A flood of them from many senders stays out.
+        var kept = 0
+        for (i in 0 until 3000) if (CandidateScreen.screen("AD-Promo${i % 40}", promos[i % promos.size] + " ref $i", now) != null) kept++
+        assertEquals(0, kept)
     }
 
     @Test fun one_time_codes_are_never_kept() {
@@ -43,7 +56,7 @@ class CandidateScreenTest {
     }
 
     @Test fun short_codes_count_as_named_senders() {
-        assertNotNull(CandidateScreen.screen("24273", "Reminder: your invoice of AED 350.00 is waiting for you.", now))
+        assertNotNull(CandidateScreen.screen("24273", purchase, now))
     }
 
     @Test fun the_shape_key_carries_no_digits() {

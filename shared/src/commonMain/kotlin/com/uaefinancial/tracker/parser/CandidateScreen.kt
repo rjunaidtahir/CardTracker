@@ -18,9 +18,9 @@ data class Screened(
 )
 
 /**
- * First look at a message from a sender that is not one of your banks. Recall comes first: anything that could be a
- * financial message is kept (locally) for you to look at. Only two kinds are thrown away unseen: one-time codes, and
- * messages with no amount in them at all. A message from a phone number must also read like a bank alert, so ordinary
+ * First look at a message from a sender that is not one of your banks. Only a message that reads as a real transaction
+ * (amount, currency, direction, not a one-time code) is kept (locally) for you to look at; everything else, including
+ * promotions, bills and reminders that merely mention an amount, is dropped unseen. A message from a phone number must also read like a bank alert, so ordinary
  * chat about money ("can you send 50 dirhams") is not kept.
  *
  * Nothing here posts anything: a kept message is a candidate in Needs review until you confirm the sender.
@@ -36,9 +36,12 @@ object CandidateScreen {
         if (!named && !SmartParser.looksLikeBankAlert(text)) return null
 
         val read = runCatching { SmartParser.read(addr.ifEmpty { "Unknown" }, text, receivedAt) }.getOrNull()
-        val summary = summarise(read)
+        // Only a message the generic reader reads as an actual transaction is offered. Promos, bills, reminders and
+        // anything that "has an amount" but fits no reading are dropped unseen, so Needs review stays small.
+        if (read !is ParseResult.Transaction) return null
+        val summary = summarise(read) ?: return null
         val shape = Masker.mask(text).let { if (it.safe) it.shape else "" }
-        return Screened(if (summary != null) CandidateKind.RECOGNISABLE else CandidateKind.UNFAMILIAR, summary, shape)
+        return Screened(CandidateKind.RECOGNISABLE, summary, shape)
     }
 
     private fun summarise(r: ParseResult?): String? = when (r) {

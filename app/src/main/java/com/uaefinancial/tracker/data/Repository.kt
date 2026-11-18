@@ -26,6 +26,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Shared by Sync and live listening: same parser, same de-duplication. */
+const val MAX_OPEN_PER_SENDER = 15
+const val MAX_OPEN_TOTAL = 200
 const val CAND_OPEN = "OPEN"
 const val CAND_ACCEPTED = "ACCEPTED"
 const val CAND_DISMISSED = "DISMISSED"
@@ -369,6 +371,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         val screened = CandidateScreen.screen(sender, body, receivedAt) ?: return false
         val senderKey = SmsParser.senderKey(sender)
         if (dao.senderMutedCount(senderKey) > 0) return false
+        // A safety cap, so a flood can never bury Needs review: a few per sender, a few hundred in all.
+        if (dao.openCandidateCountFor(senderKey) >= MAX_OPEN_PER_SENDER || dao.openCandidateCount() >= MAX_OPEN_TOTAL) return false
         val sent = sentAt?.takeIf { it > 0 }
         val key = SmsKey.of(sender, sent, receivedAt, body)
         if (dao.candidateKnown(key) > 0) return false
@@ -419,6 +423,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     }
 
     suspend fun unmuteSender(senderKey: String) = dao.deleteMute(senderKey)
+
+    /** Senders listed at setup that you left unticked: never offered again (same as "Hide this sender"). */
+    suspend fun declineSenders(senders: List<String>) { for (s in senders) if (dao.senderMutedCount(SmsParser.senderKey(s)) == 0) muteSender(s) }
 
     private fun CardType.dbName() = when (this) {
         CardType.CREDIT -> CardTypes.CREDIT

@@ -488,7 +488,7 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCandidate(c: SmsCandidateEntity): Long
 
-    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' ORDER BY receivedAt DESC")
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND kind = 'RECOGNISABLE' ORDER BY receivedAt DESC")
     fun openCandidates(): Flow<List<SmsCandidateEntity>>
 
     @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey ORDER BY receivedAt ASC")
@@ -506,6 +506,12 @@ interface AppDao {
 
     @Query("UPDATE sms_candidates SET state = :state, body = '', reading = NULL WHERE senderKey = :senderKey AND state = 'OPEN'")
     suspend fun closeCandidatesFor(senderKey: String, state: String)
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE state = 'OPEN'")
+    suspend fun openCandidateCount(): Int
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey")
+    suspend fun openCandidateCountFor(senderKey: String): Int
 
     @Query("SELECT COUNT(*) FROM sms_candidates WHERE senderKey = :senderKey AND state = 'MUTED'")
     suspend fun senderMutedCount(senderKey: String): Int

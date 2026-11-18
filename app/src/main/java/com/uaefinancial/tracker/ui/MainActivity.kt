@@ -169,6 +169,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     val txns by vm.transactions.collectAsStateWithLifecycle()
     val summaries by vm.cardSummaries.collectAsStateWithLifecycle()
     val failed by vm.failedSms.collectAsStateWithLifecycle()
+    val unknownOpen by vm.unknownMessages.collectAsStateWithLifecycle()
+    val reviewTotal = failed.size + unknownOpen.size
     val message by vm.message.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
     val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
@@ -369,8 +371,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         selected = route is Route.Home && nav.currentTab == tab,
                         onClick = { nav.selectTab(tab) },
                         icon = {
-                            if (tab == Tab.MORE && failed.isNotEmpty()) {
-                                BadgedBox(badge = { Badge { Text("${failed.size}") } }) { Icon(tab.icon, null) }
+                            if (tab == Tab.MORE && reviewTotal > 0) {
+                                BadgedBox(badge = { Badge { Text("$reviewTotal") } }) { Icon(tab.icon, null) }
                             } else {
                                 Icon(tab.icon, null)
                             }
@@ -390,7 +392,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onOpenCategory = { id -> vm.selectCard(null); vm.selectCategory(id); nav.selectTab(Tab.ACTIVITY) },
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onOpenFixed = { nav.push(Route.FixedPayments) },
-                        reviewCount = failed.size,
+                        reviewCount = reviewTotal,
                         onOpenReview = { nav.push(Route.Review) },
                         onSync = onSync,
                         onAddManual = { nav.selectTab(Tab.ACTIVITY) },
@@ -411,7 +413,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     ) }
                     Tab.MORE -> MoreScreen(
                         vm = vm,
-                        reviewCount = failed.size,
+                        reviewCount = reviewTotal,
                         liveOn = liveOn,
                         lastSyncAt = lastSyncAt,
                         biometricAvailable = biometricAvailable,
