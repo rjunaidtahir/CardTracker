@@ -92,11 +92,12 @@ class UnknownSenderDbTest {
         assertEquals("ok", integrity())
     }
 
-    @Test fun accepting_a_sender_whose_message_cannot_be_read_puts_it_in_needs_review_not_the_ledger() {
+    @Test fun accepting_a_sender_whose_message_is_not_a_transaction_keeps_the_message_and_posts_nothing() {
         ingest("MYBANKX", unfamiliar)
         runBlocking { repo.acceptSender("MYBANKX", "My Bank") }
         assertEquals(0, txns().size)
-        assertTrue("the unreadable message must be in the failed list", runBlocking { db.dao().failedSmsList() }.any { it.body == unfamiliar })
+        val stored = runBlocking { db.dao().allSms() }.single { it.body == unfamiliar }
+        assertTrue("never read as a transaction", stored.status != SmsStatus.TRANSACTION)
     }
 
     @Test fun not_financial_clears_the_text_and_the_message_is_not_offered_again() {
