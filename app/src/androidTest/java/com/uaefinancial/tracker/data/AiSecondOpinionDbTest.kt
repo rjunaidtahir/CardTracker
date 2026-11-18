@@ -101,7 +101,7 @@ class AiSecondOpinionDbTest {
         load()
         runBlocking { repo.updateSecondOpinions() }
         val dis = runBlocking { repo.aiDisagreements().first() }
-        assertTrue(dis.all { it.verdict == "DISAGREE" && it.confidencePct >= 80 })
+        assertTrue(dis.all { it.verdict == "DISAGREE" && it.confidencePct >= 99 })
     }
 
     @Test fun a_suggestion_for_an_unread_message_never_saves_anything() {

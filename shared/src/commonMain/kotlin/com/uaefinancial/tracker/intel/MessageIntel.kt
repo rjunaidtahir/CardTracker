@@ -24,10 +24,10 @@ data class Suggestion(
  * Code reads every number (SmartParser); the models only decide the kind and point at merchant words in the text.
  */
 object MessageIntel {
-    /** A model may only say "the rules look wrong" at or above this probability. */
-    const val DISAGREE_AT = 0.80
+    /** A model may only say "the rules look wrong" at or above this probability (measured: ~5% wrong at this level on unseen banks, ~23% at 0.80). */
+    const val DISAGREE_AT = 0.999
     /** Below this the suggestion is not offered as a prefill. */
-    const val USABLE_AT = 0.60
+    const val USABLE_AT = 0.90
 
     private val nb: NaiveBayes by lazy {
         NaiveBayes().also { m -> m.train(Corpus.samples.map { Features.of(it.body) to it.label }) }

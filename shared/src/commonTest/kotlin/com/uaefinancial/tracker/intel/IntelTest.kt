@@ -39,7 +39,7 @@ class IntelTest {
         }
         println("INTEL threshold sweep (unseen bank, wrong/confident): " + sweep.joinToString { "${it}: ${sweepWrong[it]}/${sweepN[it]}" })
         val acc = 100.0 * right / total
-        println("INTEL leave-one-bank-out: $right/$total = ${acc.toInt()}%; confident(>=0.80) $confident, wrong among them $confidentWrong")
+        println("INTEL leave-one-bank-out: $right/$total = ${acc.toInt()}%; confident(>=DISAGREE_AT) $confident, wrong among them $confidentWrong")
         assertTrue(total > 100)
         assertTrue(acc >= 60.0, "accuracy on unseen banks fell below 60%: $acc")
     }
