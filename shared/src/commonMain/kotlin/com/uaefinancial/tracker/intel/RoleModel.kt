@@ -163,6 +163,8 @@ internal class RoleModel(samples: List<RoleCorpus.Sample>) {
  */
 internal object RoleReader {
     const val CONFIDENT = 0.90
+    /** The due date may be a little less certain when the statement total AND the minimum are both confidently found. */
+    const val DUE_WITH_BOTH_AMOUNTS = 0.75
 
     private val model: RoleModel by lazy { RoleModel(RoleCorpus.samples) }
 
@@ -173,12 +175,12 @@ internal object RoleReader {
         val spans = SmartParser.roleSpans(text, zone)
         if (spans.size < 2) return null
         val guesses = with.guess(text, spans)
-        fun best(role: String, date: Boolean): Pair<SmartParser.RoleSpan, Double>? =
-            spans.indices.filter { spans[it].isDate == date && guesses[it].role == role && guesses[it].p >= CONFIDENT }
+        fun best(role: String, date: Boolean, atLeast: Double = CONFIDENT): Pair<SmartParser.RoleSpan, Double>? =
+            spans.indices.filter { spans[it].isDate == date && guesses[it].role == role && guesses[it].p >= atLeast }
                 .maxByOrNull { guesses[it].p }?.let { spans[it] to guesses[it].p }
         val total = best("TOTAL", false) ?: return null
-        val due = best("DUE", true) ?: return null
         val min = best("MIN", false)
+        val due = best("DUE", true, if (min != null) DUE_WITH_BOTH_AMOUNTS else CONFIDENT) ?: return null
         val stmt = best("STMTDATE", true)
         val amt = total.first.amount ?: return null
         val cur = total.first.currency ?: return null
