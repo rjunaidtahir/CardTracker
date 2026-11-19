@@ -40,6 +40,6 @@ class ShippedPackTest {
         assertIs<ParseResult.Transaction>(simply)
         val tabby = SmsParser.parse("Tabby", "You spent AED 9.00 at ISLAND SHELL CAFETERIA. Your available Tabby Card limit is now AED 2488.94.", 0L)
         assertIs<ParseResult.Transaction>(tabby)
-        assertEquals(900L, tabby.txn.amountMinor)
+        assertEquals("9", tabby.txn.amount.toString().removeSuffix(".00").removeSuffix(".0"))
     }
 }
