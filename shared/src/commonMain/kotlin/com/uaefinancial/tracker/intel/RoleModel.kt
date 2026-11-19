@@ -77,6 +77,10 @@ internal object RoleFeatures {
         if (b.size >= 3) f += "bbb:${b[2]}_${b[1]}_${b[0]}"
         if (b.isEmpty()) f += "b:none"
         if (isDate && futurePayment(before)) { f += "bw:C_DUE"; f += "fp:1" }
+        // What the whole message is about: a message that names a minimum and a statement total is a statement, wherever a number sits.
+        val doc = tokens(text).toSet()
+        for (c in listOf("C_MIN", "C_TOTAL", "C_DUE")) if (c in doc) f += "d:$c"
+        if (futurePayment(tokens(text))) f += "d:fp"
         val a = after.take(4)
         for ((i, w) in a.withIndex()) {
             if (i < 2) f += "a${i + 1}:$w"
@@ -118,7 +122,7 @@ internal class RoleBayes(private val alpha: Double = 0.4) {
         for ((label, n) in labelCount) {
             val total = (labelTotal[label] ?: 0).toDouble()
             val m = featureCount[label]
-            var s = ln(n.toDouble() / docs)
+            var s = ln(1.0 / labelCount.size)
             for (f in known) s += ln(((m?.get(f) ?: 0) + alpha) / (total + alpha * v))
             scores[label] = s
         }
