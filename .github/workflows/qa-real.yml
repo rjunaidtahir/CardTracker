@@ -1,0 +1,36 @@
+name: QA real messages (manual)
+
+# Tests small encoders on the owner's masked message export (encrypted in the repo; key in the QA_DATA_KEY secret).
+on:
+  workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['tools/qa/eval_real.py', 'tools/qa/data/**', '.github/workflows/qa-real.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  real:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Decrypt the export
+        env:
+          QA_DATA_KEY: ${{ secrets.QA_DATA_KEY }}
+        run: |
+          test -n "$QA_DATA_KEY" || { echo "QA_DATA_KEY secret is not set"; exit 1; }
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:QA_DATA_KEY -in tools/qa/data/real_masked.enc | gunzip > export.txt
+          wc -l export.txt
+      - name: Install CPU PyTorch + transformers
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers==4.46.3" "numpy<2" sentencepiece protobuf
+      - name: Run
+        run: |
+          python3 tools/qa/eval_real.py export.txt 2>&1 | tee eval-real.log
+          cat qa-real-report.md >> "$GITHUB_STEP_SUMMARY"
