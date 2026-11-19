@@ -177,7 +177,9 @@ class OldBuildPackV5Test {
         val tabby = "You spent AED 9.00 at ISLAND SHELL CAFETERIA. Your available Tabby Card limit is now AED 2488.94."
         val simply = "Your Cr.Card XXX5886 was used for USD30.60 on 04/08/2023 11:04:30 at OW *passcert.com,London-GB. Avl. Cr.limit is AED2882.95"
         println("OLDBUILD looksLikeBankAlert tabby=" + SmartParser.looksLikeBankAlert(tabby) + " simplylife=" + SmartParser.looksLikeBankAlert(simply))
-        assertNotNull(GlobalBanks.match("Tabby", null, "AE"))
-        assertNotNull(GlobalBanks.match("SIMPLYLIFE", null, "AE"))
+        val report = "bankFor=" + SmsParser.bankFor("Tabby")?.name + "/" + SmsParser.bankFor("SIMPLYLIFE")?.name +
+            " match=" + GlobalBanks.match("Tabby", null, "AE")?.name + "/" + GlobalBanks.match("SIMPLYLIFE", null, "AE")?.name +
+            " alert=" + SmartParser.looksLikeBankAlert(tabby) + "/" + SmartParser.looksLikeBankAlert(simply)
+        assertEquals("REPORT", report)
     }
 }
