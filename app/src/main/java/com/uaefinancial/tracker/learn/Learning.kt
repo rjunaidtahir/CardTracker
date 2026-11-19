@@ -96,7 +96,7 @@ object Learning {
         // That is public (every customer sees it); a phone number or a contact name is never sent.
         val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
         val sentKind = if (kind == "unread") "unread/" + reason(r.shape) else kind
-        val hash = hash("$label|${r.shape}")
+        val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:")) "|$kind" else "")
         if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
         prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, sentKind, r.shape).joinToString(US.toString()))
         schedule(context)

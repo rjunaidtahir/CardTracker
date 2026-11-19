@@ -317,5 +317,8 @@ internal object CorpusData {
         "WioPersonal" to "You have earned AED 37.05 as interest on your saving space Savings",
         "WioPersonal" to "You have made a credit repayment of AED 80.74.",
         "du" to "Purchase of AED 10.00 with Credit Card ending 1111 at X, DUBAI. Avl Cr. Limit is AED 1",
+        // Real Tabby messages (owner's phone, 19 Nov 2026): a purchase and a statement notice that says "we'll charge" instead of "due".
+        "Tabby" to "You spent AED 9.00 at ISLAND SHELL CAFETERIA. Your available Tabby Card limit is now AED 2488.94.",
+        "Tabby" to "Your statement for AED 511.06 is ready. We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun, 2026. For more, go to the Tabby app.",
     )
 }

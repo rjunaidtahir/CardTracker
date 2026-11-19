@@ -33,3 +33,33 @@ class TabbyWordingTest {
         assertTrue(CandidateScreen.screen("Tabby", tabby, 0L) != null)
     }
 }
+
+class TabbyStatementWordingTest {
+    private val stmt = "Your statement for AED 511.06 is ready. We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun, 2026. For more, go to the Tabby app."
+
+    @Test fun tabbyStatementIsReadAsAStatement() {
+        val r = SmsParser.parse("Tabby", stmt, 0L)
+        kotlin.test.assertIs<ParseResult.Statement>(r)
+        kotlin.test.assertEquals("511.06", r.statement.statementBalance.toPlainString())
+        kotlin.test.assertEquals("127.78", r.statement.minimumDue?.toPlainString())
+        kotlin.test.assertEquals(30, r.statement.dueDate.dayOfMonth)
+        kotlin.test.assertEquals(6, r.statement.dueDate.monthValue)
+    }
+
+    @Test fun aChargedPurchaseWithADateIsStillAPurchase() {
+        val r = SmsParser.parse("Tabby", "You spent AED 50.00 at CAFE X on 12 Oct 2026. Your available Tabby Card limit is now AED 2000.00.", 0L)
+        kotlin.test.assertIs<ParseResult.Transaction>(r)
+    }
+}
+
+class StatementHintsTest {
+    @Test fun findsTotalMinimumAndDueDateFromTabbyWording() {
+        val text = SmsParser.normalizeBody("Your statement for AED 511.06 is ready. We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun, 2026. For more, go to the Tabby app.")
+        val h = SmartParser.statementHints(text)
+        kotlin.test.assertEquals("511.06", h.total?.toPlainString())
+        kotlin.test.assertEquals("127.78", h.minimum?.toPlainString())
+        kotlin.test.assertEquals("AED", h.currency)
+        kotlin.test.assertEquals(30, h.due?.dayOfMonth)
+        kotlin.test.assertEquals(6, h.due?.monthValue)
+    }
+}

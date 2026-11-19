@@ -59,7 +59,7 @@ object SmartParser {
         """\b(?:min(?:imum)?\.?\s*(?:amount|amt|payment|pay)?\.?\s*(?:due|payable)?|pay\s+min\.?)[^a-z0-9]*(?:(?:is|of|amount)\b[^a-z0-9]*){0,2}$""",
     )
     private val totalLabel = Regex(
-        """\b(?:total\s+(?:amount\s+|amt\.?\s+)?(?:due|outstanding|payable)|statement\s+(?:balance|amount)|stmt\.?\s+(?:bal(?:ance)?|amt)|""" +
+        """\b(?:total\s+(?:amount\s+|amt\.?\s+)?(?:due|outstanding|payable)|statement\s+(?:balance|amount|total|for|of)|stmt\.?\s+(?:bal(?:ance)?|amt)|""" +
             """outstanding(?:\s+balance)?|closing\s+balance|amount\s+due|new\s+balance|total\s+due[^:]{0,40}:?)""" +
             """[^a-z0-9]*(?:(?:is|of|amount)\b[^a-z0-9]*){0,2}$""",
     )
@@ -86,6 +86,17 @@ object SmartParser {
 
     fun amountMentions(text: String): List<AmountMention> =
         mentions(text).map { AmountMention(it.amount, it.currency, it.role.name, it.start, it.end) }
+
+    /** What a statement-like message says, for the on-device suggestion: the amounts by role and the due date, if found. */
+    data class StatementHints(val total: Decimal?, val minimum: Decimal?, val currency: String?, val due: CalendarDate?)
+
+    fun statementHints(text: String, zone: Int = SmsParser.UAE_ZONE): StatementHints {
+        val all = mentions(text)
+        val total = all.firstOrNull { it.role == Role.TOTAL } ?: all.firstOrNull { it.role == Role.TXN }
+        val minimum = all.firstOrNull { it.role == Role.MINIMUM }
+        val due = dates(text, zone, hasMinimum = minimum != null).firstOrNull { it.kind == "due" }?.date
+        return StatementHints(total?.amount, minimum?.amount, total?.currency ?: minimum?.currency, due)
+    }
 
     /** Card / account digits found in a message (read-only view for the second opinion). */
     fun cardLast4s(text: String): List<String> = refs(text).map { it.last4 }
@@ -161,9 +172,15 @@ object SmartParser {
     private val dueContext = Regex("""(?:due(?:\s+date)?|pay(?:ment)?\s+by|by|before|on or before)\W*(?:is|on|:)?\W*$|\bdue date\b.{0,60}?\bis\s*$""")
     private val statementDateContext = Regex("""(?:statement\s+date|stmt\.?\s+date|dated|statement\s+of|generated\s+on)\W*(?:is|on|:)?\W*$""")
 
+    /** "We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun": a future charge, which is the due date. */
+    private val futureChargeContext = Regex(
+        """(?:\bwe['\u2019]?ll|\bwe\s+will|\bwill(?:\s+be)?|\bis\s+going\s+to\s+be|\bare\s+going\s+to\s+be)\s+(?:automatically\s+)?""" +
+            """(?:charg|debit|deduct|collect|withdraw|tak)\w*\b.{0,100}?\b(?:on|by)\W*$""",
+    )
+
     private data class FoundDate(val at: Int, val millis: Long, val hasTime: Boolean, val date: CalendarDate, val kind: String)
 
-    private fun dates(text: String, zone: Int): List<FoundDate> {
+    private fun dates(text: String, zone: Int, hasMinimum: Boolean = false): List<FoundDate> {
         val out = mutableListOf<FoundDate>()
         timeThenDate.find(text)?.let { m ->
             SmsParser.parseDateTime("${m.groupValues[2]} ${m.groupValues[1]}")?.let { (dt, _) ->
@@ -176,9 +193,12 @@ object SmartParser {
             val (dt, hasTime) = SmsParser.parseDateTime(m.value.trim().trimEnd(',', '.').replace(timeLinkWord, " ")) ?: continue
             val before = text.substring(maxOf(0, m.range.first - 70), m.range.first).lowercase()
             val near = before.takeLast(25)
+            val wide = text.substring(maxOf(0, m.range.first - 130), m.range.first).lowercase()
             val kind = when {
                 statementDateContext.containsMatchIn(near) -> "statement"
                 dueContext.containsMatchIn(near) || Regex("""\bdue date\b.{0,60}?\bis\s*$""").containsMatchIn(before) -> "due"
+                // Only when a minimum amount is in the message, so "was charged AED 50 at X on 12 Oct" stays a purchase date.
+                hasMinimum && futureChargeContext.containsMatchIn(wide) -> "due"
                 else -> "txn"
             }
             out += FoundDate(m.range.first, dt.toEpochMillis(zone), hasTime, dt.toLocalDate(), kind)
@@ -343,7 +363,7 @@ object SmartParser {
         if (all.isEmpty()) return null
         // Only balances / limits (e.g. a balance update): nothing to record.
         if (all.all { it.role == Role.AVAILABLE }) return ParseResult.Ignored(bank, "Balance update")
-        val found = dates(text, zone)
+        val found = dates(text, zone, hasMinimum = all.any { it.role == Role.MINIMUM })
         val references = refs(text)
 
         // ---- statement / payment due

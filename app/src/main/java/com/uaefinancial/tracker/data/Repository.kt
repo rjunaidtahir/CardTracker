@@ -13,6 +13,8 @@ import com.uaefinancial.tracker.core.SmsKey
 import com.uaefinancial.tracker.core.Spending
 import com.uaefinancial.tracker.parser.BankRules
 import com.uaefinancial.tracker.parser.ParsedTransaction
+import com.uaefinancial.tracker.parser.ParsedStatement
+import com.uaefinancial.tracker.core.CalendarDate
 import com.uaefinancial.tracker.parser.CardType
 import com.uaefinancial.tracker.parser.TxnType
 import com.uaefinancial.tracker.parser.ManualEntry
@@ -130,7 +132,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         if (keys.isEmpty()) {
             LearnedFormats.setAll(emptyList())
         } else {
-            val fixes = dao.allFixes().filter { it.dedupKey in keys }.associateBy { it.dedupKey }
+            val fixes = dao.allFixes().filter { it.dedupKey in keys && it.type != FIX_STATEMENT }.associateBy { it.dedupKey }
             val sources = dao.smsByDedupKeys(keys.toList()).mapNotNull { s -> fixes[s.dedupKey]?.let { learnedSource(s, it) } }
             LearnedFormats.setAll(sources)
         }
@@ -323,9 +325,21 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         }
     }
 
+    /**
+     * Learning record for your choice on a held message: "choice:keep-mine" tells the weekly review the newer reading was
+     * wrong for this bank, "choice:use-new" that it was right. Only the fields that differed (amount, type, currency) and the
+     * masked shape are shared, and only if you allowed sharing.
+     */
+    private suspend fun shareReadingChoice(s: SmsEntity, choice: String) {
+        val held = dao.heldReadingsNow().firstOrNull { it.smsId == s.id } ?: return
+        val changes = Regex("""\(changes: ([^)]*)\)""").find(held.newSummary)?.groupValues?.get(1)?.replace(", ", ",")?.replace(" ", "-")?.take(60) ?: "unknown"
+        runCatching { onShape?.invoke(s.sender, s.bank, s.body, "choice:$choice|changes=$changes") }
+    }
+
     /** "Use new": applies the newer reading of one held message. */
     suspend fun useNewReading(smsId: Long): Boolean = lock.withLock {
         val s = dao.smsById(smsId) ?: return@withLock false
+        shareReadingChoice(s, "use-new")
         db.withTransaction {
             val o = applyParse(s.id, s.dedupKey, SmsParser.parse(s.sender, s.body, s.receivedAt), s.receivedAt, s.bank)
             if (s.id in pendingOtp && dao.txnsForSmsNow(s.id).isEmpty()) dao.deleteSms(s.id)
@@ -339,6 +353,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     /** "Keep mine": the reading you have now is saved as your own, so later re-reads never replace it. */
     suspend fun keepCurrentReading(smsId: Long): Boolean = lock.withLock {
         val s = dao.smsById(smsId) ?: return@withLock false
+        shareReadingChoice(s, "keep-mine")
         val t = dao.txnsForSmsNow(smsId).firstOrNull()
         val cardType = t?.cardKey?.let { k -> dao.allCards().firstOrNull { it.cardKey == k }?.cardType } ?: CardTypes.CREDIT
         db.withTransaction {
@@ -709,22 +724,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         dao.fixFor(dedupKey)?.let { fix -> return applyFix(smsId, dedupKey, fix, bank ?: "Bank", r) }
         return when (r) {
             is ParseResult.Transaction -> applyTransaction(smsId, dedupKey, r)
-            is ParseResult.Statement -> {
-                val s = r.statement
-                val key = canonicalKey(cardKeyOf(s.bank, s.cardLast4))
-                ensureCard(key, s.bank, s.cardLast4, s.cardType)
-                dao.insertStatement(
-                    StatementEntity(
-                        smsId = smsId, receivedAt = receivedAt, bank = s.bank, cardLast4 = s.cardLast4, cardKey = key,
-                        balanceMinor = Money.toMinor(s.statementBalance),
-                        minimumDueMinor = s.minimumDue?.let { Money.toMinor(it) },
-                        currency = s.currency, dueDateEpochDay = s.dueDate.toEpochDay(),
-                        statementDateEpochDay = s.statementDate?.toEpochDay(),
-                    ),
-                )
-                dao.setSmsResult(smsId, SmsStatus.STATEMENT, s.bank, r.ruleId, null)
-                IngestOutcome.STATEMENT
-            }
+            is ParseResult.Statement -> storeStatement(smsId, receivedAt, r.statement, r.ruleId)
             is ParseResult.Ignored -> {
                 if (!r.store) {
                     // An old SMS that a newer rule now recognises as OTP. During a re-read it is only deleted at the
@@ -748,10 +748,42 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         }
     }
 
+    /** Saves a statement (read by the app or fixed by you) and marks the message as a statement. */
+    private suspend fun storeStatement(smsId: Long, receivedAt: Long, s: ParsedStatement, ruleId: String?): IngestOutcome {
+        val key = canonicalKey(cardKeyOf(s.bank, s.cardLast4))
+        ensureCard(key, s.bank, s.cardLast4, s.cardType)
+        dao.insertStatement(
+            StatementEntity(
+                smsId = smsId, receivedAt = receivedAt, bank = s.bank, cardLast4 = s.cardLast4, cardKey = key,
+                balanceMinor = Money.toMinor(s.statementBalance),
+                minimumDueMinor = s.minimumDue?.let { Money.toMinor(it) },
+                currency = s.currency, dueDateEpochDay = s.dueDate.toEpochDay(),
+                statementDateEpochDay = s.statementDate?.toEpochDay(),
+            ),
+        )
+        dao.setSmsResult(smsId, SmsStatus.STATEMENT, s.bank, ruleId, null)
+        return IngestOutcome.STATEMENT
+    }
+
     private suspend fun applyFix(smsId: Long, dedupKey: String, fix: SmsFixEntity, bank: String, reading: ParseResult? = null): IngestOutcome {
         if (fix.type == FIX_IGNORE) {
             dao.setSmsResult(smsId, SmsStatus.IGNORED, bank, null, "You marked this as not a transaction")
             return IngestOutcome.IGNORED
+        }
+        if (fix.type == FIX_STATEMENT) {
+            // Your own statement reading: the fields are packed in "merchant" ("stmt-fix;min=<minor>;due=<epoch day>;stmt=<epoch day>").
+            val f = fix.merchant.split(';').drop(1).mapNotNull { it.split('=', limit = 2).takeIf { p -> p.size == 2 }?.let { p -> p[0] to p[1] } }.toMap()
+            val due = f["due"]?.toLongOrNull()
+            if (due == null) {
+                dao.setSmsResult(smsId, SmsStatus.FAILED, bank, null, "The statement fix could not be read")
+                return IngestOutcome.FAILED
+            }
+            val st = ParsedStatement(
+                bank = bank, cardLast4 = fix.cardLast4, cardType = CardType.CREDIT, statementBalance = Money.fromMinor(fix.amountMinor),
+                minimumDue = f["min"]?.toLongOrNull()?.let { Money.fromMinor(it) }, currency = fix.currency,
+                dueDate = CalendarDate.ofEpochDay(due), statementDate = f["stmt"]?.toLongOrNull()?.let { CalendarDate.ofEpochDay(it) }, auto = false,
+            )
+            return storeStatement(smsId, fix.timestamp, st, FIX_RULE)
         }
         val type = runCatching { TxnType.valueOf(fix.type) }.getOrDefault(TxnType.PURCHASE)
         val cardType = runCatching { CardType.valueOf(fix.cardType) }.getOrDefault(CardType.CREDIT)
@@ -808,7 +840,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         val locked = lockedFieldsFor(sms, type, amountMinor, currency, merchant, cardLast4, cardType, timestamp)
         // What the app read before your fix, for the learning record ("unread", or the type it had guessed).
         val wasRead = runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull()
-            .let { r -> if (r is ParseResult.Transaction) r.txn.type.name else "unread" }
+            .let { r -> if (r is ParseResult.Transaction) r.txn.type.name else if (r is ParseResult.Statement) "STATEMENT" else "unread" }
         val outcome = db.withTransaction {
             dao.upsertFixes(
                 listOf(
@@ -843,6 +875,36 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }
         }
         FixResult(outcome, similar)
+    }
+
+    /**
+     * Saves your reading of an SMS as a card statement / payment due notice. Kept like any other fix (survives re-reads and
+     * backups); it is never learned for "similar messages" (a new bank wording goes to the rules file instead).
+     */
+    suspend fun saveStatementFix(
+        smsId: Long, totalMinor: Long, minimumMinor: Long?, currency: String, dueEpochDay: Long, statementEpochDay: Long?, cardLast4: String?,
+    ): FixResult = lock.withLock {
+        val sms = dao.smsById(smsId) ?: return@withLock FixResult(IngestOutcome.FAILED, 0)
+        val wasRead = runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull()
+            .let { r -> if (r is ParseResult.Transaction) r.txn.type.name else if (r is ParseResult.Statement) "STATEMENT" else "unread" }
+        val packed = "stmt-fix;min=" + (minimumMinor ?: "") + ";due=$dueEpochDay;stmt=" + (statementEpochDay ?: "")
+        val outcome = db.withTransaction {
+            dao.upsertFixes(
+                listOf(
+                    SmsFixEntity(
+                        dedupKey = sms.dedupKey, type = FIX_STATEMENT, amountMinor = totalMinor, currency = currency.uppercase(),
+                        merchant = packed, cardLast4 = cardLast4?.trim()?.takeIf { it.isNotEmpty() }, cardType = CardType.CREDIT.name,
+                        timestamp = sms.receivedAt, lockedFields = "ALL",
+                    ),
+                ),
+            )
+            applyParse(sms.id, sms.dedupKey, SmsParser.parse(sms.sender, sms.body, sms.receivedAt), sms.receivedAt, sms.bank ?: sms.sender)
+        }
+        // What was wrong: the message had no due date (or no reading), and you said it is a statement. Masked shape only, if you allowed it.
+        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:STATEMENT|was=$wasRead|card=" + CardType.CREDIT.name) }
+        prefs?.let { p -> if (sms.dedupKey in p.learnedFixKeys) p.learnedFixKeys = p.learnedFixKeys - sms.dedupKey }
+        loadLearned()
+        FixResult(outcome, 0)
     }
 
     /**
@@ -948,6 +1010,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
 
     companion object {
         const val FIX_IGNORE = "IGNORE"
+        const val FIX_STATEMENT = "STATEMENT"
         const val FIX_RULE = "fixed-by-you"
         /** The FAB "standing instructions ... processed" rule (names the payee, not the account). */
         const val SI_RULE = "fab-standing-instruction"

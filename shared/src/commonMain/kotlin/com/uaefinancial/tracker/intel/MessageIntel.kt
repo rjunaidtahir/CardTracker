@@ -17,6 +17,9 @@ data class Suggestion(
     val findings: List<Finding>,
     /** True when it passed every BLOCK check and may be shown as a ready-to-use prefill. */
     val usable: Boolean,
+    /** Statement suggestions only: the minimum due and due date found in the text (the amount above is the statement amount). */
+    val minimum: Decimal? = null,
+    val dueDate: com.uaefinancial.tracker.core.CalendarDate? = null,
 )
 
 /**
@@ -61,7 +64,16 @@ object MessageIntel {
     fun suggest(sender: String, body: String, receivedAt: Long): Suggestion? {
         val text = SmsParser.normalizeBody(body)
         val (label, p) = top(text) ?: return null
-        if (label == Label.NOT_TXN || label == Label.STATEMENT) return null
+        if (label == Label.NOT_TXN) return null
+        if (label == Label.STATEMENT) {
+            // A statement / payment-due notice the rules could not read. The numbers and date come from code, never from the model.
+            val h = runCatching { SmartParser.statementHints(text) }.getOrNull() ?: return null
+            if (h.total == null) return null
+            val last4s = runCatching { SmartParser.cardLast4s(text).firstOrNull() }.getOrNull()
+            val f = Validators.check(text, Proposal(label, h.total, h.currency, null, last4s))
+            val usable = p >= USABLE_AT && !Validators.blocks(f) && h.currency != null
+            return Suggestion(label, p, h.total, h.currency, null, last4s, f, usable, h.minimum, h.due)
+        }
         val keyword = runCatching { SmartParser.suggest(sender.ifEmpty { "Unknown" }, text, receivedAt) }.getOrNull()
         val mentions = runCatching { SmartParser.amountMentions(text) }.getOrDefault(emptyList())
         val txn = mentions.firstOrNull { it.role == "TXN" && it.amount.signum() > 0 }

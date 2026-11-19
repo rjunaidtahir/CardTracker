@@ -1209,6 +1209,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
+    /** Saves your reading as a card statement. Returns false (with a message) when something is missing, so the form stays open. */
+    fun saveStatementFix(sms: SmsEntity, amountText: String, minimumText: String, currency: String, dueText: String, cardLast4: String): Boolean {
+        val cur = currency.trim().uppercase().ifEmpty { SmsParser.homeCurrency }
+        if (!Regex("[A-Z]{3}").matches(cur)) { message.value = "Currency is a 3-letter code, e.g. ${SmsParser.homeCurrency} or USD"; return false }
+        val total = SmsParser.parseTyped(amountText, cur)
+        if (total == null || total.signum() <= 0) { message.value = "Enter the statement amount, e.g. 511.06"; return false }
+        val min = minimumText.trim().takeIf { it.isNotEmpty() }?.let { SmsParser.parseTyped(it, cur) }
+        if (minimumText.isNotBlank() && (min == null || min.signum() <= 0)) { message.value = "Minimum due: a number, or leave it empty"; return false }
+        val m = Regex("""^\s*(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\s*$""").find(dueText)
+        val due = m?.let { runCatching { com.uaefinancial.tracker.core.CalendarDate.of(it.groupValues[3].toInt(), it.groupValues[2].toInt(), it.groupValues[1].toInt()) }.getOrNull() }
+        if (due == null) { message.value = "Due date: day/month/year, e.g. 30/06/2026"; return false }
+        val last4 = cardLast4.trim()
+        if (last4.isNotEmpty() && !Regex("""\d{3,4}""").matches(last4)) { message.value = "Card: the last 4 digits, or leave it empty"; return false }
+        viewModelScope.launch {
+            repo.saveStatementFix(
+                sms.id, com.uaefinancial.tracker.parser.Money.toMinor(total), min?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) },
+                cur, due.toEpochDay(), null, last4.ifEmpty { null },
+            )
+            message.value = "Saved as a statement due ${due.dayOfMonth}/${due.monthValue}/${due.year}."
+            refreshWidget()
+        }
+        return true
+    }
+
     /** Counts every waiting standing-instruction message as money out from this account (your decision, one tap). */
     fun countWaitingStandingOn(cardKey: String) = viewModelScope.launch {
         val n = repo.countWaitingStandingOn(cardKey)

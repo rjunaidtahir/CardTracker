@@ -552,6 +552,10 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
     var cardType by remember { mutableStateOf(CardType.CREDIT) }
     var aiNote by remember { mutableStateOf<String?>(null) }
     var aiWarn by remember { mutableStateOf<String?>(null) }
+    // "Statement / payment due": a card statement notice (statement amount, minimum due, due date).
+    var statement by remember { mutableStateOf(false) }
+    var minimum by remember { mutableStateOf("") }
+    var dueText by remember { mutableStateOf("") }
     // "Apply to similar messages": on by default; only offered when it can work for this message.
     var similar by remember { mutableStateOf(true) }
     val canLearn = remember(type, amount, merchant, last4, cardType) { vm.canLearn(sms, type, amount, merchant, last4, cardType) }
@@ -567,7 +571,15 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
         // The on-device model may add what the keyword reader could not (e.g. the merchant); it only fills blanks.
         vm.aiSuggestionFor(sms)?.let { a ->
             aiNote = if (a.usable) "Fils's guess: ${a.label.name.lowercase().replace('_', ' ')} (${(a.confidence * 100).toInt()}% sure)" else null
-            if (a.usable) {
+            if (a.usable && a.label == com.uaefinancial.tracker.intel.Label.STATEMENT) {
+                // Looks like a card statement: open the form on the statement option with what the code found (you check it).
+                statement = true
+                a.amount?.let { amount = it.stripTrailingZeros().toPlainString() }
+                a.currency?.let { currency = it }
+                a.minimum?.let { minimum = it.stripTrailingZeros().toPlainString() }
+                a.dueDate?.let { dueText = "%02d/%02d/%04d".format(it.dayOfMonth, it.monthValue, it.year) }
+                a.last4?.let { if (last4.isBlank()) last4 = it }
+            } else if (a.usable) {
                 if (merchant.isBlank() || merchant == "Money out (transfer)" || merchant == "Money in") a.merchant?.let { merchant = it }
                 if (amount.isBlank()) a.amount?.let { amount = it.stripTrailingZeros().toPlainString() }
                 if (last4.isBlank()) a.last4?.let { last4 = it }
@@ -587,27 +599,41 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
                 aiNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Ink.muted) }
                 aiWarn?.let { Text("Check: $it", style = MaterialTheme.typography.bodySmall, color = Ink.amber) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    fixTypes.forEach { (t, label) -> Pill(label, type == t, onClick = { type = t }) }
+                    fixTypes.forEach { (t, label) -> Pill(label, !statement && type == t, onClick = { type = t; statement = false }) }
+                    Pill("Statement / payment due", statement, onClick = { statement = true })
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        amount, { amount = it }, label = { Text("Amount") }, singleLine = true, modifier = Modifier.weight(1f),
+                        amount, { amount = it }, label = { Text(if (statement) "Statement amount" else "Amount") }, singleLine = true, modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
                     OutlinedTextField(currency, { currency = it.take(3).uppercase() }, label = { Text("Currency") }, singleLine = true, modifier = Modifier.width(96.dp))
                 }
-                OutlinedTextField(merchant, { merchant = it }, label = { Text("Merchant / description") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (statement) {
+                    OutlinedTextField(
+                        minimum, { minimum = it }, label = { Text("Minimum due (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    OutlinedTextField(
+                        dueText, { dueText = it.take(10) }, label = { Text("Due date (day/month/year, e.g. 30/06/2026)") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    OutlinedTextField(merchant, { merchant = it }, label = { Text("Merchant / description") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 OutlinedTextField(
                     last4, { last4 = it.filter(Char::isDigit).take(4) }, label = { Text("Card / account last 4 digits (optional)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pill("Credit card", cardType == CardType.CREDIT, onClick = { cardType = CardType.CREDIT })
-                    Pill("Debit card", cardType == CardType.DEBIT, onClick = { cardType = CardType.DEBIT })
-                    Pill("Bank account", cardType == CardType.ACCOUNT, onClick = { cardType = CardType.ACCOUNT })
+                if (!statement) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Pill("Credit card", cardType == CardType.CREDIT, onClick = { cardType = CardType.CREDIT })
+                        Pill("Debit card", cardType == CardType.DEBIT, onClick = { cardType = CardType.DEBIT })
+                        Pill("Bank account", cardType == CardType.ACCOUNT, onClick = { cardType = CardType.ACCOUNT })
+                    }
+                    Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                    SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
                 }
-                Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
-                SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
                 val sharing by vm.shareConsent.collectAsStateWithLifecycle()
                 if (sharing == com.uaefinancial.tracker.learn.Learning.ON) {
                     val shape = remember(sms.id) { com.uaefinancial.tracker.learn.Learning.previewShape(sms.sender, sms.bank, sms.body) }
@@ -624,7 +650,13 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = { vm.saveFix(sms, type, amount, currency, merchant, last4, cardType, applyToSimilar = canLearn && similar); onDismiss() }) { Text("Save") }
+            TextButton(onClick = {
+                if (statement) {
+                    if (vm.saveStatementFix(sms, amount, minimum, currency, dueText, last4)) onDismiss()
+                } else {
+                    vm.saveFix(sms, type, amount, currency, merchant, last4, cardType, applyToSimilar = canLearn && similar); onDismiss()
+                }
+            }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

@@ -1,0 +1,6 @@
+{
+  "bank": "Tabby",
+  "id": "tabby-statement-20261119",
+  "kind": "STATEMENT",
+  "pattern": "Your statement for\\s+{CUR}\\s*{TOTAL}\\s+is ready\\.\\s+We.ll charge a minimum amount of\\s+{ANYCUR}\\s*{MIN}\\s+to your default payment method on\\s+{DUE}"
+}
