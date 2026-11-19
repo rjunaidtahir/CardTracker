@@ -1,7 +1,20 @@
 {
-  "version": 4,
+  "version": 5,
   "minEngine": 5,
-  "banks": [],
+  "banks": [
+    { "name": "Tabby", "country": "AE", "aliases": ["Tabby Card"], "senderIds": ["Tabby"], "track": true },
+    { "name": "ADCB", "country": "AE", "aliases": ["SimplyLife"], "senderIds": ["SIMPLYLIFE"], "track": true },
+    { "name": "Tamara", "country": "AE", "aliases": ["Tamara Pay Later"] },
+    { "name": "Postpay", "country": "AE" },
+    { "name": "Spotii", "country": "AE" },
+    { "name": "Cashew", "country": "AE" },
+    { "name": "CBD Now", "country": "AE", "aliases": ["Commercial Bank of Dubai"] },
+    { "name": "ADCB Hayyak", "country": "AE", "aliases": ["Hayyak"] },
+    { "name": "E20", "country": "AE", "aliases": ["Emirates Islamic E20"] },
+    { "name": "Reem Community Bank", "country": "AE" },
+    { "name": "YAP", "country": "AE" },
+    { "name": "Xpence", "country": "AE" }
+  ],
   "rules": [
     {
       "bank": "Mashreq",
