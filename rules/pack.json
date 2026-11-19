@@ -1,19 +1,81 @@
 {
-  "version": 5,
+  "version": 6,
   "minEngine": 5,
   "banks": [
-    { "name": "Tabby", "country": "AE", "aliases": ["Tabby Card"], "senderIds": ["Tabby"], "track": true },
-    { "name": "ADCB", "country": "AE", "aliases": ["SimplyLife"], "senderIds": ["SIMPLYLIFE"], "track": true },
-    { "name": "Tamara", "country": "AE", "aliases": ["Tamara Pay Later"] },
-    { "name": "Postpay", "country": "AE" },
-    { "name": "Spotii", "country": "AE" },
-    { "name": "Cashew", "country": "AE" },
-    { "name": "CBD Now", "country": "AE", "aliases": ["Commercial Bank of Dubai"] },
-    { "name": "ADCB Hayyak", "country": "AE", "aliases": ["Hayyak"] },
-    { "name": "E20", "country": "AE", "aliases": ["Emirates Islamic E20"] },
-    { "name": "Reem Community Bank", "country": "AE" },
-    { "name": "YAP", "country": "AE" },
-    { "name": "Xpence", "country": "AE" }
+    {
+      "name": "Tabby",
+      "country": "AE",
+      "aliases": [
+        "Tabby Card"
+      ],
+      "senderIds": [
+        "Tabby"
+      ],
+      "track": true
+    },
+    {
+      "name": "ADCB",
+      "country": "AE",
+      "aliases": [
+        "SimplyLife"
+      ],
+      "senderIds": [
+        "SIMPLYLIFE"
+      ],
+      "track": true
+    },
+    {
+      "name": "Tamara",
+      "country": "AE",
+      "aliases": [
+        "Tamara Pay Later"
+      ]
+    },
+    {
+      "name": "Postpay",
+      "country": "AE"
+    },
+    {
+      "name": "Spotii",
+      "country": "AE"
+    },
+    {
+      "name": "Cashew",
+      "country": "AE"
+    },
+    {
+      "name": "CBD Now",
+      "country": "AE",
+      "aliases": [
+        "Commercial Bank of Dubai"
+      ]
+    },
+    {
+      "name": "ADCB Hayyak",
+      "country": "AE",
+      "aliases": [
+        "Hayyak"
+      ]
+    },
+    {
+      "name": "E20",
+      "country": "AE",
+      "aliases": [
+        "Emirates Islamic E20"
+      ]
+    },
+    {
+      "name": "Reem Community Bank",
+      "country": "AE"
+    },
+    {
+      "name": "YAP",
+      "country": "AE"
+    },
+    {
+      "name": "Xpence",
+      "country": "AE"
+    }
   ],
   "rules": [
     {
@@ -97,6 +159,71 @@
       "type": "REFUND",
       "cardType": "DEBIT",
       "pattern": "{CUR}\\s*{AMOUNT}\\s+has been refunded to your debit card\\s+{CARD}\\s+on\\s+{DATETIME}\\s*by\\s+{MERCHANT}\\.\\s*The amount will be credited"
+    },
+    {
+      "bank": "CBD",
+      "id": "cbd-card-debited",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "A transaction of\\s+{CUR}\\s*{AMOUNT}\\s+has been debited from your\\s+[^.]{0,40}?\\s*{CARD}\\s+at\\s+{MERCHANT}\\.?\\s+Your balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Sharjah Islamic Bank",
+      "id": "sib-card-purchase-lines",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "(?:{DATETIME}\\s*)?Card\\s*:\\s*{CARD}\\s+Purchase\\s+(?:\\w+\\s+)?(?:\\w+\\s+)?of\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s*$"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-cheque-debit",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Cheque no\\.?\\s*\\d+\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+\\w+\\s+on\\s+{DATETIME}\\s+for debit from\\s+[^.]{0,20}\\.?\\s*no\\.?\\s*{CARD}\\.?(?:\\s+Avl Bal\\.?\\s*{ANYCUR}\\s*{AVAIL})?",
+      "fixedMerchant": "Cheque"
+    },
+    {
+      "bank": "Axis Bank",
+      "id": "axis-debit-alert",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Debit\\s+{CUR}\\s*{AMOUNT}\\s+A/c\\s+(?:no\\.?\\s*)?{CARD}\\s+{DATETIME}\\s*{MERCHANT}\\s+Bal-"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-debit-card-funds-transfer-b",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.?\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Liv",
+      "id": "liv-debit-card-funds-transfer-b",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.?\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-debit-card-refund-b",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "DEBIT",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+has been refunded to your debit card\\s+{CARD}\\s+on\\s+{DATETIME}\\s*by\\s+{MERCHANT}\\.?\\s*The amount will be credited"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-card-payment",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "card payment\\.\\s*{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+(?:\\w+\\s+)?your Wio\\b"
     }
   ],
   "ignore": [
@@ -151,6 +278,26 @@
     {
       "label": "Credit card approved notice",
       "pattern": "your FAB credit card has been approved with a limit of"
+    },
+    {
+      "label": "Card purchase initiated (one-time code)",
+      "pattern": "has been initiated\\. Please log in to your Banking App"
+    },
+    {
+      "label": "Notice: balance converted to instalments",
+      "pattern": "Balance Conversion of\\s+[A-Z]{3}\\s+[\\d,.]+\\s+on Credit Card ending"
+    },
+    {
+      "label": "Card offer with code",
+      "pattern": "\\bUse Code:\\s*\\w+"
+    },
+    {
+      "label": "Debit card offer with code",
+      "pattern": "the code ADCB\\d+"
+    },
+    {
+      "label": "Notice: transfer limit changed",
+      "pattern": "Transfer limit is now .{1,30} to [A-Z]{3} [\\d,.]+"
     }
   ]
 }
