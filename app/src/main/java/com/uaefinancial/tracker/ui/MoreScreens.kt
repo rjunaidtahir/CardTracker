@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -375,10 +377,10 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     var nudge by remember { mutableStateOf(vm.shareNudgeDue()) }
     val held by vm.heldReadings.collectAsStateWithLifecycle()
     val unknown by vm.unknownMessages.collectAsStateWithLifecycle()
-    val hidden by vm.hiddenSenders.collectAsStateWithLifecycle()
-    val aiDis by vm.aiDisagreements.collectAsStateWithLifecycle()
-    val aiCounts by vm.aiVerdictCounts.collectAsStateWithLifecycle()
-    val aiOn by vm.aiOn.collectAsStateWithLifecycle()
+    var pickingBank by remember { mutableStateOf(false) }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    if (pickingBank) PickSenderDialog(onPick = { chosen = it; pickingBank = false }, onDismiss = { pickingBank = false })
+    chosen?.let { s -> AddSenderDialog(s, guessBankName(s), onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true); chosen = null }, onDismiss = { chosen = null }) }
     val unknownGroups = remember(unknown) { unknown.groupBy { it.senderKey }.values.toList() }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
@@ -422,49 +424,6 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 }
             }
         }
-        item {
-            Panel(Modifier.fillMaxWidth()) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Second opinion", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (!aiOn) "Off. Fils reads your messages with its verified rules only."
-                            else "A small model on your phone double-checks how the rules read each message " +
-                                "(${aiCounts["AGREE"] ?: 0} agree, ${aiCounts["DISAGREE"] ?: 0} differ, ${aiCounts["UNSURE"] ?: 0} not sure). " +
-                                "It never changes anything. Works offline.",
-                            style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
-                        )
-                    }
-                    Switch(checked = aiOn, onCheckedChange = { vm.setAiOn(it) })
-                }
-            }
-        }
-        if (aiOn && aiDis.isNotEmpty()) {
-            item {
-                Panel(Modifier.fillMaxWidth()) {
-                    Text("${aiDis.size} to double-check", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "The rules read these one way and the model is quite sure it is something else. Your ledger uses the rules; open the message and use Fix if the model is right.",
-                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
-                    )
-                }
-            }
-            items(aiDis.take(20).size) { i ->
-                val c = aiDis[i]
-                var sms by remember(c.smsId) { mutableStateOf<SmsEntity?>(null) }
-                LaunchedEffect(c.smsId) { sms = vm.smsFor(c.smsId) }
-                sms?.let { s ->
-                    Panel(Modifier.fillMaxWidth()) {
-                        Text("${s.bank ?: s.sender} · ${fmtDateTime(s.receivedAt)}", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "Rules: ${c.ruleLabel.lowercase().replace('_', ' ')} · Model: ${c.aiLabel.lowercase().replace('_', ' ')} (${c.confidencePct}%)",
-                            style = MaterialTheme.typography.bodySmall, color = Ink.amber, modifier = Modifier.padding(top = 2.dp),
-                        )
-                        Text(s.body, style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
-                    }
-                }
-            }
-        }
         if (unknown.isNotEmpty()) {
             item {
                 Panel(Modifier.fillMaxWidth()) {
@@ -500,17 +459,11 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 }
             }
         }
-        if (hidden.isNotEmpty()) {
-            item {
-                Panel(Modifier.fillMaxWidth()) {
-                    Text("Hidden senders", style = MaterialTheme.typography.titleSmall)
-                    hidden.forEach { h ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(h.sender, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                            TextButton(onClick = { vm.showSenderAgain(h.senderKey) }) { Text("Show again") }
-                        }
-                    }
-                }
+        item {
+            Panel(Modifier.fillMaxWidth()) {
+                Text("Is one of your banks missing?", style = MaterialTheme.typography.titleSmall)
+                Text("Choose any sender from your messages and tell Fils it is your bank. Its messages are then read like any other bank.", style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp))
+                TextButton(onClick = { pickingBank = true }) { Text("Choose a bank from my messages") }
             }
         }
         val waiting = failed.filter { it.ruleId == com.uaefinancial.tracker.data.Repository.SI_RULE }
@@ -717,6 +670,49 @@ private fun NotTransactionDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: (
 
 // ================================================================ Bank senders
 
+/** Lists every sender on the phone so you can tell the app "this one is my bank". Nothing leaves the phone. */
+@Composable
+fun PickSenderDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var all by remember { mutableStateOf<List<com.uaefinancial.tracker.sms.InboxSender>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        try { all = withContext(Dispatchers.IO) { com.uaefinancial.tracker.sms.InboxReader.allSenders(ctx) } }
+        catch (e: SecurityException) { error = "Allow SMS access first (More → Settings), then try again." }
+        catch (e: Exception) { error = "Couldn't read your messages: ${e.message ?: e.javaClass.simpleName}" }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Ink.surface,
+        title = { Text("Choose your bank") },
+        text = {
+            Column {
+                Text("Pick the sender in your messages that is your bank or card.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                error?.let { Text(it, color = Ink.red, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
+                val list = all
+                if (list == null && error == null) CircularProgressIndicator(Modifier.padding(top = 12.dp).size(20.dp), strokeWidth = 2.dp)
+                val shown = remember(list, query) { list.orEmpty().filter { query.isBlank() || it.sender.contains(query, true) || it.sample.contains(query, true) } }
+                LazyColumn(Modifier.heightIn(max = 380.dp).padding(top = 8.dp)) {
+                    items(shown.take(150), key = { it.key }) { s ->
+                        Column(Modifier.fillMaxWidth().clickable { onPick(s.sender) }.padding(vertical = 8.dp)) {
+                            Row {
+                                Text(s.sender, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                Text("${s.count}", color = Ink.muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(s.sample, style = MaterialTheme.typography.bodySmall, color = Ink.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (list != null && shown.isEmpty()) item { Muted("No sender matches.", Modifier.padding(top = 8.dp)) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
 @Composable
 fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
     val senders by vm.senders.collectAsStateWithLifecycle()
@@ -724,7 +720,10 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
     val excluded by vm.excludedBanks.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showBuiltIn by rememberSaveable { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    val hidden by vm.hiddenSenders.collectAsStateWithLifecycle()
     adding?.let { (s, b) -> AddSenderDialog(s, b, onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true); adding = null }, onDismiss = { adding = null }) }
+    if (picking) PickSenderDialog(onPick = { s -> picking = false; adding = s to guessBankName(s) }, onDismiss = { picking = false })
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -743,6 +742,7 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
                     }
                     OutlinedButton(onClick = { adding = "" to "" }) { Text("Add by hand") }
                 }
+                Button(onClick = { picking = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Choose a bank from my messages") }
             }
         }
         scan.error?.let { e -> item { Text(e, color = Ink.red, style = MaterialTheme.typography.bodySmall) } }
@@ -790,6 +790,17 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(bank, modifier = Modifier.weight(1f), color = Ink.muted)
                         TextButton(onClick = { vm.setBankTracked(bank, true) }) { Text("Track again") }
+                    }
+                }
+            }
+        }
+        if (hidden.isNotEmpty()) {
+            item { SectionHeader("Hidden senders") }
+            items(hidden, key = { "h:" + it.senderKey }) { h ->
+                Panel(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(h.sender, modifier = Modifier.weight(1f), color = Ink.muted)
+                        TextButton(onClick = { vm.showSenderAgain(h.senderKey) }) { Text("Show again") }
                     }
                 }
             }

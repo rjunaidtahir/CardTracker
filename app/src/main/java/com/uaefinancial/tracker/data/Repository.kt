@@ -890,7 +890,6 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      * Shown beside the Fix form; it never saves anything by itself.
      */
     suspend fun aiSuggestion(sms: SmsEntity): com.uaefinancial.tracker.intel.Suggestion? {
-        if (prefs?.aiSecondOpinion == false) return null
         return withContext(Dispatchers.Default) {
             runCatching { com.uaefinancial.tracker.intel.MessageIntel.suggest(sms.bank ?: sms.sender, sms.body, sms.receivedAt) }.getOrNull()
         }
