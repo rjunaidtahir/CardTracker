@@ -3,6 +3,9 @@ name: QA measurement (manual)
 # Measures pretrained question-answering models on a labelled bank-SMS set. Nothing here ships in the app.
 on:
   workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['tools/qa/**', '.github/workflows/qa-measure.yml']
 
 permissions:
   contents: read
