@@ -173,6 +173,24 @@ object SmsParser {
     @kotlin.concurrent.Volatile
     private var custom: Map<String, CompiledBank> = emptyMap()
 
+    /** Senders from the signed rules file (bank name -> sender IDs). Checked after your own senders and the built-ins. */
+    @kotlin.concurrent.Volatile
+    private var packSenders: List<Pair<CompiledBank, List<String>>> = emptyList()
+
+    internal fun setPackSenders(byBank: Map<String, List<String>>) {
+        packSenders = byBank.map { (name, ids) ->
+            val known = compiled.firstOrNull { it.bank.name.equals(name, ignoreCase = true) }
+            (known ?: CompiledBank(Bank(name, ids, emptyList()), emptyList(), globalIgnore)) to ids
+        }
+    }
+
+    /** Every sender ID the signed rules file currently tracks (normalised). */
+    fun trackedIds(): Set<String> = packSenders.flatMap { it.second }.map { normalizeSender(it) }.toSet()
+
+    /** True when the signed rules file tracks [sender]. */
+    fun isPackSender(sender: String?): Boolean =
+        !sender.isNullOrBlank() && packSenders.any { (_, ids) -> ids.any { senderMatches(sender, it) } }
+
     /** Banks you chose not to track (by bank name). Their messages are treated like any other sender's. */
     @kotlin.concurrent.Volatile
     private var excluded: Set<String> = emptySet()
@@ -235,6 +253,7 @@ object SmsParser {
         if (sender.isNullOrBlank()) return null
         val cb = custom[senderKey(sender)] ?: custom[normalizeSender(sender)]
             ?: compiled.firstOrNull { c -> c.bank.senderIds.any { id -> senderMatches(sender, id) } }
+            ?: packSenders.firstOrNull { (_, ids) -> ids.any { id -> senderMatches(sender, id) } }?.first
             ?: return null
         return if (!includeExcluded && isExcluded(cb.bank.name)) null else cb
     }

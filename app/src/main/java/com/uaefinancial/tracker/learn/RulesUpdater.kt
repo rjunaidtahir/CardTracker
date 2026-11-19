@@ -5,6 +5,7 @@ import android.util.Base64
 import com.uaefinancial.tracker.TrackerApp
 import com.uaefinancial.tracker.data.Prefs
 import com.uaefinancial.tracker.parser.RulesPack
+import com.uaefinancial.tracker.parser.SmsParser
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -67,8 +68,15 @@ object RulesUpdater {
         File(dir(app), "pack.sig.tmp").writeText(sig)
         File(dir(app), "pack.json.tmp").renameTo(File(dir(app), "pack.json"))
         File(dir(app), "pack.sig.tmp").renameTo(File(dir(app), "pack.sig"))
+        val trackedBefore = SmsParser.trackedIds()
         RulesPack.apply(out.pack)
         prefs.packVersion = out.pack.version
+        // A sender the rules file now tracks: read what is waiting from it and re-import the inbox on the next Sync,
+        // so its older messages come in too (nothing duplicates: every message has a unique key).
+        if (SmsParser.trackedIds().any { it !in trackedBefore }) {
+            runCatching { app.repo.adoptTrackedCandidates() }
+            prefs.lastSyncAt = null
+        }
         // Messages that could not be read before may be readable now.
         runCatching { app.repo.reparseAll() }
         return true

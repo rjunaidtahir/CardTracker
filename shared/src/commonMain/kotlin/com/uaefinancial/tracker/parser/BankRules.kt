@@ -346,7 +346,7 @@ object BankRules {
         // --------------------------------------------------------------- ADCB
         Bank(
             name = "ADCB",
-            senderIds = listOf("ADCBAlert", "ADCB"),
+            senderIds = listOf("ADCBAlert", "ADCB", "SIMPLYLIFE"), // SimplyLife is ADCB's own card unit
             rules = listOf(
                 // Credit Card XX3538 was used for AED90.90 on 13/09/2026 11:58:47 at talabat.com, DUBAI-AE.
                 // Available limit AED4736.08
@@ -666,6 +666,7 @@ object BankRules {
         Bank("Wio", listOf("Wio", "WioBank", "WioPersonal"), emptyList()),
         Bank("Mashreq Neo", listOf("MashreqNeo"), emptyList()),
         Bank("Zand", listOf("Zand", "ZandBank"), emptyList()),
+        Bank("Tabby", listOf("Tabby"), emptyList()), // sender seen on a real phone: "You spent AED 9.00 at ... Your available Tabby Card limit is now ..."
         Bank("Ruya", listOf("Ruya", "RuyaBank"), emptyList()),
         Bank("Emirates Post / Al Maryah", listOf("MBank", "AlMaryah"), emptyList()),
     )

@@ -42,6 +42,7 @@ class TrackerApp : Application() {
         appScope.launch { runCatching { com.uaefinancial.tracker.learn.RulesUpdater.checkIfDue(this@TrackerApp, prefs) } }
         appScope.launch {
             runCatching { repo.ensureDefaults() }
+            runCatching { repo.adoptTrackedCandidates() }
             runCatching { repo.loadLearned() }
             // A newer reading engine: read every stored message again once, so Needs review and wrongly read messages
             // benefit from it (and a message now recognised as a one-time code is deleted).

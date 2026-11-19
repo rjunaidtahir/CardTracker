@@ -103,6 +103,25 @@ object Learning {
         return true
     }
 
+    /**
+     * You told the app a sender is one of your banks: with sharing on, the public sender ID, the bank you chose (its
+     * public name only), your country and one masked message shape are queued, so the developer can review it and add
+     * the sender to the signed rules file for everyone. A phone number or contact name is never sent.
+     */
+    fun queueSender(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String?): Boolean {
+        if (!enabled(prefs)) return false
+        val id = publicSender(sender) ?: return false
+        val bank = publicBankName(sender, bankName)
+        val shape = body?.let { b -> Masker.mask(b, bank).takeIf { it.safe }?.shape } ?: "(no sample)"
+        val country = prefs.homeCountry ?: Region.detect(context) ?: ""
+        val label = "${bank ?: "Other"} [sender: $id]"
+        val hash = hash("sender|$label|$shape")
+        if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, "sender-confirmed", shape).joinToString(US.toString()))
+        schedule(context)
+        return true
+    }
+
     fun schedule(context: Context) {
         val req = OneTimeWorkRequestBuilder<ShapeWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())

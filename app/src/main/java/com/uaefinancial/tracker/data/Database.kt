@@ -491,6 +491,9 @@ interface AppDao {
     @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND kind = 'RECOGNISABLE' ORDER BY receivedAt DESC")
     fun openCandidates(): Flow<List<SmsCandidateEntity>>
 
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND kind = 'RECOGNISABLE' ORDER BY receivedAt ASC")
+    suspend fun openCandidatesNow(): List<SmsCandidateEntity>
+
     @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey ORDER BY receivedAt ASC")
     suspend fun openCandidatesFor(senderKey: String): List<SmsCandidateEntity>
 

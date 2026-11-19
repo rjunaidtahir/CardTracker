@@ -744,6 +744,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** "These are from my bank": the sender is added and every waiting message from it is read. */
     fun acceptUnknownSender(sender: String, sample: String) = viewModelScope.launch {
         val name = com.uaefinancial.tracker.parser.GlobalBanks.match(sender, sample, prefs.homeCountry)?.name ?: sender
+        com.uaefinancial.tracker.learn.Learning.queueSender(getApplication(), prefs, sender, name, sample)
         val n = repo.acceptSender(sender, name)
         runCatching { repo.autoFillCardDays() }
         resetSyncPointerQuietly()
@@ -1119,6 +1120,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun addSenders(pairs: List<Pair<String, String>>, syncAfter: Boolean) = viewModelScope.launch {
         val clean = pairs.map { (s, b) -> s.trim() to b.trim() }.filter { it.first.isNotEmpty() }
         if (clean.isEmpty()) { message.value = "Enter the sender name exactly as it shows in Messages"; return@launch }
+        // Tell the developer (only with sharing on) that these senders are banks, so everyone can get them without an update.
+        if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) clean.forEach { (s, b) ->
+            val sample = runCatching { repo.sampleFromCandidates(s) }.getOrNull()
+            com.uaefinancial.tracker.learn.Learning.queueSender(getApplication(), prefs, s, b, sample)
+        }
         clean.forEach { (s, b) -> repo.addSender(s, b) }
         resetSyncPointerQuietly()
         // The scan list should no longer offer what was just added.

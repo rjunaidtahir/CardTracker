@@ -404,6 +404,28 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         return waiting.size
     }
 
+    /**
+     * After the signed rules file starts tracking a sender (or at startup): waiting candidates from a sender that is now
+     * a known bank are read like any other bank message. Returns how many were read. Nothing is guessed: the sender
+     * only counts when the owner-approved, signed rules file names it.
+     */
+    suspend fun adoptTrackedCandidates(): Int {
+        val waiting = dao.openCandidatesNow().filter { SmsParser.bankFor(it.sender) != null }
+        if (waiting.isEmpty()) return 0
+        db.withTransaction {
+            for (c in waiting) {
+                runCatching { ingestSms(c.sender, c.body, c.receivedAt, c.sentAt, c.source, deferResolve = true) }
+                dao.closeCandidate(c.id, CAND_ACCEPTED)
+            }
+        }
+        finishBatch()
+        return waiting.size
+    }
+
+    /** A waiting message body from [sender], if one was kept (for the optional share). */
+    suspend fun sampleFromCandidates(sender: String): String? =
+        dao.openCandidatesFor(SmsParser.senderKey(sender)).firstOrNull()?.body
+
     /** "Not financial": this one message is dropped (its text is cleared, only its key stays so it isn't offered again). */
     suspend fun dismissCandidate(id: Long) = dao.closeCandidate(id, CAND_DISMISSED)
 
