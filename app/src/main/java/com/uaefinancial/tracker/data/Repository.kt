@@ -217,6 +217,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 // Could not be read: offer its masked shape for learning (only if you allowed it). A standing-instruction
                 // message waiting for its account is not unread: its format is known.
                 if (outcome == IngestOutcome.FAILED && !parkedStanding) runCatching { onShape?.invoke(sender, bank.name, body, "unread") }
+                // Read only by the generic reader (this bank has no verified rule for the wording): offer the masked shape
+                // too, so every wording of a bank like Tabby reaches the review and can get its own verified rule.
+                if (outcome == IngestOutcome.TRANSACTION && (parsed as? ParseResult.Transaction)?.txn?.auto == true) {
+                    runCatching { onShape?.invoke(sender, bank.name, body, "smart-read") }
+                }
             }
         }
 

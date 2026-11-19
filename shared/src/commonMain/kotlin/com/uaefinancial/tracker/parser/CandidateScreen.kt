@@ -60,7 +60,9 @@ object CandidateScreen {
         //  3. and it is not a bill, a telecom or retail notice, an order or an offer.
         if (nonBankWords.containsMatchIn(text)) return null
         if (!transactionVerb.containsMatchIn(text)) return null
-        if (!namesCardOrAccount(text)) return null
+        // A sender that is a known bank or card company ("Tabby") needs no card number in the text: the name vouches for it.
+        val knownInstitution = GlobalBanks.match(addr, null, null) != null
+        if (!knownInstitution && !namesCardOrAccount(text)) return null
 
         val read = runCatching { SmartParser.read(addr.ifEmpty { "Unknown" }, text, receivedAt) }.getOrNull()
         // Only a message the generic reader reads as an actual transaction is offered. Promos, bills, reminders and
