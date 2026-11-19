@@ -375,8 +375,34 @@ object SmsParser {
         if (!looksFinancial.containsMatchIn(text)) return ParseResult.Ignored(cb.bank.name, "Informational (no amount)")
         // No bank rule: let the smart reader try, by the message's wording.
         runCatching { SmartParser.read(cb.bank.name, text, receivedAt, zone) }.getOrNull()?.let { return it }
+        // Still nothing: a statement / payment-due notice worded unlike any rule. The role reader labels each amount and date
+        // by the words around it; it answers only when it is confident of both the statement amount and the due date.
+        runCatching { com.uaefinancial.tracker.intel.RoleReader.readStatement(cb.bank.name, text, zone) }.getOrNull()?.let { return it }
         if (errors.isNotEmpty()) return ParseResult.Failed(cb.bank.name, "A rule matched but its values were invalid: " + errors.joinToString("; "))
         return ParseResult.Failed(cb.bank.name, "Couldn't read this message automatically")
+    }
+
+    /** A captured field of a verified rule, with where it is in the normalized text: training labels for the role reader. */
+    internal data class GoldSpan(val start: Int, val end: Int, val role: String)
+
+    /**
+     * The fields the bank's own verified rule captured in [body] ("AMOUNT", "AVAIL", "TOTAL", "MIN", "DUE", "STMTDATE", "DATE"),
+     * with the normalized text they refer to; null when no built-in rule of that sender's bank matches. These labels do not
+     * depend on the keyword reader, so they are an independent answer key.
+     */
+    internal fun goldSpans(sender: String, body: String): Pair<String, List<GoldSpan>>? {
+        val cb = compiledBankFor(sender) ?: return null
+        val text = normalizeBody(body)
+        for ((_, regex) in cb.rules) {
+            val m = regex.find(text) ?: continue
+            val out = ArrayList<GoldSpan>()
+            for ((group, role) in listOf("amount" to "AMOUNT", "avail" to "AVAIL", "total" to "TOTAL", "min" to "MIN", "due" to "DUE", "stmtdate" to "STMTDATE", "date" to "DATE")) {
+                val r = try { m.groups[group]?.range } catch (_: IllegalArgumentException) { null } ?: continue
+                out += GoldSpan(r.first, r.last + 1, role)
+            }
+            return text to out
+        }
+        return null
     }
 
     private fun MatchResult.g(name: String): String? =

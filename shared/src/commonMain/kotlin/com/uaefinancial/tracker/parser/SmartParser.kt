@@ -87,6 +87,14 @@ object SmartParser {
     fun amountMentions(text: String): List<AmountMention> =
         mentions(text).map { AmountMention(it.amount, it.currency, it.role.name, it.start, it.end) }
 
+    /** An amount or a date found in a message (where it is, and its value): what the role reader labels. */
+    internal data class RoleSpan(val start: Int, val end: Int, val isDate: Boolean, val amount: Decimal?, val currency: String?, val date: CalendarDate?)
+
+    /** Every amount and date in [text] (already normalized), in order. Values come from code; the role reader only labels them. */
+    internal fun roleSpans(text: String, zone: Int = SmsParser.UAE_ZONE): List<RoleSpan> =
+        (mentions(text).map { RoleSpan(it.start, it.end, false, it.amount, it.currency, null) } +
+            dates(text, zone).map { RoleSpan(it.at, it.end, true, null, null, it.date) }).sortedBy { it.start }
+
     /** What a statement-like message says, for the on-device suggestion: the amounts by role and the due date, if found. */
     data class StatementHints(val total: Decimal?, val minimum: Decimal?, val currency: String?, val due: CalendarDate?)
 
@@ -178,13 +186,13 @@ object SmartParser {
             """(?:charg|debit|deduct|collect|withdraw|tak)\w*\b.{0,100}?\b(?:on|by)\W*$""",
     )
 
-    private data class FoundDate(val at: Int, val millis: Long, val hasTime: Boolean, val date: CalendarDate, val kind: String)
+    private data class FoundDate(val at: Int, val millis: Long, val hasTime: Boolean, val date: CalendarDate, val kind: String, val end: Int = at)
 
     private fun dates(text: String, zone: Int, hasMinimum: Boolean = false): List<FoundDate> {
         val out = mutableListOf<FoundDate>()
         timeThenDate.find(text)?.let { m ->
             SmsParser.parseDateTime("${m.groupValues[2]} ${m.groupValues[1]}")?.let { (dt, _) ->
-                out += FoundDate(m.range.first, dt.toEpochMillis(zone), true, dt.toLocalDate(), "txn")
+                out += FoundDate(m.range.first, dt.toEpochMillis(zone), true, dt.toLocalDate(), "txn", m.range.last + 1)
             }
         }
         for (m in dateRegex.findAll(text)) {
@@ -201,7 +209,7 @@ object SmartParser {
                 hasMinimum && futureChargeContext.containsMatchIn(wide) -> "due"
                 else -> "txn"
             }
-            out += FoundDate(m.range.first, dt.toEpochMillis(zone), hasTime, dt.toLocalDate(), kind)
+            out += FoundDate(m.range.first, dt.toEpochMillis(zone), hasTime, dt.toLocalDate(), kind, m.range.last + 1)
         }
         return out.sortedBy { it.at }
     }
