@@ -280,7 +280,7 @@
       "pattern": "your FAB credit card has been approved with a limit of"
     },
     {
-      "label": "Card transaction initiated, waiting for one-time code",
+      "label": "Card purchase initiated (one-time code)",
       "pattern": "has been initiated\\. Please log in to your Banking App"
     },
     {
