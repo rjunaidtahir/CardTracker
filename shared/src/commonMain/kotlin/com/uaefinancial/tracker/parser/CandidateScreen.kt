@@ -26,6 +26,25 @@ data class Screened(
  * Nothing here posts anything: a kept message is a candidate in Needs review until you confirm the sender.
  */
 object CandidateScreen {
+    private val transactionVerb = Regex(
+        """\b(?:debited|credited|spent|purchase[d]?|withdrawn|withdrawal|used\s+for|paid|transfer(?:red)?|deducted|refund(?:ed)?)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Words that mark bills, telecom and retail notices, orders, offers and reminders: never a bank transaction from an unknown sender. */
+    private val nonBankWords = Regex(
+        """\b(?:bill|roaming|bundle|plans?|minutes?|calls?|data|sim|recharge|reload(?:ing)?|top[\s-]?up|offers?|vouchers?|rewards?|smiles|points|orders?|deliver(?:y|ed)|subscri(?:be|ption)|packages?|promo(?:tion)?|discount|coupon|prize|win|due|invoice|collected|shipment)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private val cardOrAccountRef = Regex(
+        """\b(?:card|a/c|acct|account|ac)\b[^.\n]{0,25}?(?:x{2,}|\*{2,}|\.{2,})?[\d\-*]{0,12}\d{3,4}\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private fun namesCardOrAccount(text: String): Boolean =
+        runCatching { SmartParser.cardLast4s(text).isNotEmpty() }.getOrDefault(false) || cardOrAccountRef.containsMatchIn(text)
+
     fun screen(sender: String?, body: String, receivedAt: Long): Screened? {
         val text = SmsParser.normalizeBody(body)
         if (text.isBlank()) return null
@@ -34,6 +53,14 @@ object CandidateScreen {
         val addr = sender?.trim().orEmpty()
         val named = addr.any { it.isLetter() } || SmsParser.isShortCode(addr)
         if (!named && !SmartParser.looksLikeBankAlert(text)) return null
+
+        // Precision first. A message from a sender we don't know must look like a real bank alert on its own:
+        //  1. it names a card or account (digits or a masked number),
+        //  2. it says money was spent, debited, credited, paid or transferred,
+        //  3. and it is not a bill, a telecom or retail notice, an order or an offer.
+        if (nonBankWords.containsMatchIn(text)) return null
+        if (!transactionVerb.containsMatchIn(text)) return null
+        if (!namesCardOrAccount(text)) return null
 
         val read = runCatching { SmartParser.read(addr.ifEmpty { "Unknown" }, text, receivedAt) }.getOrNull()
         // Only a message the generic reader reads as an actual transaction is offered. Promos, bills, reminders and

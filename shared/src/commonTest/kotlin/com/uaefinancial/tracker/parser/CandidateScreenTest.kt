@@ -36,6 +36,24 @@ class CandidateScreenTest {
         assertEquals(0, kept)
     }
 
+    /** Real messages the owner saw wrongly in Needs review (numbers and names changed). All must be dropped. */
+    @Test fun telecom_bills_retail_and_roaming_notices_are_not_kept() {
+        val seen = listOf(
+            "etisalatBil" to "Dear customer, Your October bill for 045900000 is available. Total amount to pay before 15 NOV 2026: AED 313.95 (VAT inclusive). Bill summary (AED): Plan, Add-ons & Devices: 379.00 Promotions, refunds & adjustments: -80.00 VAT on taxable services: 14.95 Balance from your last bill: 320.88 Payments processed: -320.88",
+            "Sharaf DG" to "Your old device (Apple iPhone 12 Pro Max (2020), 128GB) for order #W6165996 was not collected. As a result, AED 630.00 has been charged to the card used for this order. No action is required.",
+            "Ooredoo" to "Global Passport plans covers the entire globe in one go. Out of bundle roaming prices applicable with Etisalat: National calls: OMR/min 0.092. Calls to Oman and other GCC: OMR/min 0.231. Incoming calls: OMR/min 0.085. SMS to GCC: OMR 0.023. Data: OMR/MB 0.161. Receiving SMS on roaming is FREE.",
+            "Ooredoo" to "Dear customer, You have used 80% of your R06 Hala+ Plan data. Spent OMR 6 at Card purchase",
+            "du roaming" to "Welcome to Oman. Stay connected with our amazing roaming bundles! - AED 50: 1GB + 10 minutes, valid 1 day",
+            "ENOC" to "Purchase of AED 110.32 on 18/11/2026 17:05 P-DXB-31619. Available balance is AED 89.68 (may incl. pending holds). Pls check portal for reconciled balance.",
+        )
+        for ((s, b) in seen) assertNull(CandidateScreen.screen(s, b, now), "$s: $b")
+    }
+
+    @Test fun a_real_bank_alert_from_an_unknown_sender_is_still_kept() {
+        assertNotNull(CandidateScreen.screen("MyBank", "SMS Alerts Monthly Fee PKR 250.00 & Tax 40.00 Debited from A/C 0166-1***1440 on 16-Nov-2026", now))
+        assertNotNull(CandidateScreen.screen("MyBank", "AED 500.00 has been credited to your account ending 1234 on 24/09/2026.", now))
+    }
+
     @Test fun one_time_codes_are_never_kept() {
         assertNull(CandidateScreen.screen("MyBank", "Your OTP is 123456 for payment of AED 100.00. Do not share it.", now))
         assertNull(CandidateScreen.screen("24273", "Use code 482913 to confirm AED 20.00 purchase", now))
