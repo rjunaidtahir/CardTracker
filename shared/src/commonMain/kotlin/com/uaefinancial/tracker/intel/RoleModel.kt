@@ -26,11 +26,33 @@ internal object RoleFeatures {
             val w = m.value
             when {
                 w[0].isDigit() -> if (out.lastOrNull() != "<n>") out += "<n>"
-                w[0].isLetter() -> if (w.length >= 2 && w !in CURRENCY_LIKE) out += w
+                w[0].isLetter() -> if (w.length >= 2 && w !in CURRENCY_LIKE) out += concept(w)
                 else -> out += "|"
             }
         }
         return out
+    }
+
+    /**
+     * Words that mean the same thing share one token, so what the model learns from one bank's wording carries to another's
+     * ("Min Amt Due" and "minimum amount" are the same idea). This is a small meaning list, written by hand; it holds no
+     * bank names and no numbers.
+     */
+    private fun concept(w: String): String = when (w) {
+        "min", "minimum", "minimal", "least", "smallest", "mad" -> "C_MIN"
+        "amt", "amount", "sum" -> "C_AMT"
+        "total", "statement", "stmt", "outstanding", "owed", "tad" -> "C_TOTAL"
+        "due", "payable", "deadline" -> "C_DUE"
+        else -> w
+    }
+
+    private val futureMarkers = setOf("will", "ll", "shall", "going", "automatically")
+    private val payVerbs = listOf("charg", "debit", "deduct", "collect", "withdraw", "pull", "settl")
+
+    /** "we'll charge … on", "will be debited on": a payment that is going to be taken on a date is that date's due date. */
+    private fun futurePayment(before: List<String>): Boolean {
+        val i = before.indexOfFirst { it in futureMarkers }
+        return i >= 0 && before.drop(i).any { t -> payVerbs.any { t.startsWith(it) } }
     }
 
     private val CURRENCY_LIKE = setOf("aed", "usd", "eur", "gbp", "inr", "pkr", "sar", "dhs", "dh")
@@ -54,6 +76,7 @@ internal object RoleFeatures {
         if (b.size >= 2) f += "bb:${b[1]}_${b[0]}"
         if (b.size >= 3) f += "bbb:${b[2]}_${b[1]}_${b[0]}"
         if (b.isEmpty()) f += "b:none"
+        if (isDate && futurePayment(before)) { f += "bw:C_DUE"; f += "fp:1" }
         val a = after.take(4)
         for ((i, w) in a.withIndex()) {
             if (i < 2) f += "a${i + 1}:$w"
