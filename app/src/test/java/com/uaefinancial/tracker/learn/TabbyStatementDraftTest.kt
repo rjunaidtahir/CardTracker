@@ -29,7 +29,7 @@ class TabbyStatementDraftTest {
         RulesPack.apply(out.pack)
         val r = SmsParser.parse("Tabby", stmt, 0L)
         assertIs<ParseResult.Statement>(r)
-        assertEquals("tabby-statement-20261119", r.ruleId)
+        assertEquals("pack:tabby-statement-20261119", r.ruleId)
         assertEquals("511.06", r.statement.statementBalance.toPlainString())
         assertEquals("127.78", r.statement.minimumDue?.toPlainString())
     }
