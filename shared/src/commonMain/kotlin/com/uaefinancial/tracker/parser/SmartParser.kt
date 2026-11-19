@@ -617,10 +617,11 @@ object SmartParser {
      * True when an SMS looks like a bank transaction alert (used to suggest senders the app doesn't know yet):
      * an amount with a currency AND a masked card/account number or clear banking words.
      */
-    fun looksLikeBankAlert(body: String): Boolean {
+    fun looksLikeBankAlert(body: String, knownInstitution: Boolean = false): Boolean {
         val text = SmsParser.normalizeBody(body)
         if (!SmsParser.looksFinancial(text)) return false
-        val bankish = refs(text).isNotEmpty() ||
+        // A sender whose name is a known bank or card company ("Tabby") needs no extra banking words in the text.
+        val bankish = knownInstitution || refs(text).isNotEmpty() ||
             Regex("""\b(?:debited|credited|available (?:balance|limit)|avl\.? (?:bal|limit)|credit card|debit card|a/c|account)\b""", I).containsMatchIn(text)
         return bankish && !Regex("""\b(?:OTP|one[\s-]?time\s+pass)""", I).containsMatchIn(text) && !SmsParser.isOtp(text)
     }

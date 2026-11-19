@@ -115,7 +115,7 @@ object InboxReader {
                 // A phone number, not a named sender. Short codes ("24273") are how US, Canadian and UK banks send alerts.
                 if (!addr.any { it.isLetter() } && !SmsParser.isShortCode(addr)) continue
                 val body = c.getString(iBody) ?: continue
-                if (!SmartParser.looksLikeBankAlert(body)) continue
+                if (!SmartParser.looksLikeBankAlert(body, com.uaefinancial.tracker.parser.GlobalBanks.match(addr, null, null) != null)) continue
                 val key = SmsParser.senderKey(addr) // "AX-HDFCBK-S" and "VM-HDFCBK" are one sender
                 names.putIfAbsent(key, addr)
                 alerts[key] = (alerts[key] ?: 0) + 1
