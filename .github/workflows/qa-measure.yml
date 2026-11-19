@@ -52,6 +52,11 @@ jobs:
           python3 tools/qa/eval.py qaset.jsonl csarron/mobilebert-uncased-squad-v2 deepset/tinyroberta-squad2 2>&1 | tee eval.log
           cat qa-report.md >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Run blind measurement with small instruction models
+        run: |
+          python3 tools/qa/eval_llm.py qaset.jsonl Qwen/Qwen2.5-0.5B-Instruct Qwen/Qwen2.5-1.5B-Instruct HuggingFaceTB/SmolLM2-360M-Instruct 2>&1 | tee eval-llm.log
+          cat qa-llm-report.md >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -61,3 +66,6 @@ jobs:
             qa-report.md
             qa-errors.json
             eval.log
+            qa-llm-report.md
+            qa-llm-errors.json
+            eval-llm.log
