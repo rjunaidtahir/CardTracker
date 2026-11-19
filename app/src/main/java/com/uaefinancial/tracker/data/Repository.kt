@@ -881,6 +881,39 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      * Saves your reading of an SMS as a card statement / payment due notice. Kept like any other fix (survives re-reads and
      * backups); it is never learned for "similar messages" (a new bank wording goes to the rules file instead).
      */
+    /** The masked message export (see learn/MaskedExport): one row per stored message, with what the app decided it was. */
+    suspend fun maskedExportText(): String {
+        val cardTypes = dao.allCards().associate { it.cardKey to it.cardType }
+        val rows = ArrayList<com.uaefinancial.tracker.learn.MaskedExport.Row>()
+        var unsafe = 0; var otp = 0
+        for (sms in dao.allSms()) {
+            if (sms.status == SmsStatus.IGNORED && sms.ruleId?.contains("otp", ignoreCase = true) == true) { otp++; continue }
+            val bank = com.uaefinancial.tracker.learn.Learning.publicBankName(sms.sender, sms.bank)
+            val m = com.uaefinancial.tracker.parser.Masker.mask(sms.body, bank)
+            if (!m.safe) { unsafe++; continue }
+            val fixed = dao.fixFor(sms.dedupKey) != null
+            val txn = dao.txnsForSmsNow(sms.id).firstOrNull()
+            val stmt = if (txn == null) dao.statementsForSmsNow(sms.id).firstOrNull() else null
+            val kind = when {
+                txn != null -> txn.type
+                stmt != null -> "STATEMENT"
+                sms.status == SmsStatus.IGNORED -> "NOT_TXN"
+                else -> "UNREAD"
+            }
+            val instrument = when {
+                txn != null -> cardTypes[txn.cardKey] ?: "unknown"
+                stmt != null -> cardTypes[stmt.cardKey] ?: "unknown"
+                else -> "unknown"
+            }
+            val label = bank ?: com.uaefinancial.tracker.learn.Learning.publicSender(sms.sender)?.let { "Other ($it)" } ?: "Other"
+            rows += com.uaefinancial.tracker.learn.MaskedExport.Row(
+                m.shape, label, kind, com.uaefinancial.tracker.learn.MaskedExport.directionOf(kind), instrument,
+                com.uaefinancial.tracker.learn.MaskedExport.sourceOf(sms.ruleId, fixed),
+            )
+        }
+        return com.uaefinancial.tracker.learn.MaskedExport.render(rows, unsafe, otp)
+    }
+
     suspend fun saveStatementFix(
         smsId: Long, totalMinor: Long, minimumMinor: Long?, currency: String, dueEpochDay: Long, statementEpochDay: Long?, cardLast4: String?,
     ): FixResult = lock.withLock {

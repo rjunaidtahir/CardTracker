@@ -232,6 +232,9 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) vm.exportBackup(uri)
     }
+    val maskedLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) vm.exportMaskedMessages(uri)
+    }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importBackup(uri)
     }
@@ -427,6 +430,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onRemindersToggle = onRemindersToggle,
                         onAlertsToggle = onAlertsToggle,
                         onExportBackup = { exportLauncher.launch("fils-backup-${java.time.LocalDate.now()}.zip") },
+                        onExportMasked = { maskedLauncher.launch("fils-masked-messages-${java.time.LocalDate.now()}.txt") },
                         onImportBackup = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
                         onExportReport = { showReport = true },
                     )

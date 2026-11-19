@@ -98,6 +98,7 @@ fun MoreScreen(
     onRemindersToggle: (Boolean) -> Unit,
     onAlertsToggle: (Boolean) -> Unit,
     onExportBackup: () -> Unit,
+    onExportMasked: () -> Unit,
     onImportBackup: () -> Unit,
     onExportReport: () -> Unit,
 ) {
@@ -283,6 +284,12 @@ fun MoreScreen(
                 } else {
                     Text("Nothing has been shared yet.", style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 6.dp))
                 }
+                Text("Export masked messages for testing", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                Text(
+                    "Saves a text file on this phone, only when you tap. Each line is a message shape (no amounts, names, merchants, card digits or dates) next to what the app decided it was. Read it, then share it only if you want to. Nothing is uploaded.",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                )
+                androidx.compose.material3.OutlinedButton(onClick = onExportMasked, modifier = Modifier.padding(top = 6.dp)) { Text("Export masked messages") }
                 Text(
                     "The app also downloads a signed list of banks and reading rules (data only) about once a day, so it can read new bank formats without an update.",
                     style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 8.dp),
