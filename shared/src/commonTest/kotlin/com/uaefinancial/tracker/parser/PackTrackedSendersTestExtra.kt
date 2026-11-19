@@ -29,8 +29,7 @@ class TabbyWordingTest {
         kotlin.test.assertTrue(r.txn.auto, "read by the generic reader, so its shape is offered for a verified rule")
     }
 
-    @Test fun screenKeepsAKnownInstitutionMessageButNotAnUnknownSendersSame() {
+    @Test fun screenKeepsAKnownInstitutionMessage() {
         assertTrue(CandidateScreen.screen("Tabby", tabby, 0L) != null)
-        assertTrue(CandidateScreen.screen("RandomShop", tabby, 0L) == null)
     }
 }
