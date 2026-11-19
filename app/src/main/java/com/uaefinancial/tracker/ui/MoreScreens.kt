@@ -380,7 +380,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     var pickingBank by remember { mutableStateOf(false) }
     var chosen by remember { mutableStateOf<String?>(null) }
     if (pickingBank) PickSenderDialog(onPick = { chosen = it; pickingBank = false }, onDismiss = { pickingBank = false })
-    chosen?.let { s -> AddSenderDialog(s, guessBankName(s), onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true); chosen = null }, onDismiss = { chosen = null }) }
+    chosen?.let { s -> AddSenderDialog(s, guessBankName(s), onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true, via = "picker"); chosen = null }, onDismiss = { chosen = null }) }
     val unknownGroups = remember(unknown) { unknown.groupBy { it.senderKey }.values.toList() }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }

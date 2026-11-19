@@ -744,7 +744,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** "These are from my bank": the sender is added and every waiting message from it is read. */
     fun acceptUnknownSender(sender: String, sample: String) = viewModelScope.launch {
         val name = com.uaefinancial.tracker.parser.GlobalBanks.match(sender, sample, prefs.homeCountry)?.name ?: sender
-        com.uaefinancial.tracker.learn.Learning.queueSender(getApplication(), prefs, sender, name, sample)
+        com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "bank-added", sender, name, sample, "candidate")
         val n = repo.acceptSender(sender, name)
         runCatching { repo.autoFillCardDays() }
         resetSyncPointerQuietly()
@@ -752,11 +752,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshWidget()
     }
 
-    fun dismissUnknown(id: Long) = viewModelScope.launch { repo.dismissCandidate(id) }
+    fun dismissUnknown(id: Long) = viewModelScope.launch {
+        unknownMessages.value.firstOrNull { it.id == id }?.let { c ->
+            com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "not-financial", c.sender, null, c.body, "review")
+        }
+        repo.dismissCandidate(id)
+    }
 
-    fun declineSenders(senders: List<String>) { if (senders.isNotEmpty()) viewModelScope.launch { repo.declineSenders(senders) } }
+    fun declineSenders(senders: List<String>) {
+        if (senders.isEmpty()) return
+        senders.forEach { com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "sender-declined", it, null, null, "setup") }
+        viewModelScope.launch { repo.declineSenders(senders) }
+    }
 
     fun hideUnknownSender(sender: String) = viewModelScope.launch {
+        com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "sender-declined", sender, null, null, "hide")
         repo.muteSender(sender)
         message.value = "Hidden. You can show it again from Needs review."
     }
@@ -1106,7 +1116,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** One tap: this chat is a bank. Its messages (also the older ones) are read from now on. */
     fun acceptCandidate(c: com.uaefinancial.tracker.sms.Candidates.Candidate) {
-        addSenders(listOf(c.sender to (c.bankName ?: c.sender)), syncAfter = true)
+        addSenders(listOf(c.sender to (c.bankName ?: c.sender)), syncAfter = true, via = "scan")
         com.uaefinancial.tracker.sms.Candidates.forget(prefs, c.sender)
         refreshCandidates()
     }
@@ -1117,13 +1127,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Adds sender IDs; the next Sync re-reads the whole inbox so their older messages come in too. */
-    fun addSenders(pairs: List<Pair<String, String>>, syncAfter: Boolean) = viewModelScope.launch {
+    fun addSenders(pairs: List<Pair<String, String>>, syncAfter: Boolean, via: String = "manual") = viewModelScope.launch {
         val clean = pairs.map { (s, b) -> s.trim() to b.trim() }.filter { it.first.isNotEmpty() }
         if (clean.isEmpty()) { message.value = "Enter the sender name exactly as it shows in Messages"; return@launch }
         // Tell the developer (only with sharing on) that these senders are banks, so everyone can get them without an update.
         if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) clean.forEach { (s, b) ->
             val sample = runCatching { repo.sampleFromCandidates(s) }.getOrNull()
-            com.uaefinancial.tracker.learn.Learning.queueSender(getApplication(), prefs, s, b, sample)
+            com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "bank-added", s, b, sample, via)
         }
         clean.forEach { (s, b) -> repo.addSender(s, b) }
         resetSyncPointerQuietly()

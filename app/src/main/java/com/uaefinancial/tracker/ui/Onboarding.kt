@@ -274,7 +274,7 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
             vm.declineSenders(r?.suggestions.orEmpty().filter { !(picked[it.sender] ?: true) }.map { it.sender })
             importFrom = finished
             // Senders first, then one import that includes their older messages.
-            if (add.isNotEmpty()) vm.addSenders(add, syncAfter = true) else vm.sync()
+            if (add.isNotEmpty()) vm.addSenders(add, syncAfter = true, via = "setup") else vm.sync()
         },
         enabled = !scan.running && !syncing && !importing,
         modifier = Modifier.fillMaxWidth(),

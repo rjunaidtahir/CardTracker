@@ -801,6 +801,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     ): FixResult = lock.withLock {
         val sms = dao.smsById(smsId) ?: return@withLock FixResult(IngestOutcome.FAILED, 0)
         val locked = lockedFieldsFor(sms, type, amountMinor, currency, merchant, cardLast4, cardType, timestamp)
+        // What the app read before your fix, for the learning record ("unread", or the type it had guessed).
+        val wasRead = runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull()
+            .let { r -> if (r is ParseResult.Transaction) r.txn.type.name else "unread" }
         val outcome = db.withTransaction {
             dao.upsertFixes(
                 listOf(
@@ -815,7 +818,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             applyParse(sms.id, sms.dedupKey, SmsParser.parse(sms.sender, sms.body, sms.receivedAt), sms.receivedAt, sms.bank ?: sms.sender)
         }
         // A fix you made teaches the app: offer the masked shape with what you said it is (only if you allowed it).
-        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:" + (type?.name ?: "NOT_A_TRANSACTION")) }
+        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:" + (type?.name ?: "NOT_A_TRANSACTION") + "|was=" + wasRead + "|card=" + cardType.name) }
         // Remember (or forget) this fix as a template, then read the other unread messages from this bank again.
         prefs?.let { p ->
             val keys = p.learnedFixKeys

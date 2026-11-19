@@ -104,20 +104,34 @@ object Learning {
     }
 
     /**
-     * You told the app a sender is one of your banks: with sharing on, the public sender ID, the bank you chose (its
-     * public name only), your country and one masked message shape are queued, so the developer can review it and add
-     * the sender to the signed rules file for everyone. A phone number or contact name is never sent.
+     * One kind of thing a person did, kept apart in the sheet so the weekly review sees the full picture. The Kind column
+     * holds "event:<name>"; the Shape column holds "key=value" pairs joined by " | ". Only public things are ever sent:
+     * a sender ID as the bank prints it (never a phone number or contact name), a public bank name, a masked shape.
+     *
+     *   event:bank-added      sender not recognised -> you said it is a bank. sender=TABBY | chosen=Tabby | via=candidate
+     *                         (via = setup, picker, scan, candidate, manual) | sample=<masked shape or none>
+     *   event:sender-declined a suggested/unknown sender you left unticked or hid.  sender=ZAIN | via=setup|hide
+     *   event:not-financial   a kept message you marked "not financial".  sender=NOON | sample=<masked shape>
+     *
+     * (Fixed transactions and unread messages keep their own kinds: "fixed:<TYPE>" and "unread/<reason>".)
      */
-    fun queueSender(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String?): Boolean {
+    fun queueEvent(context: Context, prefs: Prefs, event: String, sender: String, bankName: String?, body: String?, via: String): Boolean {
         if (!enabled(prefs)) return false
         val id = publicSender(sender) ?: return false
         val bank = publicBankName(sender, bankName)
-        val shape = body?.let { b -> Masker.mask(b, bank).takeIf { it.safe }?.shape } ?: "(no sample)"
+        val sample = body?.let { b -> Masker.mask(b, bank).takeIf { it.safe }?.shape }
+        val fields = buildList {
+            add("sender=$id")
+            if (event == "bank-added") add("chosen=" + (bank ?: "unknown"))
+            add("via=$via")
+            add("sample=" + (sample ?: "none"))
+        }
+        val shape = fields.joinToString(" | ")
         val country = prefs.homeCountry ?: Region.detect(context) ?: ""
-        val label = "${bank ?: "Other"} [sender: $id]"
-        val hash = hash("sender|$label|$shape")
+        val label = bank ?: "Other ($id)"
+        val hash = hash("event|$event|$id|${bank ?: ""}|${sample ?: ""}")
         if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
-        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, "sender-confirmed", shape).joinToString(US.toString()))
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, "event:$event", shape).joinToString(US.toString()))
         schedule(context)
         return true
     }
