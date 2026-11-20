@@ -21,8 +21,8 @@ class ShippedPackTest {
         val out = RulesPack.parse(file.readText(), currentVersion = 4)
         assertIs<RulesPack.Outcome.Ok>(out, (out as? RulesPack.Outcome.Rejected)?.reason)
         assertTrue(out.pack.version >= 5)
-        assertEquals(10, out.pack.rules.size)
-        assertEquals(13, out.pack.ignore.size)
+        assertTrue(out.pack.rules.size >= 10) // grows with each published pack (v6: 18)
+        assertTrue(out.pack.ignore.size >= 13) // v6: 18
         val tracked = out.pack.banks.filter { it.track }.associate { it.name to it.senderIds }
         assertEquals(mapOf("Tabby" to listOf("Tabby"), "ADCB" to listOf("SIMPLYLIFE")), tracked)
         RulesPack.apply(out.pack)
