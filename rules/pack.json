@@ -305,7 +305,7 @@
     },
     {
       "label": "Statement: nothing due (zero)",
-      "pattern": "credit balance\\s+[A-Z]{3}\\s*0(?:\\.0+)?\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*0(?:\\.0+)?(?![\\d.,]*[1-9])"
+      "pattern": "credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*0(?:\\.0+)?\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*0(?:\\.0+)?(?![\\d.,]*[1-9])"
     }
   ]
 }

@@ -52,7 +52,9 @@ class ShippedPackTest {
         assertIs<ParseResult.Ignored>(limit)
         val zero = out.pack.ignore.first { it.label.startsWith("Statement: nothing due") }
         val re = Regex(zero.pattern, RegexOption.IGNORE_CASE)
+        assertTrue(re.containsMatchIn("Your CC Statement for 526039XXXXXX2712 is generated; CC has a credit balance of AED 0 with Min Due AED 0.00")) // the real message
         assertTrue(re.containsMatchIn("CC Statement: your credit balance AED 0 with Min Due AED 0.00"))
+        assertTrue(!re.containsMatchIn("Your CC Statement for 526039XXXXXX2712 is generated; CC has a credit balance of AED 0 with Min Due AED 150.00"))
         assertTrue(re.containsMatchIn("credit balance AED 0.00 with Minimum Due AED 0.00"))
         // a statement with something due, and ordinary Tabby messages, are not ignored
         assertTrue(!re.containsMatchIn("CC Statement: your credit balance AED 0 with Min Due AED 150.00"))
