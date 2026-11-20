@@ -33,9 +33,9 @@ Gold shapes 4 (KEEP 2, NOT 2), banks 2; threshold P(NOT) >= 0.99.
 
 | message | P(not a transaction) | sorted as |
 |---|---|---|
-| Tabby code + merchant | 0.182 | stays at top |
-| Tabby limit increased | 0.036 | stays at top |
-| Tabby code + merchant 2 | 0.182 | stays at top |
-| RAKBANK statement, nothing due | 0.009 | stays at top |
+| Tabby code + merchant | 0.626 | stays at top |
+| Tabby limit increased | 0.166 | stays at top |
+| Tabby code + merchant 2 | 0.626 | stays at top |
+| RAKBANK statement, nothing due | 0.089 | stays at top |
 | Control: real purchase | 0.000 | stays at top |
-| Control: debit | 0.018 | stays at top |
+| Control: debit | 0.122 | stays at top |

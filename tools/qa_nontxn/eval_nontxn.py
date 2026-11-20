@@ -13,6 +13,8 @@ PRE-REGISTERED (written and pushed before the first run; nothing tuned afterward
   money verb (debited, credited, spent, purchase, used, paid, withdrawn, transfer, refund).
 - BAR ("safe to use as sorting only, nothing hidden"): real transactions wrongly flagged <= 0.5% of KEEP shapes AND >= 50% of NOT shapes flagged,
   on the headline threshold; the worst single bank must also have no more than 2 wrongly flagged KEEP shapes.
+- RUN HISTORY: run 1 had a scoring bug (unseen words counted towards NOT: 44% of real transactions flagged); fixed to the plain multinomial NB above
+  with the bar, threshold and variants unchanged. Both runs are reported.
 - Probe: the 4 messages from the owner's screenshot (20 Nov), shapes written by hand in the Masker's style (approximate), model trained
   WITHOUT Tabby and RAKBANK. Informational, not part of the bar.
 """
@@ -39,20 +41,21 @@ def feats(shape):
     return set(w) | {a + " " + b for a, b in zip(w, w[1:])}
 
 def train(rows):
-    cnt = {"NOT": collections.Counter(), "KEEP": collections.Counter()}; docs = {"NOT": 0, "KEEP": 0}
+    cnt = {"NOT": collections.Counter(), "KEEP": collections.Counter()}
     for r in rows:
-        c = "NOT" if r["kind"] == "NOT_TXN" else "KEEP"; docs[c] += 1
+        c = "NOT" if r["kind"] == "NOT_TXN" else "KEEP"
         for f in feats(r["shape"]): cnt[c][f] += 1
     vocab = set(cnt["NOT"]) | set(cnt["KEEP"])
-    return cnt, docs, len(vocab)
+    tot = {c: sum(cnt[c].values()) for c in cnt}
+    return cnt, tot, vocab
 
 def p_not(model, shape):
-    cnt, docs, V = model
-    lo = 0.0  # equal priors
+    """Standard multinomial naive Bayes, add-one smoothing over the training vocabulary, equal priors; words never seen in training are ignored."""
+    cnt, tot, vocab = model
+    V = len(vocab); lo = 0.0
     for f in feats(shape):
-        a = (cnt["NOT"][f] + 1) / (docs["NOT"] + 2); b = (cnt["KEEP"][f] + 1) / (docs["KEEP"] + 2)
-        lo += math.log(a) - math.log(b)
-        # absent features are ignored (presence-only model keeps the score from being driven by missing words)
+        if f not in vocab: continue
+        lo += math.log((cnt["NOT"][f] + 1) / (tot["NOT"] + V)) - math.log((cnt["KEEP"][f] + 1) / (tot["KEEP"] + V))
     lo = max(-50, min(50, lo))
     return 1 / (1 + math.exp(-lo))
 
