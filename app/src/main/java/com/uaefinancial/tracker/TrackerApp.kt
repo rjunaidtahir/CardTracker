@@ -35,7 +35,10 @@ class TrackerApp : Application() {
         SmsParser.setCustomSenders(prefs.senderCache)
         SmsParser.setExcludedBanks(prefs.excludedBanks)
         repo.onSendersChanged = { prefs.senderCache = it }
-        repo.onShape = { sender, bank, body, kind -> com.uaefinancial.tracker.learn.Learning.queue(this, prefs, sender, bank, body, kind) }
+        repo.onShape = { sender, bank, body, kind, merchant -> com.uaefinancial.tracker.learn.Learning.queue(this, prefs, sender, bank, body, kind, merchant) }
+        repo.onCategory = { sender, bank, body, merchant, type, from, to, all ->
+            com.uaefinancial.tracker.learn.Learning.queueCategory(this, prefs, sender, bank, body, merchant, type, from, to, all)
+        }
         com.uaefinancial.tracker.learn.RulesUpdater.loadSaved(this, prefs)
         LiveListening.reconcile(this, prefs)
         if (prefs.remindersEnabled) DueReminders.setEnabled(this, true)

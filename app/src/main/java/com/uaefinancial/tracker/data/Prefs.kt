@@ -196,7 +196,7 @@ class Prefs(context: Context) {
     /** Hashes of shapes already sent (so the same shape is never sent twice), newest last, capped. */
     var sentShapeHashes: List<String>
         get() = (sp.getString("sent_shapes", "") ?: "").split(',').filter { it.isNotEmpty() }
-        set(v) { sp.edit { putString("sent_shapes", v.takeLast(300).joinToString(",")) } }
+        set(v) { sp.edit { putString("sent_shapes", v.takeLast(2000).joinToString(",")) } }
 
     /** The last few shapes sent, so More → Settings can show exactly what leaves the phone. */
     var recentShared: List<String>
@@ -211,7 +211,15 @@ class Prefs(context: Context) {
     /** Shapes waiting to be sent: "hash<US>bank<US>country<US>kind<US>shape". Held until consent is on. */
     var shapeQueue: List<String>
         get() = (sp.getString("shape_queue", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
-        set(v) { sp.edit { putString("shape_queue", v.takeLast(20).joinToString("\u001E")) } }
+        set(v) { sp.edit { putString("shape_queue", v.takeLast(200).joinToString("\u001E")) } }
+
+    /**
+     * Messages that could not be masked safely (so were never sent), counted per day, bank and reason: "epochDay<US>bank<US>reason<US>count"
+     * lines joined by RS. Only the count and the fixed reason ("digits left", "mostly unknown words" ...) are ever reported, never any text.
+     */
+    var unmaskCounts: List<String>
+        get() = (sp.getString("unmask_counts", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("unmask_counts", v.takeLast(200).joinToString("\u001E")) } }
 
     // --- rules file
     /** Newest version of the signed rules file this phone accepted; 0 = none. */

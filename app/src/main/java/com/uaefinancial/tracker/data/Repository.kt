@@ -160,14 +160,14 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         )
 
     /** Set by the app: gets (sender, bank, body, kind) for messages worth learning from. The app masks before storing anything. */
-    var onShape: ((String, String?, String, String) -> Unit)? = null
+    var onShape: ((String, String?, String, String, String?) -> Unit)? = null
 
     /** True while the message just read is a standing-instruction message waiting for its account (not an unread format). */
     private var parkedStanding = false
 
     /** Offers the masked shape of every message waiting in Needs review (nothing is sent unless sharing is on). */
     suspend fun queueUnreadForLearning() {
-        for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, "unread")
+        for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, "unread", null)
     }
 
     suspend fun ingestSms(
@@ -218,7 +218,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }.also { outcome ->
                 // Could not be read: offer its masked shape for learning (only if you allowed it). A standing-instruction
                 // message waiting for its account is not unread: its format is known.
-                if (outcome == IngestOutcome.FAILED && !parkedStanding) runCatching { onShape?.invoke(sender, bank.name, body, "unread") }
+                if (outcome == IngestOutcome.FAILED && !parkedStanding) runCatching { onShape?.invoke(sender, bank.name, body, "unread", null) }
                 // Read only by the generic reader (this bank has no verified rule for the wording): offer the masked shape
                 // too, so every wording of a bank like Tabby reaches the review and can get its own verified rule.
                 // When part of it fell back to a default (no merchant, no card), the record says which part, so the
@@ -226,7 +226,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 if (outcome == IngestOutcome.TRANSACTION && (parsed as? ParseResult.Transaction)?.txn?.auto == true) {
                     val gaps = com.uaefinancial.tracker.core.ReadingGaps.of((parsed as ParseResult.Transaction).txn)
                     val kind = if (gaps.isEmpty()) "smart-read" else "incomplete:" + gaps.joinToString("+")
-                    runCatching { onShape?.invoke(sender, bank.name, body, kind) }
+                    runCatching { onShape?.invoke(sender, bank.name, body, kind, (parsed as ParseResult.Transaction).txn.merchant) }
                 }
             }
         }
@@ -337,7 +337,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     private suspend fun shareReadingChoice(s: SmsEntity, choice: String) {
         val held = dao.heldReadingsNow().firstOrNull { it.smsId == s.id } ?: return
         val changes = Regex("""\(changes: ([^)]*)\)""").find(held.newSummary)?.groupValues?.get(1)?.replace(", ", ",")?.replace(" ", "-")?.take(60) ?: "unknown"
-        runCatching { onShape?.invoke(s.sender, s.bank, s.body, "choice:$choice|changes=$changes") }
+        runCatching { onShape?.invoke(s.sender, s.bank, s.body, "choice:$choice|changes=$changes", null) }
     }
 
     /** "Use new": applies the newer reading of one held message. */
@@ -873,7 +873,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             applyParse(sms.id, sms.dedupKey, SmsParser.parse(sms.sender, sms.body, sms.receivedAt), sms.receivedAt, sms.bank ?: sms.sender)
         }
         // A fix you made teaches the app: offer the masked shape with what you said it is (only if you allowed it).
-        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:" + (type?.name ?: "NOT_A_TRANSACTION") + "|was=" + wasRead + "|card=" + cardType.name) }
+        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:" + (type?.name ?: "NOT_A_TRANSACTION") + "|was=" + wasRead + "|card=" + cardType.name, merchant) }
         // Remember (or forget) this fix as a template, then read the other unread messages from this bank again.
         prefs?.let { p ->
             val keys = p.learnedFixKeys
@@ -952,7 +952,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             applyParse(sms.id, sms.dedupKey, SmsParser.parse(sms.sender, sms.body, sms.receivedAt), sms.receivedAt, sms.bank ?: sms.sender)
         }
         // What was wrong: the message had no due date (or no reading), and you said it is a statement. Masked shape only, if you allowed it.
-        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:STATEMENT|was=$wasRead|card=" + CardType.CREDIT.name) }
+        runCatching { onShape?.invoke(sms.sender, sms.bank, sms.body, "fixed:STATEMENT|was=$wasRead|card=" + CardType.CREDIT.name, null) }
         prefs?.let { p -> if (sms.dedupKey in p.learnedFixKeys) p.learnedFixKeys = p.learnedFixKeys - sms.dedupKey }
         loadLearned()
         FixResult(outcome, 0)
@@ -1094,7 +1094,15 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      * Sets a transaction's category. For SMS transactions the choice is remembered per SMS (survives Re-parse).
      * With [applyToMerchant], the app also learns "this merchant = this category" for the past and future.
      */
+    /** Told when you change a category (for the optional learning report); set by the app. */
+    var onCategory: ((sender: String?, bank: String, body: String?, merchant: String, type: TxnType, fromId: Long?, toId: Long, all: Boolean) -> Unit)? = null
+
     suspend fun setCategory(t: TransactionEntity, categoryId: Long, applyToMerchant: Boolean) = db.withTransaction {
+        val fromId = t.categoryId
+        val sms = t.smsId?.let { dao.smsById(it) }
+        runCatching {
+            onCategory?.invoke(sms?.sender, t.bank, sms?.body, t.merchant, runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE), fromId, categoryId, applyToMerchant)
+        }
         dao.setTxnCategory(t.id, categoryId)
         t.smsId?.let { dao.dedupKeyOf(it) }?.let { dao.upsertOverrides(listOf(TxnOverrideEntity(it, categoryId))) }
         val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)

@@ -38,7 +38,7 @@ object Learning {
     private const val F_KIND = "entry.69027038"
     private const val F_APP = "entry.1715899320"
 
-    const val DAILY_CAP = 10
+    const val DAILY_CAP = 50
     private const val US = '\u001F'
 
     const val ASKED = 0
@@ -86,11 +86,15 @@ object Learning {
     }
 
     /** Masks [body] and queues its shape. Returns true when something was queued. Does nothing unless sharing is on. */
-    fun queue(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, kind: String): Boolean {
+    fun queue(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, kind: String, merchant: String? = null): Boolean {
         if (!enabled(prefs)) return false
         val bank = publicBankName(sender, bankName)
-        val r = Masker.mask(body, bank)
-        if (!r.safe) return false
+        val r = Masker.mask(body, bank, merchant)
+        if (!r.safe) {
+            // Never sent, but counted (bank + fixed reason only, no text), so the review knows how much it cannot see.
+            countUnmasked(prefs, bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other", r.reason ?: "unsafe")
+            return false
+        }
         val country = prefs.homeCountry ?: Region.detect(context) ?: ""
         // A bank we do not know yet: send its sender ID as the bank's own name for its messages ("HBL", "AX-HDFCBK-S").
         // That is public (every customer sees it); a phone number or a contact name is never sent.
@@ -99,6 +103,56 @@ object Learning {
         val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:")) "|$kind" else "")
         if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
         prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, sentKind, r.shape).joinToString(US.toString()))
+        schedule(context)
+        return true
+    }
+
+    private fun countUnmasked(prefs: Prefs, label: String, reason: String) {
+        val today = (System.currentTimeMillis() / 86_400_000L).toString()
+        val key = "$today$US$label$US$reason$US"
+        val all = prefs.unmaskCounts.toMutableList()
+        val i = all.indexOfFirst { it.startsWith(key) }
+        if (i >= 0) all[i] = key + ((all[i].removePrefix(key).toIntOrNull() ?: 0) + 1) else all += key + "1"
+        prefs.unmaskCounts = all
+    }
+
+    /** Turns the counts of earlier days into reports (one per bank and reason), so each count is complete. */
+    private fun queueUnmaskedCounts(context: Context, prefs: Prefs) {
+        val today = System.currentTimeMillis() / 86_400_000L
+        val keep = mutableListOf<String>()
+        var queue = prefs.shapeQueue
+        val country = prefs.homeCountry ?: Region.detect(context) ?: ""
+        for (line in prefs.unmaskCounts) {
+            val p = line.split(US)
+            val day = p.getOrNull(0)?.toLongOrNull()
+            if (p.size < 4 || day == null) continue
+            if (day >= today) { keep += line; continue }
+            val shape = "count=${p[3]} | reason=${p[2]} | day=$day"
+            queue = queue + listOf(listOf(hash("unmasked|$day|${p[1]}|${p[2]}"), p[1], country, "unmasked", shape).joinToString(US.toString()))
+        }
+        prefs.shapeQueue = queue
+        prefs.unmaskCounts = keep
+    }
+
+    /**
+     * A person changed a transaction's category. Sends only what [com.uaefinancial.tracker.core.CategoryReport] allows: the
+     * old and new built-in category, the type, and the masked wording with the merchant's place marked (never its name).
+     * Needs sharing ON.
+     */
+    fun queueCategory(
+        context: Context, prefs: Prefs, sender: String?, bankName: String?, body: String?, merchant: String,
+        type: com.uaefinancial.tracker.parser.TxnType, fromId: Long?, toId: Long, applyToMerchant: Boolean,
+    ): Boolean {
+        if (!enabled(prefs)) return false
+        val fields = com.uaefinancial.tracker.core.CategoryReport.fields(type, fromId, toId, applyToMerchant) ?: return false
+        val bank = publicBankName(sender ?: "", bankName)
+        val shape = body?.let { Masker.mask(it, bank, merchant).takeIf { r -> r.safe }?.shape } ?: "none"
+        val label = bank ?: sender?.let { publicSender(it) }?.let { "Other ($it)" } ?: "Other"
+        val country = prefs.homeCountry ?: Region.detect(context) ?: ""
+        val text = "$fields | shape=$shape"
+        val hash = hash("category|$label|$text")
+        if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, "category", text).joinToString(US.toString()))
         schedule(context)
         return true
     }
@@ -151,6 +205,7 @@ object Learning {
         var sentCount = if (day == today) n else 0
         val version = runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: ""
         val appVersion = "$version/e${SmsParser.ENGINE_VERSION}"
+        queueUnmaskedCounts(context, prefs)
         var queue = prefs.shapeQueue
         var ok = true
         for (item in queue.toList()) {

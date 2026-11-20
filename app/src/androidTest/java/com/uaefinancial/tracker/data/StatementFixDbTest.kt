@@ -27,7 +27,7 @@ class StatementFixDbTest {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).allowMainThreadQueries().build()
         repo = Repository(db)
-        repo.onShape = { _, _, _, kind -> kinds += kind }
+        repo.onShape = { _, _, _, kind, _ -> kinds += kind }
         SmsParser.setHomeCurrency("AED")
         SmsParser.setMonthFirstDates(false)
     }

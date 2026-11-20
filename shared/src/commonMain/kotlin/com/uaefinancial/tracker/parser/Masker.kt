@@ -84,9 +84,17 @@ object Masker {
     private fun enc(n: Int) = n.toString().map { 'a' + (it - '0') }.joinToString("")
     private fun dec(s: String) = s.map { '0' + (it - 'a') }.joinToString("")
 
-    fun mask(body: String, bankName: String? = null): Result {
+    /**
+     * [merchant] is the merchant the app read (or you typed) for this message. It is never sent: where it stands in the wording is
+     * marked as {MERCHANT} instead, which is all a rule for this bank's wording needs ("... from {MERCHANT} for {CUR} {AMOUNT}").
+     */
+    fun mask(body: String, bankName: String? = null, merchant: String? = null): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
+        val name = merchant?.trim()?.replace(Regex("""\s+"""), " ")
+        if (name != null && name.length >= 3 && name !in com.uaefinancial.tracker.core.ReadingGaps.placeholderMerchants) {
+            t = t.replace(Regex(Regex.escape(name).replace("\\ ", "\\s+"), RegexOption.IGNORE_CASE), "{MERCHANT}")
+        }
         t = t.replace(email, "{EMAIL}").replace(url, "{URL}")
         t = t.replace(dateNamed, "{DATE}").replace(dateNumeric, "{DATE}").replace(time, "{TIME}")
         t = t.replace(cardRef) { m ->
