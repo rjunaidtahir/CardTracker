@@ -39,6 +39,9 @@ object Learning {
     private const val F_APP = "entry.1715899320"
 
     const val DAILY_CAP = 50
+    /** Shop names are sent under their own daily cap. */
+    const val MERCHANT_CAP = 40
+    private const val MERCHANT_KIND = "merchant-other"
     private const val US = '\u001F'
 
     const val ASKED = 0
@@ -158,6 +161,20 @@ object Learning {
     }
 
     /**
+     * Names-only report: a shop name filed under Other. Nothing else is attached (no amount, date, card, bank or message).
+     * Sharing must be on. Each name is queued once per phone.
+     */
+    fun queueMerchant(context: Context, prefs: Prefs, merchant: String, type: com.uaefinancial.tracker.parser.TxnType): Boolean {
+        if (!enabled(prefs)) return false
+        val name = com.uaefinancial.tracker.core.MerchantReport.clean(merchant, type) ?: return false
+        val h = hash("merchant|$name")
+        if (h in prefs.sentShapeHashes || prefs.merchantQueue.any { it.startsWith("$h$US") }) return false
+        prefs.merchantQueue = prefs.merchantQueue + (h + US + name)
+        schedule(context)
+        return true
+    }
+
+    /**
      * One kind of thing a person did, kept apart in the sheet so the weekly review sees the full picture. The Kind column
      * holds "event:<name>"; the Shape column holds "key=value" pairs joined by " | ". Only public things are ever sent:
      * a sender ID as the bank prints it (never a phone number or contact name), a public bank name, a masked shape.
@@ -221,6 +238,28 @@ object Learning {
         }
         prefs.shapeQueue = queue
         prefs.sentToday = "$today:$sentCount"
+        if (ok) ok = flushMerchants(context, prefs, today, appVersion)
+        return ok
+    }
+
+    private fun flushMerchants(context: Context, prefs: Prefs, today: Long, appVersion: String): Boolean {
+        val parts = prefs.sentMerchantsToday.split(':')
+        var sent = if (parts.getOrNull(0)?.toLongOrNull() == today) parts.getOrNull(1)?.toIntOrNull() ?: 0 else 0
+        val country = prefs.homeCountry ?: Region.detect(context) ?: ""
+        var queue = prefs.merchantQueue
+        var ok = true
+        for (item in queue.toList()) {
+            if (sent >= MERCHANT_CAP) break
+            val p = item.split(US, limit = 2)
+            if (p.size < 2) { queue = queue - item; continue }
+            if (post(p[1], "merchant", country, MERCHANT_KIND, appVersion)) {
+                sent++
+                queue = queue - item
+                prefs.sentShapeHashes = prefs.sentShapeHashes + p[0]
+            } else { ok = false; break }
+        }
+        prefs.merchantQueue = queue
+        prefs.sentMerchantsToday = "$today:$sent"
         return ok
     }
 

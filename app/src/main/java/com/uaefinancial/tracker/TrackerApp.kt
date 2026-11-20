@@ -39,6 +39,7 @@ class TrackerApp : Application() {
         repo.onCategory = { sender, bank, body, merchant, type, from, to, all ->
             com.uaefinancial.tracker.learn.Learning.queueCategory(this, prefs, sender, bank, body, merchant, type, from, to, all)
         }
+        repo.onOtherMerchant = { merchant, type -> com.uaefinancial.tracker.learn.Learning.queueMerchant(this, prefs, merchant, type) }
         com.uaefinancial.tracker.learn.RulesUpdater.loadSaved(this, prefs)
         LiveListening.reconcile(this, prefs)
         if (prefs.remindersEnabled) DueReminders.setEnabled(this, true)

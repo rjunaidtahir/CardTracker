@@ -81,11 +81,28 @@ object CategoryRules {
         keywords.map { (id, words) -> id to Regex(words.joinToString("|") { "(?:$it)" }, RegexOption.IGNORE_CASE) }
     }
 
+    /**
+     * Extra category words from the signed rules file ("categories"). Used only for a name the built-in keywords left in
+     * Other, so a published word can never move something the app already files, and your own choices still come first.
+     */
+    private var packWords: List<Pair<Long, Regex>> = emptyList()
+    var packKeywordsVersion: Int = 0
+        private set
+
+    fun setPackKeywords(list: List<Pair<Long, List<String>>>, version: Int) {
+        packWords = list.flatMap { (id, words) -> words.map { w -> id to Regex("(?<![A-Z0-9])" + Regex.escape(w.uppercase().trim()), RegexOption.IGNORE_CASE) } }
+        packKeywordsVersion = if (packWords.isEmpty()) 0 else version
+    }
+
+    /** The categories a pack word may file under (spending categories only). */
+    val packCategoryIds: Set<Long> = setOf(GROCERIES, DINING, TRANSPORT, UTILITIES, SHOPPING, TRAVEL, HEALTH, ENTERTAINMENT, GOVERNMENT, EDUCATION, INSURANCE)
+
     /** Best guess for a merchant; null only for non-spending transactions. */
     fun guess(merchant: String, type: TxnType): Long? {
         if (type != TxnType.PURCHASE && type != TxnType.REFUND) return null
         if (merchant.equals("Cashback", true) || merchant.startsWith("FAB Rewards", true)) return OTHER
-        return compiled.firstOrNull { it.second.containsMatchIn(merchant) }?.first ?: OTHER
+        compiled.firstOrNull { it.second.containsMatchIn(merchant) }?.first?.let { return it }
+        return packWords.firstOrNull { it.second.containsMatchIn(merchant) }?.first ?: OTHER
     }
 
     /** Generic SMS texts that say nothing about who was paid ("Account debit (EMI / direct debit)", "Outward remittance"). */

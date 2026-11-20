@@ -88,7 +88,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      */
     suspend fun reapplyAutoCategories() {
         val p = prefs ?: return
-        val version = "k${CategoryRules.KEYWORDS_VERSION}"
+        val version = "k${CategoryRules.KEYWORDS_VERSION}-p${CategoryRules.packKeywordsVersion}"
+        // Names still in Other are reported (names only, once each); this also covers messages that arrived before the report existed.
+        for (t in dao.autoOtherTxns(CategoryRules.OTHER)) {
+            val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
+            onOtherMerchant?.invoke(t.merchant, type)
+        }
         if (p.categoryKeywordsApplied == version) return
         for (t in dao.autoOtherTxns(CategoryRules.OTHER)) {
             val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
@@ -125,6 +130,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         dao.deleteSender(sender)
         loadSenders()
     }
+
+    /** Called with a shop name the app filed under Other and the transaction type (the names-only report). */
+    var onOtherMerchant: ((merchant: String, type: TxnType) -> Unit)? = null
 
     /** Your choice for this SMS > learned merchant rule > keyword guess. */
     private suspend fun resolveCategory(dedupKey: String?, merchantKey: String, merchant: String, type: TxnType, amountMinor: Long): Long? {
@@ -701,6 +709,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 inferred = placement != null,
             )
         dao.insertTxn(entity)
+        if (entity.categoryId == CategoryRules.OTHER && !entity.categoryUserSet && !reparsing) onOtherMerchant?.invoke(entity.merchant, t.type)
         if (!reparsing && (placement == null || placement.notify)) synchronized(fresh) { fresh += entity }
         val note = if (aed == null) "No exchange rate for ${t.currency}: add one in More → Exchange rates" else null
         dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, note ?: if (placement != null) SI_PLACED_NOTE else null)

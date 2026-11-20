@@ -79,6 +79,8 @@ object RulesUpdater {
         }
         // Messages that could not be read before may be readable now.
         runCatching { app.repo.reparseAll() }
+        // New category words in the rules file: re-check what the app itself filed under Other.
+        runCatching { app.repo.reapplyAutoCategories() }
         return true
     }
 

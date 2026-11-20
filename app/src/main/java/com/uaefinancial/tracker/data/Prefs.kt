@@ -44,6 +44,16 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("ai_merchant_fill", true)
         set(v) { sp.edit { putBoolean("ai_merchant_fill", v) } }
 
+    /** Shop names waiting to be sent (names-only report), as "hash<US>name". Newest last, capped. */
+    var merchantQueue: List<String>
+        get() = (sp.getString("merchant_queue", "") ?: "").split('\u001e').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("merchant_queue", v.takeLast(300).joinToString("\u001e")) } }
+
+    /** "epochDay:count" of shop names sent today (own cap, so they never crowd out the other reports). */
+    var sentMerchantsToday: String
+        get() = sp.getString("sent_merchants_today", "") ?: ""
+        set(v) { sp.edit { putString("sent_merchants_today", v) } }
+
     /** Which category keyword set the stored "Other" rows were last re-checked against (see Repository.reapplyAutoCategories). */
     var categoryKeywordsApplied: String
         get() = sp.getString("category_keywords_applied", "") ?: ""
