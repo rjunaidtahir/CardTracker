@@ -721,6 +721,13 @@ interface AppDao {
     )
     suspend fun applyRuleExact(merchant: String, amountMinor: Long, type: String, categoryId: Long)
 
+    /** Purchases and refunds the app filed under Other by itself (never one you set by hand). */
+    @Query("SELECT * FROM transactions WHERE categoryUserSet = 0 AND categoryId = :otherId AND type IN ('PURCHASE', 'REFUND')")
+    suspend fun autoOtherTxns(otherId: Long): List<TransactionEntity>
+
+    @Query("UPDATE transactions SET categoryId = :categoryId WHERE id = :id AND categoryUserSet = 0")
+    suspend fun setAutoCategory(id: Long, categoryId: Long)
+
     @Query("SELECT * FROM transactions WHERE merchantKey IS NULL")
     suspend fun txnsWithoutMerchantKey(): List<TransactionEntity>
 

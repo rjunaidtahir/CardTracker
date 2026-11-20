@@ -78,6 +78,25 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             val cat = if (t.categoryUserSet) t.categoryId else resolveCategory(null, key, t.merchant, type, t.amountMinor)
             dao.setMerchantKeyAndCategory(t.id, key, cat)
         }
+        runCatching { reapplyAutoCategories() }
+    }
+
+    /**
+     * When the built-in category keywords change (a new app version), looks once more at the purchases the app itself filed
+     * under Other and moves those that now match a keyword. Never touches a category you set (or any row you confirmed),
+     * and your learned merchant rules still come first. Runs only when the keyword set differs from the one last applied.
+     */
+    suspend fun reapplyAutoCategories() {
+        val p = prefs ?: return
+        val version = "k${CategoryRules.KEYWORDS_VERSION}"
+        if (p.categoryKeywordsApplied == version) return
+        for (t in dao.autoOtherTxns(CategoryRules.OTHER)) {
+            val type = runCatching { TxnType.valueOf(t.type) }.getOrDefault(TxnType.PURCHASE)
+            val key = t.merchantKey ?: CategoryRules.merchantKey(t.merchant)
+            val cat = resolveCategory(null, key, t.merchant, type, t.amountMinor) ?: continue
+            if (cat != CategoryRules.OTHER) dao.setAutoCategory(t.id, cat)
+        }
+        p.categoryKeywordsApplied = version
     }
 
     private suspend fun loadRates() {

@@ -44,6 +44,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("ai_merchant_fill", true)
         set(v) { sp.edit { putBoolean("ai_merchant_fill", v) } }
 
+    /** Which category keyword set the stored "Other" rows were last re-checked against (see Repository.reapplyAutoCategories). */
+    var categoryKeywordsApplied: String
+        get() = sp.getString("category_keywords_applied", "") ?: ""
+        set(v) { sp.edit { putString("category_keywords_applied", v) } }
+
     /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
         get() = sp.getBoolean(KEY_LIVE, true)
