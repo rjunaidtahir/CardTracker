@@ -221,8 +221,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 if (outcome == IngestOutcome.FAILED && !parkedStanding) runCatching { onShape?.invoke(sender, bank.name, body, "unread") }
                 // Read only by the generic reader (this bank has no verified rule for the wording): offer the masked shape
                 // too, so every wording of a bank like Tabby reaches the review and can get its own verified rule.
+                // When part of it fell back to a default (no merchant, no card), the record says which part, so the
+                // review can see every wording the reader only half understood.
                 if (outcome == IngestOutcome.TRANSACTION && (parsed as? ParseResult.Transaction)?.txn?.auto == true) {
-                    runCatching { onShape?.invoke(sender, bank.name, body, "smart-read") }
+                    val gaps = com.uaefinancial.tracker.core.ReadingGaps.of((parsed as ParseResult.Transaction).txn)
+                    val kind = if (gaps.isEmpty()) "smart-read" else "incomplete:" + gaps.joinToString("+")
+                    runCatching { onShape?.invoke(sender, bank.name, body, kind) }
                 }
             }
         }
@@ -643,10 +647,13 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
 
         val override = dao.overrideFor(dedupKey)
         // Check: the amount read must be written in the message (user fixes are checked by the user).
-        val checkNote = if (r.ruleId == FIX_RULE) null else dao.smsBody(smsId)?.let { b ->
+        val amountNote = if (r.ruleId == FIX_RULE) null else dao.smsBody(smsId)?.let { b ->
             if (com.uaefinancial.tracker.core.Checks.amountAppearsIn(SmsParser.normalizeBody(b), amountMinor)) null
             else "The amount (${t.currency} ${Money.fromMinor(amountMinor).toPlainString()}) isn't written in the message: check it."
         }
+        // Completeness: a part of the message that fell back to a default (no merchant, no card) is marked, never hidden.
+        val gaps = if (r.ruleId == FIX_RULE) emptyList() else com.uaefinancial.tracker.core.ReadingGaps.of(t)
+        val checkNote = amountNote ?: if (gaps.isNotEmpty()) "gap:" + gaps.joinToString(",") else null
         // Spends on a card you pay for someone else go to the Family category (unless you chose another).
         val family = card?.owner == CardOwner.FAMILY && t.type == TxnType.PURCHASE && override == null
         val entity =

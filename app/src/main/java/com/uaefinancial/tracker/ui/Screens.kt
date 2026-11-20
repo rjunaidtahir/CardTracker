@@ -463,6 +463,7 @@ internal fun TransactionRow(
                             com.uaefinancial.tracker.core.Checks.Kind.DUPLICATE -> "possible duplicate"
                             com.uaefinancial.tracker.core.Checks.Kind.UNUSUAL -> "unusually large"
                             com.uaefinancial.tracker.core.Checks.Kind.RESIDUAL -> "a small amount is unaccounted for"
+                            com.uaefinancial.tracker.core.Checks.Kind.INCOMPLETE -> "incomplete reading"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.amber, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )

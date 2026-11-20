@@ -846,7 +846,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val found = com.uaefinancial.tracker.core.Checks.evaluate(rows) { m -> fmtMoney(m) }.toMutableMap()
             for (t in all) {
                 val note = t.checkNote ?: continue
-                found[t.id] = listOf(com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.BALANCE, note)) + (found[t.id] ?: emptyList())
+                val flag = if (note.startsWith("gap:")) {
+                    com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.INCOMPLETE, com.uaefinancial.tracker.core.ReadingGaps.describe(note.removePrefix("gap:")))
+                } else com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.BALANCE, note)
+                found[t.id] = listOf(flag) + (found[t.id] ?: emptyList())
             }
             found.filterKeys { it.toString() !in dismissed }
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
