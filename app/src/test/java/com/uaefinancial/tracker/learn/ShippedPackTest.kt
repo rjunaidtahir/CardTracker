@@ -64,3 +64,42 @@ class ShippedPackTest {
         assertTrue(stmt !is ParseResult.Ignored)
     }
 }
+
+/**
+ * Checks the shop-name category words in the exact rules/pack.json about to be published. rules/merchants.json holds one
+ * real example name per published word group (written by the daily merchant review); each must file under the category
+ * the review chose once the shipped pack is applied, and no word may change what the built-in keywords already file.
+ */
+class ShippedCategoryWordsTest {
+    @AfterTest fun reset() { RulesPack.apply(null) }
+
+    private val packFile = listOf(File("../rules/pack.json"), File("rules/pack.json")).first { it.exists() }
+    private val examplesFile = listOf(File("../rules/merchants.json"), File("rules/merchants.json")).first { it.exists() }
+
+    @Test fun everyExampleFilesWhereTheReviewChose() {
+        val out = RulesPack.parse(packFile.readText(), currentVersion = 0)
+        assertIs<RulesPack.Outcome.Ok>(out, (out as? RulesPack.Outcome.Rejected)?.reason)
+        RulesPack.apply(out.pack)
+        val root = com.uaefinancial.tracker.parser.MiniJson.parse(examplesFile.readText()) as Map<*, *>
+        val examples = (root["examples"] as? List<*>).orEmpty()
+        for (e in examples) {
+            val m = e as Map<*, *>
+            val name = m["name"] as String
+            val want = com.uaefinancial.tracker.parser.CategoryRules.defaults.first { it.name.equals(m["category"] as String, true) }.id
+            assertEquals(want, com.uaefinancial.tracker.parser.CategoryRules.guess(name, com.uaefinancial.tracker.parser.TxnType.PURCHASE), "example $name")
+        }
+        // every published word must file at least one example (no word goes out untested)
+        for ((id, words) in out.pack.categories) for (w in words) {
+            assertTrue(examples.any { (it as Map<*, *>)["name"].toString().uppercase().contains(w) }, "word $w has no example in rules/merchants.json")
+        }
+    }
+
+    @Test fun builtInFilingIsNeverChangedByThePack() {
+        val tp = com.uaefinancial.tracker.parser.TxnType.PURCHASE
+        val names = listOf("CARREFOUR CITY", "EPPCO SITE 91", "GAZANIA RESTAURANT", "AMAZONUFR DI", "ADNOC 1234", "NOON FOOD", "DEWA", "SALIK", "TALABAT", "LULU HYPERMARKET")
+        val before = names.map { com.uaefinancial.tracker.parser.CategoryRules.guess(it, tp) }
+        val out = RulesPack.parse(packFile.readText(), currentVersion = 0) as RulesPack.Outcome.Ok
+        RulesPack.apply(out.pack)
+        assertEquals(before, names.map { com.uaefinancial.tracker.parser.CategoryRules.guess(it, tp) })
+    }
+}
