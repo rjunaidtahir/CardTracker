@@ -546,6 +546,16 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         } else if (t.cardLast4 == null && t.accountNotNamed) {
             dao.cardsOfBank(t.bank, CardTypes.ACCOUNT).singleOrNull()?.let { t = t.copy(cardLast4 = it.last4, cardType = CardType.ACCOUNT) }
         }
+        // No pattern found a merchant (it would read "Card purchase"): the small on-device reader may fill it, only with words that
+        // are in the message, and the row is marked "Check this" so you confirm it. Never for a rule-read or fixed transaction.
+        var guessedMerchant = false
+        if (r.ruleId != FIX_RULE && t.auto && t.type == TxnType.PURCHASE &&
+            t.merchant in com.uaefinancial.tracker.core.ReadingGaps.placeholderMerchants && prefs?.aiMerchantFill != false
+        ) {
+            dao.smsBody(smsId)?.let { b ->
+                com.uaefinancial.tracker.intel.MessageIntel.merchantFallback(b)?.let { m -> t = t.copy(merchant = m); guessedMerchant = true }
+            }
+        }
         val amountForPair = Money.toMinor(t.amount)
         // "Standing instructions ... processed" does not name the account. It belongs with a debit message for the same
         // amount if exactly one account has one; otherwise it waits (Needs review) until the balances place it.
@@ -652,7 +662,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             else "The amount (${t.currency} ${Money.fromMinor(amountMinor).toPlainString()}) isn't written in the message: check it."
         }
         // Completeness: a part of the message that fell back to a default (no merchant, no card) is marked, never hidden.
-        val gaps = if (r.ruleId == FIX_RULE) emptyList() else com.uaefinancial.tracker.core.ReadingGaps.of(t)
+        val gaps = if (r.ruleId == FIX_RULE) emptyList()
+        else (if (guessedMerchant) listOf("merchant-guess") else emptyList()) + com.uaefinancial.tracker.core.ReadingGaps.of(t)
         val checkNote = amountNote ?: if (gaps.isNotEmpty()) "gap:" + gaps.joinToString(",") else null
         // Spends on a card you pay for someone else go to the Family category (unless you chose another).
         val family = card?.owner == CardOwner.FAMILY && t.type == TxnType.PURCHASE && override == null

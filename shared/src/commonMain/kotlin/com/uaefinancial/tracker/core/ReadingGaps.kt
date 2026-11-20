@@ -30,10 +30,11 @@ object ReadingGaps {
         val parts = gaps.split(",").filter { it.isNotBlank() }.map {
             when (it) {
                 "merchant" -> "no merchant name was found in the message"
+                "merchant-guess" -> "the merchant name was filled in by the app's small on-device reader, not by a bank rule"
                 "card" -> "no card or account number was found in the message"
                 else -> it
             }
         }
-        return "Incomplete reading: " + parts.joinToString(" and ") + ". Name it with Fix so it is counted and categorised right."
+        return "Incomplete reading: " + parts.joinToString(" and ") + ". Check it, and use Fix if it is wrong so it is counted and categorised right."
     }
 }

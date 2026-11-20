@@ -36,6 +36,10 @@ class ReadingGapsTest {
         assertEquals(listOf("card"), ReadingGaps.of(t.copy(cardLast4 = null)))
     }
 
+    @Test fun describesAGuessedMerchant() {
+        assertTrue(ReadingGaps.describe("merchant-guess").contains("small on-device reader"))
+    }
+
     @Test fun describeIsReadable() {
         assertTrue(ReadingGaps.describe("merchant,card").contains("no merchant name") && ReadingGaps.describe("merchant,card").contains("no card"))
     }
