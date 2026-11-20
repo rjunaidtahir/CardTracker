@@ -38,3 +38,5 @@ jobs:
           grep -h 'READER ' reader.log | sed 's/^ *READER //' > reader-report.md
           cat reader-report.md >> "$GITHUB_STEP_SUMMARY"
           wc -l reader-report.md
+          echo '=====REPORT====='
+          cat reader-report.md
