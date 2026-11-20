@@ -42,4 +42,25 @@ class ShippedPackTest {
         assertIs<ParseResult.Transaction>(tabby)
         assertEquals("9", tabby.txn.amount.toString().removeSuffix(".00").removeSuffix(".0"))
     }
+
+    @Test fun v7IgnoresTheTabbyLimitNoticeAndTheZeroDueStatementOnly() {
+        val out = RulesPack.parse(file.readText(), currentVersion = 4) as RulesPack.Outcome.Ok
+        assertTrue(out.pack.version >= 7)
+        RulesPack.apply(out.pack)
+        // the two notices are ignored
+        val limit = SmsParser.parse("Tabby", "Your Tabby Card total limit is now increased to AED 3,000.00", 0L)
+        assertIs<ParseResult.Ignored>(limit)
+        val zero = out.pack.ignore.first { it.label.startsWith("Statement: nothing due") }
+        val re = Regex(zero.pattern, RegexOption.IGNORE_CASE)
+        assertTrue(re.containsMatchIn("CC Statement: your credit balance AED 0 with Min Due AED 0.00"))
+        assertTrue(re.containsMatchIn("credit balance AED 0.00 with Minimum Due AED 0.00"))
+        // a statement with something due, and ordinary Tabby messages, are not ignored
+        assertTrue(!re.containsMatchIn("CC Statement: your credit balance AED 0 with Min Due AED 150.00"))
+        assertTrue(!re.containsMatchIn("CC Statement: your credit balance AED 0 with Min Due AED 0.50"))
+        assertTrue(!re.containsMatchIn("CC Statement: your credit balance AED 2,500.00 with Min Due AED 0.00 ... AED 0"))
+        val spent = SmsParser.parse("Tabby", "You spent AED 9.00 at ISLAND SHELL CAFETERIA. Your available Tabby Card limit is now AED 2488.94.", 0L)
+        assertIs<ParseResult.Transaction>(spent)
+        val stmt = SmsParser.parse("Tabby", "Your statement for AED 511.06 is ready. We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun, 2026.", 0L)
+        assertTrue(stmt !is ParseResult.Ignored)
+    }
 }
