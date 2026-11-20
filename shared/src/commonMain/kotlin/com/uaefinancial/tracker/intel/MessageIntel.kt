@@ -42,6 +42,31 @@ object MessageIntel {
         }
     }
 
+    /**
+     * The merchant the tagger points at, made fit to show: cut at the end of the sentence and before card digits, cleaned like the
+     * pattern reader's names, and only if it is written in the message word for word. Null when nothing fit remains.
+     */
+    internal fun cleanSpan(text: String, raw: String): String? {
+        var s = raw.substringBefore(". ").substringBefore(".\t")
+        s = s.replace(Regex("""\s+[Xx*]{2,}\d*.*$"""), "")
+        val name = SmartParser.cleanName(s.trim()) ?: return null
+        if (name.length !in 2..50 || !text.contains(name, ignoreCase = true)) return null
+        return name
+    }
+
+    /** Tagger confidence needed before its answer fills a merchant (set from the leave-one-bank-out measurement, see the QA notes). */
+    const val MERCHANT_FILL_MARGIN = 20.0
+
+    /**
+     * A last-resort merchant for a purchase whose merchant the patterns did not find. Only words that are in the message; the
+     * caller marks the transaction "Check this", it never overrides a merchant found by a rule or a pattern.
+     */
+    fun merchantFallback(body: String): String? {
+        val text = SmsParser.normalizeBody(body)
+        val f = runCatching { tagger.find(text) }.getOrNull()?.takeIf { it.margin > MERCHANT_FILL_MARGIN } ?: return null
+        return cleanSpan(text, f.text)
+    }
+
     /** Builds both models now (call from a background thread at start-up so the first message is not slow). */
     fun warmUp() { nb; tagger }
 

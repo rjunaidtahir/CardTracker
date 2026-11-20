@@ -45,6 +45,18 @@ class MerchantSetDump {
             val spurious = noGold.count { it.tag.isNotEmpty() && it.margin > th }
             println("MSETSUM tagger margin>$th answered=${ans.size} right=${right} wrong=${ans.size - right} unanswered=${withGold.size - ans.size} spuriousOnNoMerchantRows=$spurious/${noGold.size}")
         }
+        // The same answers after the clean-up the app would apply (cut at sentence end / card digits, name cleaning, must be in the text).
+        fun cleaned(r: Row) = if (r.tag.isEmpty()) "" else (MessageIntel.cleanSpan(r.text, r.tag) ?: "")
+        for (th in listOf(0.0, 10.0, 15.0, 20.0, 30.0, 40.0)) {
+            val ans = withGold.filter { cleaned(it).isNotEmpty() && it.margin > th }
+            val right = ans.count { ok(it, cleaned(it)) }
+            val spurious = noGold.count { cleaned(it).isNotEmpty() && it.margin > th }
+            println("MSETSUM taggerCleaned margin>$th answered=${ans.size} right=$right wrong=${ans.size - right} unanswered=${withGold.size - ans.size} spuriousOnNoMerchantRows=$spurious/${noGold.size}")
+        }
+        // What the fallback would add where the patterns found nothing (the only place it is used).
+        val gap = withGold.filter { it.smart.isEmpty() }
+        println("MSETSUM patternsFoundNothing=${gap.size}; of those the cleaned tagger (margin>${MessageIntel.MERCHANT_FILL_MARGIN}) answers ${gap.count { cleaned(it).isNotEmpty() && it.margin > MessageIntel.MERCHANT_FILL_MARGIN }} and is right on ${gap.count { cleaned(it).isNotEmpty() && it.margin > MessageIntel.MERCHANT_FILL_MARGIN && ok(it, cleaned(it)) }}")
+        println("MSETSUM wrongCleaned examples: " + withGold.filter { cleaned(it).isNotEmpty() && it.margin > 0 && !ok(it, cleaned(it)) }.take(14).joinToString(" || ") { "gold='${it.gold}' got='${cleaned(it)}' m=${"%.1f".format(it.margin)}" })
         val sa = withGold.filter { it.smart.isNotEmpty() }
         println("MSETSUM patterns answered=${sa.size} right=${sa.count { ok(it, it.smart) }} wrong=${sa.count { !ok(it, it.smart) }} unanswered=${withGold.size - sa.size}")
         val comb = withGold.filter { it.smart.isNotEmpty() || it.tag.isNotEmpty() }

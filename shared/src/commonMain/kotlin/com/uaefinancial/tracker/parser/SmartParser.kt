@@ -351,6 +351,9 @@ object SmartParser {
         I,
     )
 
+    /** The same cleaning the pattern reader gives a merchant name (city and country tails, amounts, card digits, "your card"). */
+    fun cleanName(raw: String?): String? = clean(raw)
+
     private fun clean(raw: String?): String? {
         raw ?: return null
         var m = SmsParser.cleanMerchant(raw).let { r -> r.substringBefore(",").takeIf { it.count(Char::isLetter) >= 2 } ?: r }
