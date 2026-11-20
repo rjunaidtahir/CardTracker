@@ -72,12 +72,15 @@ class RealMaskedReaderMeasureTest {
             val perBankKind = sortedMapOf<String, Tally>()
             val perBankMerchant = sortedMapOf<String, Tally>()
             val confusion = sortedMapOf<String, Int>()
+            val faults = sortedMapOf<String, IntArray>() // which rule (an id from our own code, never message text) produced each wrong answer
+            fun fault(key: String, w: Int) { val a = faults.getOrPut(key) { IntArray(2) }; a[0]++; a[1] += w }
             fun tally(k: String) = t.getOrPut(k) { Tally() }
             for (r in gold) {
                 val text = render(r.shape)
                 val bank = if (path2 == "shipped") r.bank else "Unknown Test Bank"
                 val res = runCatching { SmsParser.parseAsBank(bank, text, received) }.getOrNull()
                 val txn = (res as? ParseResult.Transaction)?.txn
+                val rid = (res as? ParseResult.Transaction)?.ruleId ?: (res as? ParseResult.Statement)?.ruleId ?: "-"
                 val isStatement = res is ParseResult.Statement
                 val answered = txn != null || isStatement
                 val label = when { txn != null -> txn.type.name; isStatement -> "STATEMENT"; else -> null }
@@ -85,19 +88,23 @@ class RealMaskedReaderMeasureTest {
                 if (r.kind == "NOT_TXN") {
                     val st = if (answered) 0 else 1 // a made-up transaction is wrong; ignoring it is right
                     tally("not-a-transaction (should NOT become a transaction)").add(st, w)
-                    if (answered) confusion["NOT_TXN -> $label"] = (confusion["NOT_TXN -> $label"] ?: 0) + 1
+                    if (answered) { confusion["NOT_TXN -> $label"] = (confusion["NOT_TXN -> $label"] ?: 0) + 1; fault("${r.bank} | not-a-transaction -> $label | rule=$rid", w) }
                     continue
                 }
                 val kindState = if (!answered) -1 else if (label == r.kind) 1 else 0
                 tally("kind of message (6 kinds)").add(kindState, w)
                 tally("kind, ${r.kind}").add(kindState, w)
                 perBankKind.getOrPut(r.bank) { Tally() }.add(kindState, w)
-                if (answered && label != r.kind) confusion["${r.kind} -> $label"] = (confusion["${r.kind} -> $label"] ?: 0) + 1
+                if (answered && label != r.kind) { confusion["${r.kind} -> $label"] = (confusion["${r.kind} -> $label"] ?: 0) + 1; fault("${r.bank} | ${r.kind} -> $label | rule=$rid", w) }
+                if (!answered) fault("${r.bank} | ${r.kind} -> unanswered | rule=-", w)
                 val gd = dir(r.kind)
                 if (gd == "out" || gd == "in") tally("money out vs in").add(if (!answered || dir(label) == "none") -1 else if (dir(label) == gd) 1 else 0, w)
                 if (r.kind != "STATEMENT") {
-                    if (r.instr in setOf("CREDIT", "DEBIT", "ACCOUNT")) tally("credit card / debit card / account")
-                        .add(if (txn == null) -1 else if (txn.cardType == CardType.valueOf(r.instr)) 1 else 0, w)
+                    if (r.instr in setOf("CREDIT", "DEBIT", "ACCOUNT")) {
+                        val ok = if (txn == null) -1 else if (txn.cardType == CardType.valueOf(r.instr)) 1 else 0
+                        tally("credit card / debit card / account").add(ok, w)
+                        if (ok == 0) fault("${r.bank} | card kind ${r.instr} -> ${txn?.cardType} | rule=$rid", w)
+                    }
                     if (Regex("""\{AMOUNT\}""").findAll(r.shape).count() == 1) {
                         tally("amount (messages with one amount)").add(if (txn == null) -1 else if (txn.amount.setScale(2).toPlainString() == "123.45") 1 else 0, w)
                         tally("currency (messages with one amount)").add(if (txn == null) -1 else if (txn.currency == "AED") 1 else 0, w)
@@ -107,14 +114,19 @@ class RealMaskedReaderMeasureTest {
                         tally("merchant (messages where the merchant was masked)").add(st, w)
                         perBankMerchant.getOrPut(r.bank) { Tally() }.add(st, w)
                     }
-                    if (Regex("""\{CARD:\d+\}""").containsMatchIn(r.shape))
-                        tally("card last 4 (indicative: stand-in card format)").add(if (txn == null) -1 else if (txn.cardLast4 == "1234") 1 else 0, w)
+                    if (Regex("""\{CARD:\d+\}""").containsMatchIn(r.shape)) {
+                        val ok = if (txn == null) -1 else if (txn.cardLast4 == "1234") 1 else 0
+                        tally("card last 4 (indicative: stand-in card format)").add(ok, w)
+                        if (ok == 0) fault("${r.bank} | card digits wrong | rule=$rid", w)
+                    }
                 }
             }
             out.append(if (path2 == "shipped") "### Reader as shipped (verified bank rules first, then the generic reader)\n\n" else "### Generic reader alone (as for a bank we have no rules for)\n\n")
             t.forEach { (k, v) -> out.append("- **$k:** ${v.line()}\n") }
             out.append("\nMix-ups (wanted -> got, counted in wordings):\n")
             if (confusion.isEmpty()) out.append("- none\n") else confusion.entries.sortedByDescending { it.value }.forEach { out.append("- ${it.key}: ${it.value}\n") }
+            out.append("\nWhere the wrong answers came from (bank | wanted -> got | rule id; wordings, messages):\n")
+            if (faults.isEmpty()) out.append("- none\n") else faults.entries.sortedByDescending { it.value[1] }.take(60).forEach { out.append("- ${it.key}: ${it.value[0]} wordings, ${it.value[1]} messages\n") }
             out.append("\nPer bank, kind of message:\n")
             perBankKind.forEach { (b, v) -> out.append("- $b: ${v.line()}\n") }
             out.append("\nPer bank, merchant:\n")
