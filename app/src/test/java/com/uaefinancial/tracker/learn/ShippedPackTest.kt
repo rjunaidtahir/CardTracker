@@ -80,17 +80,16 @@ class ShippedCategoryWordsTest {
         val out = RulesPack.parse(packFile.readText(), currentVersion = 0)
         assertIs<RulesPack.Outcome.Ok>(out, (out as? RulesPack.Outcome.Rejected)?.reason)
         RulesPack.apply(out.pack)
-        val root = com.uaefinancial.tracker.parser.MiniJson.parse(examplesFile.readText()) as Map<*, *>
-        val examples = (root["examples"] as? List<*>).orEmpty()
-        for (e in examples) {
-            val m = e as Map<*, *>
-            val name = m["name"] as String
-            val want = com.uaefinancial.tracker.parser.CategoryRules.defaults.first { it.name.equals(m["category"] as String, true) }.id
+        // rules/merchants.json: {"name": "...", "category": "..."} pairs (read with a regex: the JSON helper is internal to shared)
+        val pair = Regex("\"name\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"category\"\\s*:\\s*\"([^\"]+)\"")
+        val examples = pair.findAll(examplesFile.readText()).map { it.groupValues[1] to it.groupValues[2] }.toList()
+        for ((name, category) in examples) {
+            val want = com.uaefinancial.tracker.parser.CategoryRules.defaults.first { it.name.equals(category, true) }.id
             assertEquals(want, com.uaefinancial.tracker.parser.CategoryRules.guess(name, com.uaefinancial.tracker.parser.TxnType.PURCHASE), "example $name")
         }
         // every published word must file at least one example (no word goes out untested)
-        for ((id, words) in out.pack.categories) for (w in words) {
-            assertTrue(examples.any { (it as Map<*, *>)["name"].toString().uppercase().contains(w) }, "word $w has no example in rules/merchants.json")
+        for ((_, words) in out.pack.categories) for (w in words) {
+            assertTrue(examples.any { it.first.uppercase().contains(w) }, "word $w has no example in rules/merchants.json")
         }
     }
 
