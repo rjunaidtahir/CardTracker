@@ -146,6 +146,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val message = MutableStateFlow<String?>(null)
 
     val syncing = MutableStateFlow(false)
+    /** (messages done, total) while a Sync runs. */
+    val syncProgress get() = ctApp.smsSync.progress
     /** "12 new transactions, 1 statement" from the last Sync in this session. */
     val lastSyncSummary = MutableStateFlow<String?>(null)
     /** Goes up by one each time a Sync ends (success or not), so screens can wait for "the next one finished". */
@@ -716,6 +718,61 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val rates: StateFlow<List<FxRateEntity>> =
         dao.rates().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    /** Re-reads that would have changed a reading you already have; waiting for your decision. */
+    val heldReadings: StateFlow<List<com.uaefinancial.tracker.data.SmsReadingEntity>> =
+        repo.heldReadings().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun keepReading(smsId: Long) = viewModelScope.launch {
+        repo.keepCurrentReading(smsId)
+        message.value = "Kept your reading. Re-reads won't change it."
+    }
+
+    fun useNewReading(smsId: Long) = viewModelScope.launch {
+        repo.useNewReading(smsId)
+        runCatching { repo.autoFillCardDays() }
+        message.value = "Updated to the new reading."
+        refreshWidget()
+    }
+
+    /** Messages from senders the app doesn't know that could be financial; kept for your review, never posted on their own. */
+    val unknownMessages: StateFlow<List<com.uaefinancial.tracker.data.SmsCandidateEntity>> =
+        repo.openCandidates().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val hiddenSenders: StateFlow<List<com.uaefinancial.tracker.data.SmsCandidateEntity>> =
+        repo.mutedSenders().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** "These are from my bank": the sender is added and every waiting message from it is read. */
+    fun acceptUnknownSender(sender: String, sample: String) = viewModelScope.launch {
+        val name = com.uaefinancial.tracker.parser.GlobalBanks.match(sender, sample, prefs.homeCountry)?.name ?: sender
+        com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "bank-added", sender, name, sample, "candidate")
+        val n = repo.acceptSender(sender, name)
+        runCatching { repo.autoFillCardDays() }
+        resetSyncPointerQuietly()
+        message.value = "Added $name and read $n message${if (n == 1) "" else "s"}. Anything unclear is below."
+        refreshWidget()
+    }
+
+    fun dismissUnknown(id: Long) = viewModelScope.launch {
+        unknownMessages.value.firstOrNull { it.id == id }?.let { c ->
+            com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "not-financial", c.sender, null, c.body, "review")
+        }
+        repo.dismissCandidate(id)
+    }
+
+    fun declineSenders(senders: List<String>) {
+        if (senders.isEmpty()) return
+        senders.forEach { com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "sender-declined", it, null, null, "setup") }
+        viewModelScope.launch { repo.declineSenders(senders) }
+    }
+
+    fun hideUnknownSender(sender: String) = viewModelScope.launch {
+        com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "sender-declined", sender, null, null, "hide")
+        repo.muteSender(sender)
+        message.value = "Hidden. You can show it again from Needs review."
+    }
+
+    fun showSenderAgain(senderKey: String) = viewModelScope.launch { repo.unmuteSender(senderKey) }
+
     val failedSms: StateFlow<List<SmsEntity>> =
         dao.failedSms().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -746,6 +803,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 lastSyncSummary.value = r.summary()
                 message.value = r.summary()
                 refreshWidget()
+                refreshSecondOpinions()
             } catch (e: SecurityException) {
                 message.value = "SMS permission missing. Allow it, then tap Sync again."
             } catch (e: Exception) {
@@ -788,7 +846,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val found = com.uaefinancial.tracker.core.Checks.evaluate(rows) { m -> fmtMoney(m) }.toMutableMap()
             for (t in all) {
                 val note = t.checkNote ?: continue
-                found[t.id] = listOf(com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.BALANCE, note)) + (found[t.id] ?: emptyList())
+                val flag = if (note.startsWith("gap:")) {
+                    com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.INCOMPLETE, com.uaefinancial.tracker.core.ReadingGaps.describe(note.removePrefix("gap:")))
+                } else com.uaefinancial.tracker.core.Checks.Flag(com.uaefinancial.tracker.core.Checks.Kind.BALANCE, note)
+                found[t.id] = listOf(flag) + (found[t.id] ?: emptyList())
             }
             found.filterKeys { it.toString() !in dismissed }
         }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Lazily, emptyMap())
@@ -938,6 +999,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** Writes the masked message export (shapes + what the app decided) where the user chose. Nothing is uploaded. */
+    fun exportMaskedMessages(uri: Uri) = viewModelScope.launch {
+        try {
+            val text = withContext(Dispatchers.IO) { repo.maskedExportText() }
+            withContext(Dispatchers.IO) {
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                    ?: error("Couldn't open the file")
+            }
+            message.value = "Saved. Open the file and read it before you share it."
+        } catch (e: Exception) {
+            message.value = "Export failed: ${e.message}"
+        }
+    }
+
     fun importBackup(uri: Uri) = viewModelScope.launch {
         try {
             val r = withContext(Dispatchers.IO) {
@@ -978,6 +1053,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         message.value = "Re-parsed: ${c[IngestOutcome.TRANSACTION] ?: 0} transactions, " +
             "${c[IngestOutcome.MERGED] ?: 0} merged, ${c[IngestOutcome.STATEMENT] ?: 0} statements, ${c[IngestOutcome.FAILED] ?: 0} need review"
         refreshWidget()
+        refreshSecondOpinions()
     }
 
     /** Grouped text of all unparsed SMS, for sharing. */
@@ -1057,7 +1133,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** One tap: this chat is a bank. Its messages (also the older ones) are read from now on. */
     fun acceptCandidate(c: com.uaefinancial.tracker.sms.Candidates.Candidate) {
-        addSenders(listOf(c.sender to (c.bankName ?: c.sender)), syncAfter = true)
+        addSenders(listOf(c.sender to (c.bankName ?: c.sender)), syncAfter = true, via = "scan")
         com.uaefinancial.tracker.sms.Candidates.forget(prefs, c.sender)
         refreshCandidates()
     }
@@ -1068,9 +1144,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Adds sender IDs; the next Sync re-reads the whole inbox so their older messages come in too. */
-    fun addSenders(pairs: List<Pair<String, String>>, syncAfter: Boolean) = viewModelScope.launch {
+    fun addSenders(pairs: List<Pair<String, String>>, syncAfter: Boolean, via: String = "manual") = viewModelScope.launch {
         val clean = pairs.map { (s, b) -> s.trim() to b.trim() }.filter { it.first.isNotEmpty() }
         if (clean.isEmpty()) { message.value = "Enter the sender name exactly as it shows in Messages"; return@launch }
+        // Tell the developer (only with sharing on) that these senders are banks, so everyone can get them without an update.
+        if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) clean.forEach { (s, b) ->
+            val sample = runCatching { repo.sampleFromCandidates(s) }.getOrNull()
+            com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "bank-added", s, b, sample, via)
+        }
         clean.forEach { (s, b) -> repo.addSender(s, b) }
         resetSyncPointerQuietly()
         // The scan list should no longer offer what was just added.
@@ -1093,6 +1174,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** What the smart reader makes of an unread SMS, to pre-fill the Fix form. */
     suspend fun guessFor(sms: SmsEntity): com.uaefinancial.tracker.parser.ParsedTransaction? =
         withContext(Dispatchers.Default) { repo.guess(sms) }
+
+    /** The on-device model's suggestion for a message the rules couldn't read (shown beside the Fix form; never saved by itself). */
+    suspend fun aiSuggestionFor(sms: SmsEntity) = repo.aiSuggestion(sms)
+
+    /** Messages where the model clearly disagrees with how the rules read them (advisory; nothing is changed). */
+    val aiDisagreements: StateFlow<List<com.uaefinancial.tracker.data.AiCheckEntity>> =
+        repo.aiDisagreements().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val aiVerdictCounts: StateFlow<Map<String, Int>> =
+        repo.aiVerdictCounts().map { l -> l.associate { it.status to it.n } }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val aiOn = MutableStateFlow(prefs.aiSecondOpinion)
+
+    fun setAiOn(on: Boolean) = viewModelScope.launch {
+        prefs.aiSecondOpinion = on
+        aiOn.value = on
+        runCatching { repo.updateSecondOpinions() }
+    }
+
+    fun refreshSecondOpinions() = viewModelScope.launch { runCatching { repo.updateSecondOpinions() } }
+
+    suspend fun smsFor(id: Long): SmsEntity? = dao.smsById(id)
 
     /** Whether "apply to similar messages" can work for this reading (the Fix form enables the option then). */
     fun canLearn(sms: SmsEntity, type: TxnType?, amountText: String, merchant: String, cardLast4: String, cardType: CardType): Boolean {
@@ -1121,6 +1224,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         )
         message.value = fixMessage(r, if (applyToSimilar) "Saved. Similar messages will be read the same way." else "Saved. The app will remember this message.")
         refreshWidget()
+    }
+
+    /** Saves your reading as a card statement. Returns false (with a message) when something is missing, so the form stays open. */
+    fun saveStatementFix(sms: SmsEntity, amountText: String, minimumText: String, currency: String, dueText: String, cardLast4: String): Boolean {
+        val cur = currency.trim().uppercase().ifEmpty { SmsParser.homeCurrency }
+        if (!Regex("[A-Z]{3}").matches(cur)) { message.value = "Currency is a 3-letter code, e.g. ${SmsParser.homeCurrency} or USD"; return false }
+        val total = SmsParser.parseTyped(amountText, cur)
+        if (total == null || total.signum() <= 0) { message.value = "Enter the statement amount, e.g. 511.06"; return false }
+        val min = minimumText.trim().takeIf { it.isNotEmpty() }?.let { SmsParser.parseTyped(it, cur) }
+        if (minimumText.isNotBlank() && (min == null || min.signum() <= 0)) { message.value = "Minimum due: a number, or leave it empty"; return false }
+        val m = Regex("""^\s*(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\s*$""").find(dueText)
+        val due = m?.let { runCatching { com.uaefinancial.tracker.core.CalendarDate.of(it.groupValues[3].toInt(), it.groupValues[2].toInt(), it.groupValues[1].toInt()) }.getOrNull() }
+        if (due == null) { message.value = "Due date: day/month/year, e.g. 30/06/2026"; return false }
+        val last4 = cardLast4.trim()
+        if (last4.isNotEmpty() && !Regex("""\d{3,4}""").matches(last4)) { message.value = "Card: the last 4 digits, or leave it empty"; return false }
+        viewModelScope.launch {
+            repo.saveStatementFix(
+                sms.id, com.uaefinancial.tracker.parser.Money.toMinor(total), min?.let { com.uaefinancial.tracker.parser.Money.toMinor(it) },
+                cur, due.toEpochDay(), null, last4.ifEmpty { null },
+            )
+            message.value = "Saved as a statement due ${due.dayOfMonth}/${due.monthValue}/${due.year}."
+            refreshWidget()
+        }
+        return true
     }
 
     /** Counts every waiting standing-instruction message as money out from this account (your decision, one tap). */

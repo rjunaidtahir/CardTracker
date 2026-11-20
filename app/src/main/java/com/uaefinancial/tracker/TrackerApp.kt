@@ -42,6 +42,7 @@ class TrackerApp : Application() {
         appScope.launch { runCatching { com.uaefinancial.tracker.learn.RulesUpdater.checkIfDue(this@TrackerApp, prefs) } }
         appScope.launch {
             runCatching { repo.ensureDefaults() }
+            runCatching { repo.adoptTrackedCandidates() }
             runCatching { repo.loadLearned() }
             // A newer reading engine: read every stored message again once, so Needs review and wrongly read messages
             // benefit from it (and a message now recognised as a one-time code is deleted).
@@ -52,6 +53,9 @@ class TrackerApp : Application() {
                 }
                 runCatching { repo.autoFillCardDays() }
             }
+            // Build the on-device models once, off the main thread, then double-check what the rules read.
+            runCatching { com.uaefinancial.tracker.intel.MessageIntel.warmUp() }
+            runCatching { repo.updateSecondOpinions() }
             // Only after the re-read above, so a message the new engine can now read is never reported as unread.
             if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { repo.queueUnreadForLearning() }
         }

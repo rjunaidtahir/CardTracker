@@ -31,6 +31,19 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_LAST_SYNC, -1L).takeIf { it >= 0 }
         set(v) { sp.edit { putLong(KEY_LAST_SYNC, v ?: -1L) } }
 
+    /** The on-device second opinion check (internal; no screen shows it). Off unless switched on in code. */
+    var aiSecondOpinion: Boolean
+        get() = sp.getBoolean("ai_second_opinion", false)
+        set(v) { sp.edit { putBoolean("ai_second_opinion", v) } }
+
+    /**
+     * Lets the small on-device merchant reader fill in a purchase whose merchant no pattern found (marked "Check this").
+     * Internal; no screen shows it. On by default; with it off the app shows the placeholder, as before.
+     */
+    var aiMerchantFill: Boolean
+        get() = sp.getBoolean("ai_merchant_fill", true)
+        set(v) { sp.edit { putBoolean("ai_merchant_fill", v) } }
+
     /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
         get() = sp.getBoolean(KEY_LIVE, true)

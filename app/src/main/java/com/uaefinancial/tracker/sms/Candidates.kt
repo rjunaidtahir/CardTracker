@@ -23,7 +23,7 @@ object Candidates {
         if (SmsParser.anyBankFor(addr) != null) return
         val key = SmsParser.senderKey(addr)
         if (key in prefs.dismissedCandidates) return
-        if (!SmartParser.looksLikeBankAlert(body)) return
+        if (!SmartParser.looksLikeBankAlert(body, GlobalBanks.match(addr, null, null) != null)) return
         val rows = prefs.candidateCounts.associate { e ->
             val p = e.split(SEP)
             p[0] to (p.getOrNull(1).orEmpty() to (p.getOrNull(2)?.toIntOrNull() ?: 1))

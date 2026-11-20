@@ -346,7 +346,7 @@ object BankRules {
         // --------------------------------------------------------------- ADCB
         Bank(
             name = "ADCB",
-            senderIds = listOf("ADCBAlert", "ADCB"),
+            senderIds = listOf("ADCBAlert", "ADCB", "SIMPLYLIFE"), // SimplyLife is ADCB's own card unit
             rules = listOf(
                 // Credit Card XX3538 was used for AED90.90 on 13/09/2026 11:58:47 at talabat.com, DUBAI-AE.
                 // Available limit AED4736.08
@@ -666,6 +666,7 @@ object BankRules {
         Bank("Wio", listOf("Wio", "WioBank", "WioPersonal"), emptyList()),
         Bank("Mashreq Neo", listOf("MashreqNeo"), emptyList()),
         Bank("Zand", listOf("Zand", "ZandBank"), emptyList()),
+        Bank("Tabby", listOf("Tabby"), emptyList()), // sender seen on a real phone: "You spent AED 9.00 at ... Your available Tabby Card limit is now ..."
         Bank("Ruya", listOf("Ruya", "RuyaBank"), emptyList()),
         Bank("Emirates Post / Al Maryah", listOf("MBank", "AlMaryah"), emptyList()),
     )
@@ -695,7 +696,9 @@ object BankRules {
             """|\b(?:use|enter|type)\s+\d{4,8}\b.{0,60}\bto\s+(?:pay|complete|confirm|verify|authori[sz]e|approve|log\s*in|sign\s*in|proceed|continue|activate|reset)\b""" +
             """|\b(?:security|secure|verification|confirmation|login|access|one[\s-]?time|3-?d\s*secure|3ds)\s+code\s*(?:is|:|-)?\s*\d{4,8}\b""" +
             """|\b\d{4,8}\s+is\s+(?:your|the)\b.{0,40}\bcode\b""" +
-            """|\bcode\s*(?:is|:)?\s*\d{4,8}\b.{0,80}\bto\s+(?:pay|complete|confirm|verify|authori[sz]e|approve|log\s*in|sign\s*in|proceed|continue|activate)\b""",
+            """|\bcode\s*(?:is|:)?\s*\d{4,8}\b.{0,80}\bto\s+(?:pay|complete|confirm|verify|authori[sz]e|approve|log\s*in|sign\s*in|proceed|continue|activate)\b""" +
+            // Tabby: "Do not tell anyone this code: 617967. ANTHROPIC. USD 21.00" (a warning about sharing, then the code).
+            """|\b(?:do\s+not|don'?t|never)\s+(?:tell|share|give|disclose|reveal)\b[^.\n]{0,30}\bcode\s*(?:is|:|-)?\s*\d{4,8}\b""",
         store = false,
     )
 

@@ -1,0 +1,71 @@
+name: QA measurement (manual)
+
+# Measures pretrained question-answering models on a labelled bank-SMS set. Nothing here ships in the app.
+on:
+  workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['tools/qa/**', '.github/workflows/qa-measure.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Dump labelled test set (verified rules only)
+        run: |
+          chmod +x gradlew
+          ./gradlew :shared:testDebugUnitTest --tests '*QaTestsetDump*' --no-daemon -i 2>&1 | tee dump.log || true
+          grep -h '^ *QASET' dump.log | sed 's/^ *//' > qaset.jsonl || true
+          wc -l qaset.jsonl
+          if [ ! -s qaset.jsonl ]; then
+            python3 - <<'PY'
+          import glob, re, html
+          out = open('qaset.jsonl', 'w')
+          for f in glob.glob('shared/build/test-results/**/*QaTestsetDump*.xml', recursive=True):
+              for l in html.unescape(open(f, encoding='utf-8').read()).splitlines():
+                  if l.startswith('QASET {'): out.write(l + '\n')
+          PY
+            wc -l qaset.jsonl
+          fi
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Install CPU PyTorch + transformers
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers==4.46.3" "numpy<2"
+
+      - name: Run blind measurement
+        run: |
+          python3 tools/qa/eval.py qaset.jsonl csarron/mobilebert-uncased-squad-v2 deepset/tinyroberta-squad2 2>&1 | tee eval.log
+          cat qa-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run blind measurement with small instruction models
+        run: |
+          python3 tools/qa/eval_llm.py qaset.jsonl Qwen/Qwen2.5-0.5B-Instruct Qwen/Qwen2.5-1.5B-Instruct HuggingFaceTB/SmolLM2-360M-Instruct 2>&1 | tee eval-llm.log
+          cat qa-llm-report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qa-measurement
+          path: |
+            qaset.jsonl
+            qa-report.md
+            qa-errors.json
+            eval.log
+            qa-llm-report.md
+            qa-llm-errors.json
+            eval-llm.log

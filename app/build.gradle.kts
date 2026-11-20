@@ -50,6 +50,14 @@ android {
     }
 
     buildTypes {
+        // Test build for sideloading next to the Play copy: own app id, own name, same fixed debug key.
+        create("beta") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".beta"
+            versionNameSuffix = "-beta"
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("debug")
+        }
         release {
             isMinifyEnabled = false
             signingConfigs.findByName("release")?.let { signingConfig = it }
@@ -62,6 +70,8 @@ android {
     buildFeatures {
         compose = true
     }
+    // Room's exported schemas, so database upgrade tests can start from the real older layout.
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 kotlin {
@@ -149,5 +159,6 @@ dependencies {
     testImplementation(kotlin("test"))
 
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
     androidTestImplementation("androidx.test:runner:1.5.2")
 }

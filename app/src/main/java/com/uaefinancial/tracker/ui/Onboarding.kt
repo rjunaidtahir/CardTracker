@@ -193,6 +193,7 @@ private fun ConsentStep(vm: MainViewModel, onNext: () -> Unit) {
 private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
     val scan by vm.scan.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
+    val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
     val picked = remember { mutableStateMapOf<String, Boolean>() }
     val names = remember { mutableStateMapOf<String, String>() }
     // Banks the app knows, found on this phone: ticked unless you left them out before.
@@ -269,15 +270,27 @@ private fun FindBanksStep(vm: MainViewModel, onDone: () -> Unit) {
                 val keep = excludedBefore.filterNot { e -> known.any { it.first.equals(e, ignoreCase = true) } }.toSet()
                 vm.setExcludedBanksBeforeImport(keep + off)
             }
+            // Suggested senders you left unticked are never offered again (also not in Needs review).
+            vm.declineSenders(r?.suggestions.orEmpty().filter { !(picked[it.sender] ?: true) }.map { it.sender })
             importFrom = finished
             // Senders first, then one import that includes their older messages.
-            if (add.isNotEmpty()) vm.addSenders(add, syncAfter = true) else vm.sync()
+            if (add.isNotEmpty()) vm.addSenders(add, syncAfter = true, via = "setup") else vm.sync()
         },
         enabled = !scan.running && !syncing && !importing,
         modifier = Modifier.fillMaxWidth(),
     ) {
         if (syncing) { CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp, color = Ink.onAccent); Spacer(Modifier.width(8.dp)) }
         Text(if (syncing) "Importing…" else "Import my bank messages")
+    }
+    if (syncing) {
+        val pr = syncProgress
+        if (pr != null && pr.second > 0) {
+            androidx.compose.material3.LinearProgressIndicator(progress = { pr.first.toFloat() / pr.second }, modifier = Modifier.fillMaxWidth())
+            Text("Read ${pr.first} of ${pr.second} messages", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        } else {
+            androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            Text("Finding your bank messages…", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+        }
     }
     TextButton(onClick = onDone, modifier = Modifier.fillMaxWidth()) { Text("Skip") }
 }

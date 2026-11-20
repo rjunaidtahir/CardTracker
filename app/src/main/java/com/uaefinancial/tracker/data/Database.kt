@@ -173,6 +173,53 @@ data class FxRateEntity(
     val updatedAt: Long,
 )
 
+/**
+ * A re-read of a message that would have changed what you already have (amount, type, currency, or a reading that
+ * disappeared). The old reading is kept; this row asks you to decide. State is HELD until you choose.
+ */
+@Entity(tableName = "sms_readings", indices = [Index(value = ["smsId"])])
+data class SmsReadingEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val smsId: Long,
+    val engineVersion: Int,
+    val createdAt: Long,
+    /** What the app holds now, in words. */
+    val keptSummary: String,
+    /** What the newer reading says, in words. */
+    val newSummary: String,
+    val state: String = "HELD",
+)
+
+/**
+ * A message from a sender the app doesn't know yet that could be financial (it has an amount and is not a one-time
+ * code). Kept locally and shown in Needs review until you decide. Open candidates are never removed automatically.
+ * Once accepted (the message is then read like any other) or dismissed, the text is cleared and only the key stays,
+ * so the same message is not offered twice.
+ */
+@Entity(
+    tableName = "sms_candidates",
+    indices = [Index(value = ["dedupKey"], unique = true), Index(value = ["senderKey"])],
+)
+data class SmsCandidateEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val dedupKey: String,
+    val sender: String,
+    val senderKey: String,
+    val body: String,
+    val receivedAt: Long,
+    val sentAt: Long?,
+    val source: String,
+    /** RECOGNISABLE (the generic reader found a transaction) or UNFAMILIAR (an amount, but no readable format). */
+    val kind: String,
+    /** What the generic reader found, in words (RECOGNISABLE only). */
+    val reading: String?,
+    /** Masked wording with nothing personal in it; lets a verified sender+format pair be recognised later. */
+    val shapeKey: String,
+    val createdAt: Long,
+    /** OPEN until you choose; then ACCEPTED or DISMISSED. */
+    val state: String,
+)
+
 @Entity(tableName = "statements", indices = [Index(value = ["smsId"]), Index(value = ["cardKey"])])
 data class StatementEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -287,9 +334,32 @@ data class SmsFixEntity(
     val cardLast4: String?,
     val cardType: String,
     val timestamp: Long,
+    /**
+     * Which fields you confirmed yourself: "ALL" (the whole reading, also for fixes made before this existed) or a
+     * comma list of TYPE, AMOUNT, CURRENCY, MERCHANT, CARD, TIME. Only these are protected from later readings;
+     * the other fields follow the reader as before.
+     */
+    @ColumnInfo(defaultValue = "ALL") val lockedFields: String = "ALL",
 )
 
 fun cardKeyOf(bank: String, last4: String?) = "$bank ·${last4 ?: "????"}"
+
+/**
+ * The second opinion on a message the rules already read: what the small on-device model thinks it is, beside what the
+ * rules concluded. Advisory only; nothing here changes a transaction. One row per message, rebuilt at any time.
+ */
+@Entity(tableName = "ai_checks")
+data class AiCheckEntity(
+    @PrimaryKey val smsId: Long,
+    /** What the rules concluded: PURCHASE, REFUND, ... */
+    val ruleLabel: String,
+    /** What the model thinks. */
+    val aiLabel: String,
+    val confidencePct: Int,
+    /** AGREE, DISAGREE or UNSURE. */
+    val verdict: String,
+    val createdAt: Long,
+)
 
 @Dao
 interface AppDao {
@@ -414,6 +484,70 @@ interface AppDao {
 
     @Query("DELETE FROM transactions WHERE smsId IS NOT NULL")
     suspend fun deleteAllSmsTxns()
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertCandidate(c: SmsCandidateEntity): Long
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND kind = 'RECOGNISABLE' ORDER BY receivedAt DESC")
+    fun openCandidates(): Flow<List<SmsCandidateEntity>>
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND kind = 'RECOGNISABLE' ORDER BY receivedAt ASC")
+    suspend fun openCandidatesNow(): List<SmsCandidateEntity>
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey ORDER BY receivedAt ASC")
+    suspend fun openCandidatesFor(senderKey: String): List<SmsCandidateEntity>
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE state = 'OPEN'")
+    suspend fun openCandidateCount(): Int
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE dedupKey = :dedupKey")
+    suspend fun candidateKnown(dedupKey: String): Int
+
+    /** Accepted or dismissed: the text is cleared (only the key stays so it is not offered again). */
+    @Query("UPDATE sms_candidates SET state = :state, body = '', reading = NULL WHERE id = :id")
+    suspend fun closeCandidate(id: Long, state: String)
+
+    @Query("UPDATE sms_candidates SET state = :state, body = '', reading = NULL WHERE senderKey = :senderKey AND state = 'OPEN'")
+    suspend fun closeCandidatesFor(senderKey: String, state: String)
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey")
+    suspend fun openCandidateCountFor(senderKey: String): Int
+
+    @Query("SELECT COUNT(*) FROM sms_candidates WHERE senderKey = :senderKey AND state = 'MUTED'")
+    suspend fun senderMutedCount(senderKey: String): Int
+
+    @Query("SELECT * FROM sms_candidates WHERE state = 'MUTED' ORDER BY sender")
+    fun mutedSenders(): Flow<List<SmsCandidateEntity>>
+
+    @Query("DELETE FROM sms_candidates WHERE senderKey = :senderKey AND state = 'MUTED'")
+    suspend fun deleteMute(senderKey: String)
+
+    @Query("SELECT * FROM sms_candidates")
+    suspend fun allCandidates(): List<SmsCandidateEntity>
+
+    @Query("DELETE FROM sms_readings WHERE smsId = :smsId")
+    suspend fun clearReadings(smsId: Long)
+
+    @Insert
+    suspend fun insertReading(r: SmsReadingEntity)
+
+    @Query("SELECT * FROM sms_readings WHERE state = 'HELD' ORDER BY createdAt DESC")
+    fun heldReadings(): Flow<List<SmsReadingEntity>>
+
+    @Query("SELECT * FROM sms_readings WHERE state = 'HELD'")
+    suspend fun heldReadingsNow(): List<SmsReadingEntity>
+
+    @Query("SELECT * FROM transactions WHERE smsId = :smsId AND inferred = 0")
+    suspend fun txnsForSmsNow(smsId: Long): List<TransactionEntity>
+
+    @Query("SELECT * FROM statements WHERE smsId = :smsId")
+    suspend fun statementsForSmsNow(smsId: Long): List<StatementEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreStatement(s: StatementEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun restoreTxn(t: TransactionEntity)
 
     /** SMS statements only: statements saved from a PDF (smsId = 0) survive Re-parse. */
     @Query("DELETE FROM statements WHERE smsId > 0")
@@ -630,6 +764,23 @@ interface AppDao {
     @Query("SELECT * FROM transactions ORDER BY timestamp")
     suspend fun allTxns(): List<TransactionEntity>
 
+    // ---- second opinion (advisory)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAiChecks(rows: List<AiCheckEntity>)
+
+    @Query("DELETE FROM ai_checks")
+    suspend fun clearAiChecks()
+
+    @Query("DELETE FROM ai_checks WHERE smsId NOT IN (SELECT id FROM sms)")
+    suspend fun pruneAiChecks()
+
+    @Query("SELECT * FROM ai_checks WHERE verdict = 'DISAGREE' ORDER BY confidencePct DESC")
+    fun aiDisagreements(): Flow<List<AiCheckEntity>>
+
+    @Query("SELECT verdict AS status, COUNT(*) AS n FROM ai_checks GROUP BY verdict")
+    fun aiVerdictCounts(): Flow<List<StatusCount>>
+
+
     @Query("SELECT * FROM transactions WHERE source = 'MANUAL' ORDER BY timestamp")
     suspend fun manualTxns(): List<TransactionEntity>
 
@@ -716,9 +867,10 @@ data class StatusCount(val status: String, val n: Int)
     entities = [
         SmsEntity::class, TransactionEntity::class, StatementEntity::class, CardEntity::class,
         CategoryEntity::class, MerchantRuleEntity::class, TxnOverrideEntity::class, GoalEntity::class, FxRateEntity::class,
-        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class,
+        BudgetEntity::class, FixedPaymentEntity::class, SenderEntity::class, SmsFixEntity::class, InstalmentPlanEntity::class, CardAliasEntity::class, SmsReadingEntity::class,
+        SmsCandidateEntity::class, AiCheckEntity::class,
     ],
-    version = 5,
+    version = 8,
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

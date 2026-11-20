@@ -1,0 +1,23 @@
+name: QA invest tagger (manual)
+on:
+  workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['shared/src/commonTest/kotlin/com/uaefinancial/tracker/intel/InvestTaggerReport.kt', '.github/workflows/qa-tagger.yml']
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Report
+        run: |
+          chmod +x gradlew
+          ./gradlew :shared:testDebugUnitTest --tests '*InvestTaggerReport*' --no-daemon -i 2>&1 | tee tagger.log || true
+          grep -h 'TAGGER' tagger.log | sed 's/^ *//' | tee tagger.txt

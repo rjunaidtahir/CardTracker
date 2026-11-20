@@ -169,8 +169,11 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     val txns by vm.transactions.collectAsStateWithLifecycle()
     val summaries by vm.cardSummaries.collectAsStateWithLifecycle()
     val failed by vm.failedSms.collectAsStateWithLifecycle()
+    val unknownOpen by vm.unknownMessages.collectAsStateWithLifecycle()
+    val reviewTotal = failed.size + unknownOpen.size
     val message by vm.message.collectAsStateWithLifecycle()
     val syncing by vm.syncing.collectAsStateWithLifecycle()
+    val syncProgress by vm.syncProgress.collectAsStateWithLifecycle()
     val lastSyncAt by vm.lastSyncAt.collectAsStateWithLifecycle()
     val liveOn by vm.liveListening.collectAsStateWithLifecycle()
     val categories by vm.categories.collectAsStateWithLifecycle()
@@ -228,6 +231,9 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
     // Backup: system file pickers (nothing leaves the phone unless you choose where to save it).
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) vm.exportBackup(uri)
+    }
+    val maskedLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) vm.exportMaskedMessages(uri)
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importBackup(uri)
@@ -368,8 +374,8 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         selected = route is Route.Home && nav.currentTab == tab,
                         onClick = { nav.selectTab(tab) },
                         icon = {
-                            if (tab == Tab.MORE && failed.isNotEmpty()) {
-                                BadgedBox(badge = { Badge { Text("${failed.size}") } }) { Icon(tab.icon, null) }
+                            if (tab == Tab.MORE && reviewTotal > 0) {
+                                BadgedBox(badge = { Badge { Text("$reviewTotal") } }) { Icon(tab.icon, null) }
                             } else {
                                 Icon(tab.icon, null)
                             }
@@ -389,14 +395,14 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onOpenCategory = { id -> vm.selectCard(null); vm.selectCategory(id); nav.selectTab(Tab.ACTIVITY) },
                         onOpenCard = { nav.push(Route.CardDetail(it)) },
                         onOpenFixed = { nav.push(Route.FixedPayments) },
-                        reviewCount = failed.size,
+                        reviewCount = reviewTotal,
                         onOpenReview = { nav.push(Route.Review) },
                         onSync = onSync,
                         onAddManual = { nav.selectTab(Tab.ACTIVITY) },
                     )
                     Tab.ACTIVITY -> TransactionsScreen(
                         vm, period, cardFilter, cards, excluded, txns,
-                        syncing = syncing, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
+                        syncing = syncing, syncProgress = syncProgress, lastSyncAt = lastSyncAt, liveOn = liveOn, onSync = onSync,
                         categories = categories, categoryFilter = categoryFilter,
                     )
                     Tab.CARDS -> { val ov by vm.overview.collectAsStateWithLifecycle(); CardsScreen(
@@ -410,7 +416,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                     ) }
                     Tab.MORE -> MoreScreen(
                         vm = vm,
-                        reviewCount = failed.size,
+                        reviewCount = reviewTotal,
                         liveOn = liveOn,
                         lastSyncAt = lastSyncAt,
                         biometricAvailable = biometricAvailable,
@@ -424,6 +430,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                         onRemindersToggle = onRemindersToggle,
                         onAlertsToggle = onAlertsToggle,
                         onExportBackup = { exportLauncher.launch("fils-backup-${java.time.LocalDate.now()}.zip") },
+                        onExportMasked = { maskedLauncher.launch("fils-masked-messages-${java.time.LocalDate.now()}.txt") },
                         onImportBackup = { importLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
                         onExportReport = { showReport = true },
                     )

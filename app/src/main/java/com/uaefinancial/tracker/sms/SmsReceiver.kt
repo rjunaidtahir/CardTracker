@@ -12,6 +12,7 @@ import androidx.work.workDataOf
 import com.uaefinancial.tracker.TrackerApp
 import com.uaefinancial.tracker.data.SmsSource
 import com.uaefinancial.tracker.notify.Alerts
+import com.uaefinancial.tracker.parser.CandidateScreen
 import com.uaefinancial.tracker.parser.ParseResult
 import com.uaefinancial.tracker.parser.SmsParser
 
@@ -28,7 +29,9 @@ class SmsReceiver : BroadcastReceiver() {
             .groupBy { it.displayOriginatingAddress ?: it.originatingAddress ?: "" }
             .forEach { (sender, pieces) ->
                 val body = pieces.joinToString("") { it.displayMessageBody ?: it.messageBody ?: "" }
-                if (SmsParser.bankFor(sender) == null) return@forEach // only your bank sender IDs
+                // Your banks are read straight away. Any other sender is looked at only to see whether the message could be
+                // financial; if so it is kept for your review (never posted), otherwise it is dropped unread.
+                if (SmsParser.bankFor(sender) == null && CandidateScreen.screen(sender, body, now) == null) return@forEach
                 val sentAt = pieces.first().timestampMillis
                 // Drop OTPs here so their text never even reaches WorkManager's queue.
                 val quick = SmsParser.parse(sender, body, now)

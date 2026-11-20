@@ -4,6 +4,9 @@ package com.uaefinancial.tracker.parser
  * The signed rules file: new banks (names, sender IDs) and reading rules, as DATA. The apps download it, check its
  * signature (platform code), and hand the text to [parse]; nothing in it is ever run as code.
  *
+ * A bank entry with "track": true also makes the app treat its senderIds as that bank's own (no app update needed);
+ * if the name is a built-in bank, its verified rules read those messages. IDs: printed names or 3-6 digit codes only.
+ *
  * Beyond bank rules the file can carry "ignore" (label + pattern: kinds of messages that are not transactions, refused
  * if they would hide an ordinary purchase) and "words" ({"debit":[…],"credit":[…],"transfer":[…]}: single words a bank
  * uses that the built-in wording lists do not know). Both are optional.
@@ -69,7 +72,13 @@ object RulesPack {
             val ids = strings(m["senderIds"], 20, 30) ?: return Outcome.Rejected("bank $name: bad sender IDs")
             // A sender ID of two letters or fewer would match far too much.
             if (ids.any { SmsParser.normalizeSender(it).length < 3 }) return Outcome.Rejected("bank $name: sender ID too short")
-            banks += GlobalBanks.DirBank(name, country, aliases, ids)
+            val track = m["track"] == true
+            if (track) {
+                if (ids.isEmpty()) return Outcome.Rejected("bank $name: tracked but no sender IDs")
+                // Tracked IDs must be a printed sender name or a 3-6 digit short code, never a phone number.
+                if (ids.any { !trackableId(it) }) return Outcome.Rejected("bank $name: sender ID not allowed")
+            }
+            banks += GlobalBanks.DirBank(name, country, aliases, ids, track)
         }
 
         val knownNames = (BankRules.banks.map { it.name } + GlobalBanks.banks.map { it.name } + banks.map { it.name })
@@ -122,6 +131,16 @@ object RulesPack {
         return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW)))
     }
 
+    private val trackName = Regex("[A-Za-z][A-Za-z0-9._& -]{2,29}")
+    private val trackCode = Regex("[0-9]{3,6}")
+
+    internal fun trackableId(id: String): Boolean {
+        val s = id.trim()
+        if (trackCode.matches(s)) return true
+        if (!trackName.matches(s)) return false
+        return s.count { it.isDigit() } <= s.length / 2
+    }
+
     /** Null when the pattern is acceptable, otherwise why not. */
     internal fun checkPattern(pattern: String, kind: RuleKind): String? {
         if (pattern.length > MAX_PATTERN) return "pattern too long"
@@ -148,6 +167,7 @@ object RulesPack {
     /** Puts [pack] to work (or clears it, with null). */
     fun apply(pack: Pack?) {
         GlobalBanks.setExtra(pack?.banks.orEmpty())
+        SmsParser.setPackSenders(pack?.banks.orEmpty().filter { it.track }.associate { it.name to it.senderIds })
         SmsParser.setPackRules(pack?.rules.orEmpty().groupBy({ it.bank.trim().lowercase() }, { it.rule }))
         SmsParser.setPackIgnore(pack?.ignore.orEmpty())
         SmartParser.setExtraWords(pack?.words?.debit.orEmpty(), pack?.words?.credit.orEmpty(), pack?.words?.transfer.orEmpty())

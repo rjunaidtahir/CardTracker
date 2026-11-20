@@ -14,6 +14,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -96,6 +98,7 @@ fun MoreScreen(
     onRemindersToggle: (Boolean) -> Unit,
     onAlertsToggle: (Boolean) -> Unit,
     onExportBackup: () -> Unit,
+    onExportMasked: () -> Unit,
     onImportBackup: () -> Unit,
     onExportReport: () -> Unit,
 ) {
@@ -281,6 +284,12 @@ fun MoreScreen(
                 } else {
                     Text("Nothing has been shared yet.", style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 6.dp))
                 }
+                Text("Export masked messages for testing", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                Text(
+                    "Saves a text file on this phone, only when you tap. Each line is a message shape (no amounts, names, merchants, card digits or dates) next to what the app decided it was. Read it, then share it only if you want to. Nothing is uploaded.",
+                    style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                )
+                androidx.compose.material3.OutlinedButton(onClick = onExportMasked, modifier = Modifier.padding(top = 6.dp)) { Text("Export masked messages") }
                 Text(
                     "The app also downloads a signed list of banks and reading rules (data only) about once a day, so it can read new bank formats without an update.",
                     style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 8.dp),
@@ -373,6 +382,13 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
     var fixing by remember { mutableStateOf<SmsEntity?>(null) }
     var notTxn by remember { mutableStateOf<SmsEntity?>(null) }
     var nudge by remember { mutableStateOf(vm.shareNudgeDue()) }
+    val held by vm.heldReadings.collectAsStateWithLifecycle()
+    val unknown by vm.unknownMessages.collectAsStateWithLifecycle()
+    var pickingBank by remember { mutableStateOf(false) }
+    var chosen by remember { mutableStateOf<String?>(null) }
+    if (pickingBank) PickSenderDialog(onPick = { chosen = it; pickingBank = false }, onDismiss = { pickingBank = false })
+    chosen?.let { s -> AddSenderDialog(s, guessBankName(s), onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true, via = "picker"); chosen = null }, onDismiss = { chosen = null }) }
+    val unknownGroups = remember(unknown) { unknown.groupBy { it.senderKey }.values.toList() }
     fixing?.let { s -> FixSmsDialog(vm, s, onDismiss = { fixing = null }) }
     notTxn?.let { s -> NotTransactionDialog(vm, s, onDismiss = { notTxn = null }) }
 
@@ -390,6 +406,71 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                         "not transactions ${counts["IGNORED"] ?: 0}",
                     style = MaterialTheme.typography.bodySmall, color = Ink.faint, modifier = Modifier.padding(top = 8.dp),
                 )
+            }
+        }
+        if (held.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${held.size} message${if (held.size == 1) "" else "s"} would be read differently", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "An update reads these differently from before. Nothing was changed: your current reading is still in use. " +
+                            "Keep yours, or switch to the new reading.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            items(held.size) { i ->
+                val h = held[i]
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("Now: ${h.keptSummary}", style = MaterialTheme.typography.bodyMedium)
+                    Text("New reading: ${h.newSummary}", style = MaterialTheme.typography.bodyMedium, color = Ink.muted)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        TextButton(onClick = { vm.keepReading(h.smsId) }) { Text("Keep mine") }
+                        TextButton(onClick = { vm.useNewReading(h.smsId) }) { Text("Use new") }
+                    }
+                }
+            }
+        }
+        if (unknown.isNotEmpty()) {
+            item {
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${unknown.size} message${if (unknown.size == 1) "" else "s"} from senders Fils doesn't know", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "These read like a bank transaction but come from a sender that isn't one of your banks yet. Nothing here is counted. " +
+                            "If a sender is your bank, tap \"These are from my bank\" and Fils will read its messages. They stay here until you decide.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+            items(unknownGroups.size) { gi ->
+                val msgs = unknownGroups[gi]
+                val first = msgs.first()
+                Panel(Modifier.fillMaxWidth()) {
+                    Text("${first.sender} · ${msgs.size} message${if (msgs.size == 1) "" else "s"}", style = MaterialTheme.typography.titleSmall)
+                    msgs.take(3).forEach { m ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (m.kind == "RECOGNISABLE") "Looks like a transaction: ${m.reading ?: "amount found"}" else "Unfamiliar format (has an amount)",
+                            style = MaterialTheme.typography.bodySmall, color = Ink.amber,
+                        )
+                        SelectionContainer {
+                            Text(m.body, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                        }
+                        TextButton(onClick = { vm.dismissUnknown(m.id) }) { Text("Not financial", color = Ink.muted) }
+                    }
+                    if (msgs.size > 3) Text("+ ${msgs.size - 3} more from this sender", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
+                        TextButton(onClick = { vm.acceptUnknownSender(first.sender, first.body) }) { Text("These are from my bank") }
+                        TextButton(onClick = { vm.hideUnknownSender(first.sender) }) { Text("Hide this sender", color = Ink.muted) }
+                    }
+                }
+            }
+        }
+        item {
+            Panel(Modifier.fillMaxWidth()) {
+                Text("Is one of your banks missing?", style = MaterialTheme.typography.titleSmall)
+                Text("Choose any sender from your messages and tell Fils it is your bank. Its messages are then read like any other bank.", style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp))
+                TextButton(onClick = { pickingBank = true }) { Text("Choose a bank from my messages") }
             }
         }
         val waiting = failed.filter { it.ruleId == com.uaefinancial.tracker.data.Repository.SI_RULE }
@@ -431,7 +512,7 @@ fun ReviewScreen(vm: MainViewModel, onShare: () -> Unit) {
                 }
             }
         }
-        if (failed.isEmpty()) {
+        if (failed.isEmpty() && held.isEmpty() && unknown.isEmpty()) {
             item { Muted("Nothing to review. Every bank message was read.", Modifier.padding(8.dp)) }
         }
         items(failed, key = { it.id }) { s ->
@@ -476,6 +557,12 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
     var merchant by remember { mutableStateOf("") }
     var last4 by remember { mutableStateOf("") }
     var cardType by remember { mutableStateOf(CardType.CREDIT) }
+    var aiNote by remember { mutableStateOf<String?>(null) }
+    var aiWarn by remember { mutableStateOf<String?>(null) }
+    // "Statement / payment due": a card statement notice (statement amount, minimum due, due date).
+    var statement by remember { mutableStateOf(false) }
+    var minimum by remember { mutableStateOf("") }
+    var dueText by remember { mutableStateOf("") }
     // "Apply to similar messages": on by default; only offered when it can work for this message.
     var similar by remember { mutableStateOf(true) }
     val canLearn = remember(type, amount, merchant, last4, cardType) { vm.canLearn(sms, type, amount, merchant, last4, cardType) }
@@ -488,6 +575,24 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
             last4 = g.cardLast4 ?: ""
             cardType = g.cardType
         }
+        // The on-device model may add what the keyword reader could not (e.g. the merchant); it only fills blanks.
+        vm.aiSuggestionFor(sms)?.let { a ->
+            aiNote = if (a.usable) "Fils's guess: ${a.label.name.lowercase().replace('_', ' ')} (${(a.confidence * 100).toInt()}% sure)" else null
+            if (a.usable && a.label == com.uaefinancial.tracker.intel.Label.STATEMENT) {
+                // Looks like a card statement: open the form on the statement option with what the code found (you check it).
+                statement = true
+                a.amount?.let { amount = it.stripTrailingZeros().toPlainString() }
+                a.currency?.let { currency = it }
+                a.minimum?.let { minimum = it.stripTrailingZeros().toPlainString() }
+                a.dueDate?.let { dueText = "%02d/%02d/%04d".format(it.dayOfMonth, it.monthValue, it.year) }
+                a.last4?.let { if (last4.isBlank()) last4 = it }
+            } else if (a.usable) {
+                if (merchant.isBlank() || merchant == "Money out (transfer)" || merchant == "Money in") a.merchant?.let { merchant = it }
+                if (amount.isBlank()) a.amount?.let { amount = it.stripTrailingZeros().toPlainString() }
+                if (last4.isBlank()) a.last4?.let { last4 = it }
+            }
+            if (a.findings.isNotEmpty()) aiWarn = a.findings.joinToString("; ") { it.text }
+        }
         loaded = true
     }
     AlertDialog(
@@ -498,28 +603,44 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(sms.body, style = MaterialTheme.typography.bodySmall, color = Ink.muted, maxLines = 6, overflow = TextOverflow.Ellipsis)
                 if (!loaded) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                aiNote?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Ink.muted) }
+                aiWarn?.let { Text("Check: $it", style = MaterialTheme.typography.bodySmall, color = Ink.amber) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    fixTypes.forEach { (t, label) -> Pill(label, type == t, onClick = { type = t }) }
+                    fixTypes.forEach { (t, label) -> Pill(label, !statement && type == t, onClick = { type = t; statement = false }) }
+                    Pill("Statement / payment due", statement, onClick = { statement = true })
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
-                        amount, { amount = it }, label = { Text("Amount") }, singleLine = true, modifier = Modifier.weight(1f),
+                        amount, { amount = it }, label = { Text(if (statement) "Statement amount" else "Amount") }, singleLine = true, modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     )
                     OutlinedTextField(currency, { currency = it.take(3).uppercase() }, label = { Text("Currency") }, singleLine = true, modifier = Modifier.width(96.dp))
                 }
-                OutlinedTextField(merchant, { merchant = it }, label = { Text("Merchant / description") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                if (statement) {
+                    OutlinedTextField(
+                        minimum, { minimum = it }, label = { Text("Minimum due (optional)") }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    )
+                    OutlinedTextField(
+                        dueText, { dueText = it.take(10) }, label = { Text("Due date (day/month/year, e.g. 30/06/2026)") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    OutlinedTextField(merchant, { merchant = it }, label = { Text("Merchant / description") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                }
                 OutlinedTextField(
                     last4, { last4 = it.filter(Char::isDigit).take(4) }, label = { Text("Card / account last 4 digits (optional)") },
                     singleLine = true, modifier = Modifier.fillMaxWidth(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Pill("Credit card", cardType == CardType.CREDIT, onClick = { cardType = CardType.CREDIT })
-                    Pill("Debit card", cardType == CardType.DEBIT, onClick = { cardType = CardType.DEBIT })
-                    Pill("Bank account", cardType == CardType.ACCOUNT, onClick = { cardType = CardType.ACCOUNT })
+                if (!statement) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Pill("Credit card", cardType == CardType.CREDIT, onClick = { cardType = CardType.CREDIT })
+                        Pill("Debit card", cardType == CardType.DEBIT, onClick = { cardType = CardType.DEBIT })
+                        Pill("Bank account", cardType == CardType.ACCOUNT, onClick = { cardType = CardType.ACCOUNT })
+                    }
+                    Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
+                    SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
                 }
-                Text("The date is the day the SMS arrived.", style = MaterialTheme.typography.bodySmall, color = Ink.faint)
-                SimilarMessagesOption(canLearn, similar, onChange = { similar = it })
                 val sharing by vm.shareConsent.collectAsStateWithLifecycle()
                 if (sharing == com.uaefinancial.tracker.learn.Learning.ON) {
                     val shape = remember(sms.id) { com.uaefinancial.tracker.learn.Learning.previewShape(sms.sender, sms.bank, sms.body) }
@@ -536,7 +657,13 @@ fun FixSmsDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton(onClick = { vm.saveFix(sms, type, amount, currency, merchant, last4, cardType, applyToSimilar = canLearn && similar); onDismiss() }) { Text("Save") }
+            TextButton(onClick = {
+                if (statement) {
+                    if (vm.saveStatementFix(sms, amount, minimum, currency, dueText, last4)) onDismiss()
+                } else {
+                    vm.saveFix(sms, type, amount, currency, merchant, last4, cardType, applyToSimilar = canLearn && similar); onDismiss()
+                }
+            }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
@@ -582,6 +709,49 @@ private fun NotTransactionDialog(vm: MainViewModel, sms: SmsEntity, onDismiss: (
 
 // ================================================================ Bank senders
 
+/** Lists every sender on the phone so you can tell the app "this one is my bank". Nothing leaves the phone. */
+@Composable
+fun PickSenderDialog(onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var all by remember { mutableStateOf<List<com.uaefinancial.tracker.sms.InboxSender>?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        try { all = withContext(Dispatchers.IO) { com.uaefinancial.tracker.sms.InboxReader.allSenders(ctx) } }
+        catch (e: SecurityException) { error = "Allow SMS access first (More → Settings), then try again." }
+        catch (e: Exception) { error = "Couldn't read your messages: ${e.message ?: e.javaClass.simpleName}" }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Ink.surface,
+        title = { Text("Choose your bank") },
+        text = {
+            Column {
+                Text("Pick the sender in your messages that is your bank or card.", style = MaterialTheme.typography.bodySmall, color = Ink.muted)
+                OutlinedTextField(query, { query = it }, label = { Text("Search") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                error?.let { Text(it, color = Ink.red, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }
+                val list = all
+                if (list == null && error == null) CircularProgressIndicator(Modifier.padding(top = 12.dp).size(20.dp), strokeWidth = 2.dp)
+                val shown = remember(list, query) { list.orEmpty().filter { query.isBlank() || it.sender.contains(query, true) || it.sample.contains(query, true) } }
+                LazyColumn(Modifier.heightIn(max = 380.dp).padding(top = 8.dp)) {
+                    items(shown.take(150), key = { it.key }) { s ->
+                        Column(Modifier.fillMaxWidth().clickable { onPick(s.sender) }.padding(vertical = 8.dp)) {
+                            Row {
+                                Text(s.sender, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                                Text("${s.count}", color = Ink.muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text(s.sample, style = MaterialTheme.typography.bodySmall, color = Ink.faint, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (list != null && shown.isEmpty()) item { Muted("No sender matches.", Modifier.padding(top = 8.dp)) }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
 @Composable
 fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
     val senders by vm.senders.collectAsStateWithLifecycle()
@@ -589,7 +759,10 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
     val excluded by vm.excludedBanks.collectAsStateWithLifecycle()
     var adding by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showBuiltIn by rememberSaveable { mutableStateOf(false) }
+    var picking by remember { mutableStateOf(false) }
+    val hidden by vm.hiddenSenders.collectAsStateWithLifecycle()
     adding?.let { (s, b) -> AddSenderDialog(s, b, onAdd = { sender, bank -> vm.addSenders(listOf(sender to bank), syncAfter = true); adding = null }, onDismiss = { adding = null }) }
+    if (picking) PickSenderDialog(onPick = { s -> picking = false; adding = s to guessBankName(s) }, onDismiss = { picking = false })
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -608,6 +781,7 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
                     }
                     OutlinedButton(onClick = { adding = "" to "" }) { Text("Add by hand") }
                 }
+                Button(onClick = { picking = true }, modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) { Text("Choose a bank from my messages") }
             }
         }
         scan.error?.let { e -> item { Text(e, color = Ink.red, style = MaterialTheme.typography.bodySmall) } }
@@ -655,6 +829,17 @@ fun SendersScreen(vm: MainViewModel, onScan: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(bank, modifier = Modifier.weight(1f), color = Ink.muted)
                         TextButton(onClick = { vm.setBankTracked(bank, true) }) { Text("Track again") }
+                    }
+                }
+            }
+        }
+        if (hidden.isNotEmpty()) {
+            item { SectionHeader("Hidden senders") }
+            items(hidden, key = { "h:" + it.senderKey }) { h ->
+                Panel(Modifier.fillMaxWidth(), padding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(h.sender, modifier = Modifier.weight(1f), color = Ink.muted)
+                        TextButton(onClick = { vm.showSenderAgain(h.senderKey) }) { Text("Show again") }
                     }
                 }
             }

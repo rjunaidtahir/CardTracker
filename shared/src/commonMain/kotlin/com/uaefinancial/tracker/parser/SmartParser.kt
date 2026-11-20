@@ -59,7 +59,7 @@ object SmartParser {
         """\b(?:min(?:imum)?\.?\s*(?:amount|amt|payment|pay)?\.?\s*(?:due|payable)?|pay\s+min\.?)[^a-z0-9]*(?:(?:is|of|amount)\b[^a-z0-9]*){0,2}$""",
     )
     private val totalLabel = Regex(
-        """\b(?:total\s+(?:amount\s+|amt\.?\s+)?(?:due|outstanding|payable)|statement\s+(?:balance|amount)|stmt\.?\s+(?:bal(?:ance)?|amt)|""" +
+        """\b(?:total\s+(?:amount\s+|amt\.?\s+)?(?:due|outstanding|payable)|statement\s+(?:balance|amount|total|for|of)|stmt\.?\s+(?:bal(?:ance)?|amt)|""" +
             """outstanding(?:\s+balance)?|closing\s+balance|amount\s+due|new\s+balance|total\s+due[^:]{0,40}:?)""" +
             """[^a-z0-9]*(?:(?:is|of|amount)\b[^a-z0-9]*){0,2}$""",
     )
@@ -80,6 +80,34 @@ object SmartParser {
         }
         Mention(m.range.first, m.range.last + 1, amount, code, role)
     }.toList()
+
+    /** An amount found in a message and what it is: "TXN", "AVAILABLE", "MINIMUM", "TOTAL" or "FEE". Read-only view for the on-device second opinion. */
+    data class AmountMention(val amount: Decimal, val currency: String, val role: String, val start: Int, val end: Int)
+
+    fun amountMentions(text: String): List<AmountMention> =
+        mentions(text).map { AmountMention(it.amount, it.currency, it.role.name, it.start, it.end) }
+
+    /** An amount or a date found in a message (where it is, and its value): what the role reader labels. */
+    internal data class RoleSpan(val start: Int, val end: Int, val isDate: Boolean, val amount: Decimal?, val currency: String?, val date: CalendarDate?)
+
+    /** Every amount and date in [text] (already normalized), in order. Values come from code; the role reader only labels them. */
+    internal fun roleSpans(text: String, zone: Int = SmsParser.UAE_ZONE): List<RoleSpan> =
+        (mentions(text).map { RoleSpan(it.start, it.end, false, it.amount, it.currency, null) } +
+            dates(text, zone).map { RoleSpan(it.at, it.end, true, null, null, it.date) }).sortedBy { it.start }
+
+    /** What a statement-like message says, for the on-device suggestion: the amounts by role and the due date, if found. */
+    data class StatementHints(val total: Decimal?, val minimum: Decimal?, val currency: String?, val due: CalendarDate?)
+
+    fun statementHints(text: String, zone: Int = SmsParser.UAE_ZONE): StatementHints {
+        val all = mentions(text)
+        val total = all.firstOrNull { it.role == Role.TOTAL } ?: all.firstOrNull { it.role == Role.TXN }
+        val minimum = all.firstOrNull { it.role == Role.MINIMUM }
+        val due = dates(text, zone, hasMinimum = minimum != null).firstOrNull { it.kind == "due" }?.date
+        return StatementHints(total?.amount, minimum?.amount, total?.currency ?: minimum?.currency, due)
+    }
+
+    /** Card / account digits found in a message (read-only view for the second opinion). */
+    fun cardLast4s(text: String): List<String> = refs(text).map { it.last4 }
 
     // ------------------------------------------------------------ cards/accounts
 
@@ -152,13 +180,19 @@ object SmartParser {
     private val dueContext = Regex("""(?:due(?:\s+date)?|pay(?:ment)?\s+by|by|before|on or before)\W*(?:is|on|:)?\W*$|\bdue date\b.{0,60}?\bis\s*$""")
     private val statementDateContext = Regex("""(?:statement\s+date|stmt\.?\s+date|dated|statement\s+of|generated\s+on)\W*(?:is|on|:)?\W*$""")
 
-    private data class FoundDate(val at: Int, val millis: Long, val hasTime: Boolean, val date: CalendarDate, val kind: String)
+    /** "We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun": a future charge, which is the due date. */
+    private val futureChargeContext = Regex(
+        """(?:\bwe['\u2019]?ll|\bwe\s+will|\bwill(?:\s+be)?|\bis\s+going\s+to\s+be|\bare\s+going\s+to\s+be)\s+(?:automatically\s+)?""" +
+            """(?:charg|debit|deduct|collect|withdraw|tak)\w*\b.{0,100}?\b(?:on|by)\W*$""",
+    )
 
-    private fun dates(text: String, zone: Int): List<FoundDate> {
+    private data class FoundDate(val at: Int, val millis: Long, val hasTime: Boolean, val date: CalendarDate, val kind: String, val end: Int = at)
+
+    private fun dates(text: String, zone: Int, hasMinimum: Boolean = false): List<FoundDate> {
         val out = mutableListOf<FoundDate>()
         timeThenDate.find(text)?.let { m ->
             SmsParser.parseDateTime("${m.groupValues[2]} ${m.groupValues[1]}")?.let { (dt, _) ->
-                out += FoundDate(m.range.first, dt.toEpochMillis(zone), true, dt.toLocalDate(), "txn")
+                out += FoundDate(m.range.first, dt.toEpochMillis(zone), true, dt.toLocalDate(), "txn", m.range.last + 1)
             }
         }
         for (m in dateRegex.findAll(text)) {
@@ -167,12 +201,15 @@ object SmartParser {
             val (dt, hasTime) = SmsParser.parseDateTime(m.value.trim().trimEnd(',', '.').replace(timeLinkWord, " ")) ?: continue
             val before = text.substring(maxOf(0, m.range.first - 70), m.range.first).lowercase()
             val near = before.takeLast(25)
+            val wide = text.substring(maxOf(0, m.range.first - 130), m.range.first).lowercase()
             val kind = when {
                 statementDateContext.containsMatchIn(near) -> "statement"
                 dueContext.containsMatchIn(near) || Regex("""\bdue date\b.{0,60}?\bis\s*$""").containsMatchIn(before) -> "due"
+                // Only when a minimum amount is in the message, so "was charged AED 50 at X on 12 Oct" stays a purchase date.
+                hasMinimum && futureChargeContext.containsMatchIn(wide) -> "due"
                 else -> "txn"
             }
-            out += FoundDate(m.range.first, dt.toEpochMillis(zone), hasTime, dt.toLocalDate(), kind)
+            out += FoundDate(m.range.first, dt.toEpochMillis(zone), hasTime, dt.toLocalDate(), kind, m.range.last + 1)
         }
         return out.sortedBy { it.at }
     }
@@ -274,7 +311,7 @@ object SmartParser {
     )
 
     private val merchantEnd =
-        """(?=\s+on\s|\s+dated\s|\s*[.;](?:\s|$)|,\s|\s+(?:avl|available|avail|bal(?:ance)?|using|via|with|ref|txn|reference|card|from your|for your|has been|was|is|through|for (?:consumer|customer|account|contract|mobile|bill|ref))\b|\s+\d{1,2}[/-]\d{1,2}|\s+\d{1,2}-[A-Za-z]{3}|\s*$)"""
+        """(?=\s+on\s|\s+dated\s|\s*[.;](?:\s|$)|,\s|\s+(?:avl|available|avail|bal(?:ance)?|using|via|with|ref|txn|reference|card|from your|for your|has been|was|is|through|for (?:consumer|customer|account|contract|mobile|bill|ref))\b|\s+\d{1,2}[/-]\d{1,2}|\s+\d{1,2}-[A-Za-z]{3}|\s+for\s+(?:[A-Za-z]{3}|rs\.?)\s*\d|\s*$)"""
     private val atMerchant = Regex("""\b(?:at|@)\s+(.+?)$merchantEnd""", I)
     private val toMerchant = Regex(
         """\b(?:to|towards)\s+(?!your\b|(?:online|mobile|internet|net)\s+banking|log\s*in|top\s*-?\s*up|view|know|avoid|call|report|check|enjoy|the card\b|iban\b|account\b|a/c\b|card\b)(.+?)$merchantEnd""",
@@ -282,6 +319,8 @@ object SmartParser {
     )
     private val topUpMerchant = Regex("""\bto\s+top\s*-?\s*up\s+(?:your\s+)?(.+?)$merchantEnd""", I)
     private val asMerchant = Regex("""\bas\s+(?!per\b|of\b|on\b)(.+?)$merchantEnd""", I)
+    /** "... on your Credit Card ending 1234 from AL AHLI HOSPITAL for AED 25.00": the name sits between "from" and "for <amount>". */
+    private val fromForAmountMerchant = Regex("""\bfrom\s+(?!your\b)(.+?)\s+for\s+(?:[A-Za-z]{3}|rs\.?)\s*\d""", I)
     private val fromMerchant = Regex("""\b(?:from|by)\s+(?!your\b)(.+?)$merchantEnd""", I)
     private val forMerchant = Regex(
         """\bfor\s+(?!your\b|card\b|the card\b|details\b|more\b|further\b|any\b|queries\b|information\b|assistance\b)(.+?)$merchantEnd""",
@@ -312,6 +351,9 @@ object SmartParser {
         I,
     )
 
+    /** The same cleaning the pattern reader gives a merchant name (city and country tails, amounts, card digits, "your card"). */
+    fun cleanName(raw: String?): String? = clean(raw)
+
     private fun clean(raw: String?): String? {
         raw ?: return null
         var m = SmsParser.cleanMerchant(raw).let { r -> r.substringBefore(",").takeIf { it.count(Char::isLetter) >= 2 } ?: r }
@@ -334,7 +376,7 @@ object SmartParser {
         if (all.isEmpty()) return null
         // Only balances / limits (e.g. a balance update): nothing to record.
         if (all.all { it.role == Role.AVAILABLE }) return ParseResult.Ignored(bank, "Balance update")
-        val found = dates(text, zone)
+        val found = dates(text, zone, hasMinimum = all.any { it.role == Role.MINIMUM })
         val references = refs(text)
 
         // ---- statement / payment due
@@ -471,6 +513,7 @@ object SmartParser {
                 ?: clean(forMerchant.find(text)?.groupValues?.get(1))
                 ?: firstClean(atMerchantIntl, text)
                 ?: clean(bracketMerchant.find(text)?.groupValues?.get(1))
+                ?: clean(fromForAmountMerchant.find(text)?.groupValues?.get(1))
                 ?: if (cardType == CardType.ACCOUNT) "Account debit" else "Card purchase"
             TxnType.REFUND -> clean(fromMerchant.find(text)?.groupValues?.get(1))
                 ?: clean(atMerchant.find(text)?.groupValues?.get(1))
@@ -608,10 +651,11 @@ object SmartParser {
      * True when an SMS looks like a bank transaction alert (used to suggest senders the app doesn't know yet):
      * an amount with a currency AND a masked card/account number or clear banking words.
      */
-    fun looksLikeBankAlert(body: String): Boolean {
+    fun looksLikeBankAlert(body: String, knownInstitution: Boolean = false): Boolean {
         val text = SmsParser.normalizeBody(body)
         if (!SmsParser.looksFinancial(text)) return false
-        val bankish = refs(text).isNotEmpty() ||
+        // A sender whose name is a known bank or card company ("Tabby") needs no extra banking words in the text.
+        val bankish = knownInstitution || refs(text).isNotEmpty() ||
             Regex("""\b(?:debited|credited|available (?:balance|limit)|avl\.? (?:bal|limit)|credit card|debit card|a/c|account)\b""", I).containsMatchIn(text)
         return bankish && !Regex("""\b(?:OTP|one[\s-]?time\s+pass)""", I).containsMatchIn(text) && !SmsParser.isOtp(text)
     }
