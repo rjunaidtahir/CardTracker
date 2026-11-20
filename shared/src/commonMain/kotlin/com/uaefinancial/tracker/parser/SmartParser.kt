@@ -311,7 +311,7 @@ object SmartParser {
     )
 
     private val merchantEnd =
-        """(?=\s+on\s|\s+dated\s|\s*[.;](?:\s|$)|,\s|\s+(?:avl|available|avail|bal(?:ance)?|using|via|with|ref|txn|reference|card|from your|for your|has been|was|is|through|for (?:consumer|customer|account|contract|mobile|bill|ref))\b|\s+\d{1,2}[/-]\d{1,2}|\s+\d{1,2}-[A-Za-z]{3}|\s*$)"""
+        """(?=\s+on\s|\s+dated\s|\s*[.;](?:\s|$)|,\s|\s+(?:avl|available|avail|bal(?:ance)?|using|via|with|ref|txn|reference|card|from your|for your|has been|was|is|through|for (?:consumer|customer|account|contract|mobile|bill|ref))\b|\s+\d{1,2}[/-]\d{1,2}|\s+\d{1,2}-[A-Za-z]{3}|\s+for\s+(?:[A-Za-z]{3}|rs\.?)\s*\d|\s*$)"""
     private val atMerchant = Regex("""\b(?:at|@)\s+(.+?)$merchantEnd""", I)
     private val toMerchant = Regex(
         """\b(?:to|towards)\s+(?!your\b|(?:online|mobile|internet|net)\s+banking|log\s*in|top\s*-?\s*up|view|know|avoid|call|report|check|enjoy|the card\b|iban\b|account\b|a/c\b|card\b)(.+?)$merchantEnd""",
@@ -319,6 +319,8 @@ object SmartParser {
     )
     private val topUpMerchant = Regex("""\bto\s+top\s*-?\s*up\s+(?:your\s+)?(.+?)$merchantEnd""", I)
     private val asMerchant = Regex("""\bas\s+(?!per\b|of\b|on\b)(.+?)$merchantEnd""", I)
+    /** "... on your Credit Card ending 1234 from AL AHLI HOSPITAL for AED 25.00": the name sits between "from" and "for <amount>". */
+    private val fromForAmountMerchant = Regex("""\bfrom\s+(?!your\b)(.+?)\s+for\s+(?:[A-Za-z]{3}|rs\.?)\s*\d""", I)
     private val fromMerchant = Regex("""\b(?:from|by)\s+(?!your\b)(.+?)$merchantEnd""", I)
     private val forMerchant = Regex(
         """\bfor\s+(?!your\b|card\b|the card\b|details\b|more\b|further\b|any\b|queries\b|information\b|assistance\b)(.+?)$merchantEnd""",
@@ -508,6 +510,7 @@ object SmartParser {
                 ?: clean(forMerchant.find(text)?.groupValues?.get(1))
                 ?: firstClean(atMerchantIntl, text)
                 ?: clean(bracketMerchant.find(text)?.groupValues?.get(1))
+                ?: clean(fromForAmountMerchant.find(text)?.groupValues?.get(1))
                 ?: if (cardType == CardType.ACCOUNT) "Account debit" else "Card purchase"
             TxnType.REFUND -> clean(fromMerchant.find(text)?.groupValues?.get(1))
                 ?: clean(atMerchant.find(text)?.groupValues?.get(1))
