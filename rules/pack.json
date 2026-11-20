@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "minEngine": 5,
   "banks": [
     {
@@ -298,6 +298,14 @@
     {
       "label": "Notice: transfer limit changed",
       "pattern": "Transfer limit is now .{1,30} to [A-Z]{3} [\\d,.]+"
+    },
+    {
+      "label": "Notice: Tabby card limit increased",
+      "pattern": "Tabby Card total limit is now increased to [A-Z]{3}\\s*[\\d,.]+"
+    },
+    {
+      "label": "Statement: nothing due (zero)",
+      "pattern": "credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*0(?:\\.0+)?\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*0(?:\\.0+)?(?![\\d.,]*[1-9])"
     }
   ]
 }
