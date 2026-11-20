@@ -57,16 +57,19 @@ object CategoryRules {
         DefaultCategory(FAMILY, "Family (cards I pay for)"),
     )
 
+    /** Bump when the built-in keywords change: the app then re-checks auto-assigned "Other" rows once. */
+    const val KEYWORDS_VERSION = 2
+
     /** category id -> keywords (plain words or regex fragments), checked in this order. */
     val keywords: List<Pair<Long, List<String>>> = listOf(
         CASH to listOf("ATM CASH", "CASH WITHDRAWAL"),
         EMI_LOANS to listOf("\\bEMI\\b", "ACCOUNT DEBIT", "\\bLOAN\\b", "INSTALMENT", "INSTALLMENT", "TABBY", "TAMARA", "POSTPAY"),
         INSURANCE to listOf("INSURANCE", "LIVA INS", "\\bINS\\b", "TAKAFUL", "AXA", "SUKOON", "ORIENT INS"),
         UTILITIES to listOf("DEWA", "ADDC", "SEWA", "FEWA", "ETISALAT", "\\bE&\\b", "\\bDU\\b", "HOMEINTERNET", "UTLTY", "UTILITY", "EMPOWER", "NESTLE WATERS", "GAS CYLIND", "MANDOOS"),
-        GOVERNMENT to listOf("SMART DUBAI", "SMARTDXBGOV", "DUBAI EGOVERNMENT", "GOVERNMENT", "POLICE", "TASHEEL", "\\bAMER\\b", "\\bICP\\b", "INTEGRATED TRANSPORT", "MOHRE", "TAMM", "EMIRATES AUCTION", "\\bRTA\\b", "LAND DEPARTMENT", "DUBAI LAND"),
+        GOVERNMENT to listOf("SMART DUBAI", "DIGITAL DUBAI", "SMARTDXBGOV", "DUBAI EGOVERNMENT", "GOVERNMENT", "POLICE", "TASHEEL", "\\bAMER\\b", "\\bICP\\b", "INTEGRATED TRANSPORT", "MOHRE", "TAMM", "EMIRATES AUCTION", "\\bRTA\\b", "LAND DEPARTMENT", "DUBAI LAND"),
         TRANSPORT to listOf("ADNOC", "ENOC", "EPPCO", "EMARAT", "PETROL", "SALIK", "DARB", "CAREEM", "UBER", "TAXI", "PARKING", "MAWAQIF", "HALA", "\\bNOL\\b"),
-        DINING to listOf("TALABAT", "DELIVEROO", "NOON FOOD", "KEETA", "CAFE", "COFFEE", "RESTAURANT", "RESTURAUNT", "GRILL", "PIZZA", "BURGER", "KFC", "MCDONALD", "STARBUCKS", "TIM HORTONS", "SHAWARMA", "BAKERY", "WHIPPY", "SNACK", "ANGAARA", "KITCHEN"),
-        GROCERIES to listOf("CARREFOUR", "LULU", "SUPERMARKE", "SUPERM", "HYPERMA", "HYPMKT", "MINIMART", "GROCERY", "UNION COOP", "SPINNEYS", "CHOITHRAMS", "WAITROSE", "GRANDIOSE", "WEST ZONE", "MORE VALUE", "AL MAYA", "NESTO", "VIVA", "KIBSONS", "AMAZON NOW", "INSTASHOP"),
+        DINING to listOf("TALABAT", "DELIVEROO", "NOON FOOD", "KEETA", "CAFE", "COFFEE", "RESTAURANT", "RESTURAUNT", "GRILL", "PIZZA", "BURGER", "KFC", "MCDONALD", "STARBUCKS", "TIM HORTONS", "SHAWARMA", "BAKERY", "WHIPPY", "SNACK", "ANGAARA", "KITCHEN", "\\bRES$"),
+        GROCERIES to listOf("CARREFOUR", "LULU", "SUPERMARKE", "SUPERM", "HYPERMA", "HYPMKT", "MINIMART", "GROCERY", "UNION COOP", "SPINNEYS", "CHOITHRAMS", "WAITROSE", "GRANDIOSE", "WEST ZONE", "MORE VALUE", "AL MAYA", "NESTO", "VIVA", "KIBSONS", "AMAZON NOW", "INSTASHOP", "CIRCLE K", "MINI MAR", "MINI STORE"),
         ENTERTAINMENT to listOf("BIG TICKET", "MAGIC PLANET", "CINEMA", "VOX", "REEL", "NOVO", "OSN", "NETFLIX", "SPOTIFY", "SHAHID", "ANGHAMI", "GAMES", "PLAYSTATION", "STEAM", "APPLE\\.COM", "GOOGLE"),
         TRAVEL to listOf("AGODA", "BOOKING\\.COM", "EXPEDIA", "FLYDUBAI", "EMIRATES AIRLINE", "ETIHAD", "AIR ARABIA", "AIRLINE", "HOTEL", "HOLIDAY IN", "AIRBNB", "TICKET", "RAHAT"),
         HEALTH to listOf("PHARMACY", "PHARMA", "HOSPITAL", "CLINIC", "MEDICAL", "SPECIALITY HO", "DENTAL", "ASTER", "LIFE PHARMACY", "BOOTS"),
@@ -78,11 +81,28 @@ object CategoryRules {
         keywords.map { (id, words) -> id to Regex(words.joinToString("|") { "(?:$it)" }, RegexOption.IGNORE_CASE) }
     }
 
+    /**
+     * Extra category words from the signed rules file ("categories"). Used only for a name the built-in keywords left in
+     * Other, so a published word can never move something the app already files, and your own choices still come first.
+     */
+    private var packWords: List<Pair<Long, Regex>> = emptyList()
+    var packKeywordsVersion: Int = 0
+        private set
+
+    fun setPackKeywords(list: List<Pair<Long, List<String>>>, version: Int) {
+        packWords = list.flatMap { (id, words) -> words.map { w -> id to Regex("(?<![A-Z0-9])" + Regex.escape(w.uppercase().trim()), RegexOption.IGNORE_CASE) } }
+        packKeywordsVersion = if (packWords.isEmpty()) 0 else version
+    }
+
+    /** The categories a pack word may file under (spending categories only). */
+    val packCategoryIds: Set<Long> = setOf(GROCERIES, DINING, TRANSPORT, UTILITIES, SHOPPING, TRAVEL, HEALTH, ENTERTAINMENT, GOVERNMENT, EDUCATION, INSURANCE)
+
     /** Best guess for a merchant; null only for non-spending transactions. */
     fun guess(merchant: String, type: TxnType): Long? {
         if (type != TxnType.PURCHASE && type != TxnType.REFUND) return null
         if (merchant.equals("Cashback", true) || merchant.startsWith("FAB Rewards", true)) return OTHER
-        return compiled.firstOrNull { it.second.containsMatchIn(merchant) }?.first ?: OTHER
+        compiled.firstOrNull { it.second.containsMatchIn(merchant) }?.first?.let { return it }
+        return packWords.firstOrNull { it.second.containsMatchIn(merchant) }?.first ?: OTHER
     }
 
     /** Generic SMS texts that say nothing about who was paid ("Account debit (EMI / direct debit)", "Outward remittance"). */

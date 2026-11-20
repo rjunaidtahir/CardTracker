@@ -1,0 +1,41 @@
+name: QA field-reading models (manual)
+
+# Tests small pretrained token taggers (merchant) on banks they have not seen. Nothing here ships in the app.
+on:
+  workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['tools/qa_field/**', '.github/workflows/qa-field.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  field:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Dump the merchant set
+        run: |
+          chmod +x gradlew
+          ./gradlew :shared:testDebugUnitTest --tests '*MerchantSetDump*' --no-daemon -i 2>&1 | tee dump.log || true
+          grep -h '^ *MSET {' dump.log | sed 's/^ *//' > mset.jsonl
+          wc -l mset.jsonl
+          grep -h 'MSETSUM' dump.log | sed 's/^ *//' | sort -u
+      - name: Install CPU PyTorch + transformers
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "transformers==4.46.3" "numpy<2" sentencepiece protobuf
+      - name: Run
+        run: |
+          python3 tools/qa_field/eval_field.py mset.jsonl 2>&1 | tee eval-field.log
+          cat qa-field-report.md >> "$GITHUB_STEP_SUMMARY"

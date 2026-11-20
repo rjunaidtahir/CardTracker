@@ -56,6 +56,13 @@ jobs:
         if: always()
         run: python3 .github/scripts/report.py
 
+      - name: Keep database schemas
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: schemas
+          path: app/schemas/
+
       - name: Keep reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -79,3 +86,16 @@ jobs:
           gh release create "build-${{ github.run_number }}" Fils-v${VER}-build${{ github.run_number }}.apk \
             --title "Fils v${VER} (build ${{ github.run_number }})" \
             --notes "Built from commit ${{ github.sha }}. Tap the .apk below to download and install."
+
+      - name: Publish beta APK as a pre-release (engine-* branches only)
+        if: startsWith(github.ref_name, 'engine-')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./gradlew assembleBeta --no-daemon
+          VER=$(grep -oP 'versionName = "\K[^"]+' app/build.gradle.kts)
+          F=Fils-Beta-v${VER}-build${{ github.run_number }}.apk
+          cp app/build/outputs/apk/beta/app-beta.apk "$F"
+          gh release create "beta-${{ github.run_number }}" "$F" --prerelease \
+            --title "Fils Beta v${VER} (build ${{ github.run_number }}, ${{ github.ref_name }})" \
+            --notes "Test build from ${{ github.ref_name }} @ ${{ github.sha }}. Installs next to the Play app as 'Fils Beta'. Not for Play."

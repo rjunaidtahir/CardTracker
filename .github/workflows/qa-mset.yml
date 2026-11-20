@@ -1,0 +1,23 @@
+name: QA merchant set dump (manual)
+on:
+  workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['shared/src/commonTest/kotlin/com/uaefinancial/tracker/intel/MerchantSetDump.kt', '.github/workflows/qa-mset.yml']
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Report
+        run: |
+          chmod +x gradlew
+          ./gradlew :shared:testDebugUnitTest --tests '*MerchantSetDump*' --no-daemon -i 2>&1 | tee mset.log || true
+          grep -h 'MSET' mset.log | sed 's/^ *//' | tee mset.txt

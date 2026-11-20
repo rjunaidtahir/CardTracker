@@ -35,13 +35,18 @@ class TrackerApp : Application() {
         SmsParser.setCustomSenders(prefs.senderCache)
         SmsParser.setExcludedBanks(prefs.excludedBanks)
         repo.onSendersChanged = { prefs.senderCache = it }
-        repo.onShape = { sender, bank, body, kind -> com.uaefinancial.tracker.learn.Learning.queue(this, prefs, sender, bank, body, kind) }
+        repo.onShape = { sender, bank, body, kind, merchant -> com.uaefinancial.tracker.learn.Learning.queue(this, prefs, sender, bank, body, kind, merchant) }
+        repo.onCategory = { sender, bank, body, merchant, type, from, to, all ->
+            com.uaefinancial.tracker.learn.Learning.queueCategory(this, prefs, sender, bank, body, merchant, type, from, to, all)
+        }
+        repo.onOtherMerchant = { merchant, type -> com.uaefinancial.tracker.learn.Learning.queueMerchant(this, prefs, merchant, type) }
         com.uaefinancial.tracker.learn.RulesUpdater.loadSaved(this, prefs)
         LiveListening.reconcile(this, prefs)
         if (prefs.remindersEnabled) DueReminders.setEnabled(this, true)
         appScope.launch { runCatching { com.uaefinancial.tracker.learn.RulesUpdater.checkIfDue(this@TrackerApp, prefs) } }
         appScope.launch {
             runCatching { repo.ensureDefaults() }
+            runCatching { repo.adoptTrackedCandidates() }
             runCatching { repo.loadLearned() }
             // A newer reading engine: read every stored message again once, so Needs review and wrongly read messages
             // benefit from it (and a message now recognised as a one-time code is deleted).
@@ -52,6 +57,9 @@ class TrackerApp : Application() {
                 }
                 runCatching { repo.autoFillCardDays() }
             }
+            // Build the on-device models once, off the main thread, then double-check what the rules read.
+            runCatching { com.uaefinancial.tracker.intel.MessageIntel.warmUp() }
+            runCatching { repo.updateSecondOpinions() }
             // Only after the re-read above, so a message the new engine can now read is never reported as unread.
             if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { repo.queueUnreadForLearning() }
         }

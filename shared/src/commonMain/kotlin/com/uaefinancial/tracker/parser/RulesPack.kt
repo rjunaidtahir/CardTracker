@@ -4,6 +4,9 @@ package com.uaefinancial.tracker.parser
  * The signed rules file: new banks (names, sender IDs) and reading rules, as DATA. The apps download it, check its
  * signature (platform code), and hand the text to [parse]; nothing in it is ever run as code.
  *
+ * A bank entry with "track": true also makes the app treat its senderIds as that bank's own (no app update needed);
+ * if the name is a built-in bank, its verified rules read those messages. IDs: printed names or 3-6 digit codes only.
+ *
  * Beyond bank rules the file can carry "ignore" (label + pattern: kinds of messages that are not transactions, refused
  * if they would hide an ordinary purchase) and "words" ({"debit":[…],"credit":[…],"transfer":[…]}: single words a bank
  * uses that the built-in wording lists do not know). Both are optional.
@@ -40,6 +43,7 @@ object RulesPack {
     data class Pack(
         val version: Int, val banks: List<GlobalBanks.DirBank>, val rules: List<PackRule>,
         val ignore: List<IgnoreRule> = emptyList(), val words: Words = Words(),
+        val categories: List<Pair<Long, List<String>>> = emptyList(),
     )
 
     sealed class Outcome {
@@ -69,7 +73,13 @@ object RulesPack {
             val ids = strings(m["senderIds"], 20, 30) ?: return Outcome.Rejected("bank $name: bad sender IDs")
             // A sender ID of two letters or fewer would match far too much.
             if (ids.any { SmsParser.normalizeSender(it).length < 3 }) return Outcome.Rejected("bank $name: sender ID too short")
-            banks += GlobalBanks.DirBank(name, country, aliases, ids)
+            val track = m["track"] == true
+            if (track) {
+                if (ids.isEmpty()) return Outcome.Rejected("bank $name: tracked but no sender IDs")
+                // Tracked IDs must be a printed sender name or a 3-6 digit short code, never a phone number.
+                if (ids.any { !trackableId(it) }) return Outcome.Rejected("bank $name: sender ID not allowed")
+            }
+            banks += GlobalBanks.DirBank(name, country, aliases, ids, track)
         }
 
         val knownNames = (BankRules.banks.map { it.name } + GlobalBanks.banks.map { it.name } + banks.map { it.name })
@@ -119,7 +129,53 @@ object RulesPack {
         val creditW = wordList("credit") ?: return Outcome.Rejected("bad credit words")
         val transferW = wordList("transfer") ?: return Outcome.Rejected("bad transfer words")
 
-        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW)))
+        // ---- category words: plain shop-name words (never patterns) for names the built-in keywords file under Other
+        val categories = mutableListOf<Pair<Long, List<String>>>()
+        val catList = o["categories"] as? List<*> ?: emptyList<Any?>()
+        if (catList.size > MAX_CATEGORY_GROUPS) return Outcome.Rejected("too many category groups")
+        var wordTotal = 0
+        for (c in catList) {
+            val m = c as? Map<*, *> ?: return Outcome.Rejected("bad category entry")
+            val name = (m["category"] as? String)?.trim() ?: return Outcome.Rejected("category entry without a category")
+            val id = CategoryRules.defaults.firstOrNull { it.name.equals(name, ignoreCase = true) }?.id?.takeIf { it in CategoryRules.packCategoryIds }
+                ?: return Outcome.Rejected("category not allowed: $name")
+            val raw = m["words"] as? List<*> ?: return Outcome.Rejected("category $name: no words")
+            val words = raw.map { w -> checkCategoryWord(w as? String) ?: return Outcome.Rejected("category $name: bad word") }
+            wordTotal += words.size
+            if (wordTotal > MAX_CATEGORY_WORDS) return Outcome.Rejected("too many category words")
+            categories += id to words
+        }
+
+        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories))
+    }
+
+    private const val MAX_CATEGORY_GROUPS = 40
+    private const val MAX_CATEGORY_WORDS = 3000
+
+    /** Words so common that a shop-name keyword made of them would catch unrelated names. */
+    private val genericCategoryWords = setOf(
+        "STORE", "STORES", "SHOP", "SHOPS", "MARKET", "TRADING", "CENTER", "CENTRE", "GROUP", "LLC", "FZE", "FZCO", "EST", "COMPANY",
+        "SERVICES", "SERVICE", "DUBAI", "ABU DHABI", "SHARJAH", "AJMAN", "UAE", "AL", "THE", "AND", "INTERNATIONAL", "GENERAL", "BRANCH",
+    )
+
+    /** The word tidied (upper case), or null when it is not an acceptable shop-name keyword. */
+    internal fun checkCategoryWord(w: String?): String? {
+        val s = w?.trim()?.uppercase()?.replace(Regex("\\s+"), " ") ?: return null
+        if (s.length !in 4..30) return null
+        if (!Regex("[A-Z0-9][A-Z0-9 &'.-]*").matches(s)) return null
+        if (s.count { it.isLetter() } < 4) return null
+        if (s in genericCategoryWords) return null
+        return s
+    }
+
+    private val trackName = Regex("[A-Za-z][A-Za-z0-9._& -]{2,29}")
+    private val trackCode = Regex("[0-9]{3,6}")
+
+    internal fun trackableId(id: String): Boolean {
+        val s = id.trim()
+        if (trackCode.matches(s)) return true
+        if (!trackName.matches(s)) return false
+        return s.count { it.isDigit() } <= s.length / 2
     }
 
     /** Null when the pattern is acceptable, otherwise why not. */
@@ -148,8 +204,10 @@ object RulesPack {
     /** Puts [pack] to work (or clears it, with null). */
     fun apply(pack: Pack?) {
         GlobalBanks.setExtra(pack?.banks.orEmpty())
+        SmsParser.setPackSenders(pack?.banks.orEmpty().filter { it.track }.associate { it.name to it.senderIds })
         SmsParser.setPackRules(pack?.rules.orEmpty().groupBy({ it.bank.trim().lowercase() }, { it.rule }))
         SmsParser.setPackIgnore(pack?.ignore.orEmpty())
+        CategoryRules.setPackKeywords(pack?.categories.orEmpty(), pack?.version ?: 0)
         SmartParser.setExtraWords(pack?.words?.debit.orEmpty(), pack?.words?.credit.orEmpty(), pack?.words?.transfer.orEmpty())
     }
 }

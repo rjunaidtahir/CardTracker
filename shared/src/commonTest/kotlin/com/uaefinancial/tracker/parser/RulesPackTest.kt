@@ -109,3 +109,63 @@ class RulesPackTest {
         SmsParser.setCustomSenders(emptyMap())
     }
 }
+
+class PackTrackedSendersTest {
+    @AfterTest fun reset() { RulesPack.apply(null) }
+
+    private fun pack(banks: String) = """{"version":9,"banks":$banks,"rules":[]}"""
+
+    @Test fun packTracksANewSenderWithoutAnAppUpdate() {
+        assertEquals(null, SmsParser.bankFor("NewPayCo"))
+        val out = RulesPack.parse(pack("""[{"name":"NewPayCo","country":"AE","senderIds":["NewPayCo"],"track":true}]"""))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        assertEquals("NewPayCo", SmsParser.bankFor("NewPayCo")?.name)
+        assertEquals("NewPayCo", SmsParser.bankFor("AD-NewPayCo")?.name)
+        assertTrue(SmsParser.isPackSender("NewPayCo"))
+        RulesPack.apply(null)
+        assertEquals(null, SmsParser.bankFor("NewPayCo"))
+    }
+
+    @Test fun trackedSenderOfABuiltInBankUsesItsVerifiedRules() {
+        val out = RulesPack.parse(pack("""[{"name":"ADCB","country":"AE","senderIds":["ZZCardUnit"],"track":true}]"""))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        assertEquals("ADCB", SmsParser.bankFor("ZZCardUnit")?.name)
+    }
+
+    @Test fun simplyLifeAndTabbyAreKnown() {
+        assertEquals("ADCB", SmsParser.bankFor("SIMPLYLIFE")?.name)
+        assertEquals("Tabby", SmsParser.bankFor("Tabby")?.name)
+        val r = SmsParser.parse("SIMPLYLIFE", "Your Cr.Card XXX5886 was used for USD30.60 on 04/08/2023 11:04:30 at OW *passcert.com,London-GB. Avl. Cr.limit is AED2882.95", 0L)
+        assertIs<ParseResult.Transaction>(r)
+    }
+
+    @Test fun userExclusionAndBuiltInsStillWin() {
+        val out = RulesPack.parse(pack("""[{"name":"ADCB","country":"AE","senderIds":["ADCBAlert"],"track":true},{"name":"NewPayCo","country":"AE","senderIds":["NewPayCo"],"track":true}]"""))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        SmsParser.setExcludedBanks(setOf("NewPayCo"))
+        try {
+            assertEquals(null, SmsParser.bankFor("NewPayCo"))
+            assertEquals("NewPayCo", SmsParser.anyBankFor("NewPayCo")?.name)
+        } finally { SmsParser.setExcludedBanks(emptySet()) }
+    }
+
+    @Test fun rejectsPhoneNumbersAndTinyIds() {
+        fun rejected(ids: String) = assertIs<RulesPack.Outcome.Rejected>(
+            RulesPack.parse(pack("""[{"name":"X Pay","country":"AE","senderIds":$ids,"track":true}]""")), ids)
+        rejected("""["+971501234567"]""")
+        rejected("""["971501234567"]""")
+        rejected("""["AB"]""")
+        rejected("""["12"]""")
+        rejected("[]")
+        assertIs<RulesPack.Outcome.Ok>(RulesPack.parse(pack("""[{"name":"X Pay","country":"PK","senderIds":["8258"],"track":true}]""")))
+    }
+
+    @Test fun shippedPackParsesAndTracksTabbyAndSimplyLife() {
+        // The same text as rules/pack.json banks section.
+        val out = RulesPack.parse(pack("""[{"name":"Tabby","country":"AE","senderIds":["Tabby"],"track":true},{"name":"ADCB","country":"AE","aliases":["SimplyLife"],"senderIds":["SIMPLYLIFE"],"track":true},{"name":"Tamara","country":"AE"}]"""))
+        assertIs<RulesPack.Outcome.Ok>(out)
+    }
+}

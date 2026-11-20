@@ -17,6 +17,8 @@ object GlobalBanks {
         val country: String,
         val aliases: List<String> = emptyList(),
         val senderIds: List<String> = emptyList(),
+        /** From the signed rules file only: the app treats these sender IDs as this bank's (see SmsParser.setPackSenders). */
+        val track: Boolean = false,
     )
 
     val countries: List<Country> = listOf(
@@ -173,7 +175,14 @@ object GlobalBanks {
     /** Banks added by the signed rules file (see RulesPack). Replaces the previous set. */
     fun setExtra(list: List<DirBank>) { extra = list }
 
-    fun all(): List<DirBank> = banks + extra
+    /** Built-in and rules-file banks; a bank named in both appears once, with the aliases and sender IDs of both. */
+    fun all(): List<DirBank> =
+        if (extra.isEmpty()) banks
+        else (banks + extra).groupBy { it.name.trim().lowercase() }.values.map { g ->
+            if (g.size == 1) g[0] else g[0].copy(
+                aliases = g.flatMap { it.aliases }.distinct(), senderIds = g.flatMap { it.senderIds }.distinct(), track = g.any { it.track },
+            )
+        }
 
     fun forCountry(code: String?): List<DirBank> =
         if (code == null) emptyList() else all().filter { it.country.equals(code, ignoreCase = true) }

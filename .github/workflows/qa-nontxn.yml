@@ -1,0 +1,31 @@
+name: QA not-a-transaction sorter (manual)
+
+# Tiny sorter measured on the owner's masked export (encrypted in the repo; key in the QA_DATA_KEY secret). Stdlib only.
+on:
+  workflow_dispatch:
+  push:
+    branches: [engine-ai-layers]
+    paths: ['tools/qa_nontxn/**', '.github/workflows/qa-nontxn.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  nontxn:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Decrypt the export
+        env:
+          QA_DATA_KEY: ${{ secrets.QA_DATA_KEY }}
+        run: |
+          test -n "$QA_DATA_KEY" || { echo "QA_DATA_KEY secret is not set"; exit 1; }
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:QA_DATA_KEY -in tools/qa/data/real_masked.enc | gunzip > export.txt
+      - name: Run
+        run: |
+          python3 tools/qa_nontxn/eval_nontxn.py export.txt 2>&1 | tee nontxn.log
+          cat qa-nontxn-report.md >> "$GITHUB_STEP_SUMMARY"

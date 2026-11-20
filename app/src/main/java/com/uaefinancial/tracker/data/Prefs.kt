@@ -31,6 +31,34 @@ class Prefs(context: Context) {
         get() = sp.getLong(KEY_LAST_SYNC, -1L).takeIf { it >= 0 }
         set(v) { sp.edit { putLong(KEY_LAST_SYNC, v ?: -1L) } }
 
+    /** The on-device second opinion check (internal; no screen shows it). Off unless switched on in code. */
+    var aiSecondOpinion: Boolean
+        get() = sp.getBoolean("ai_second_opinion", false)
+        set(v) { sp.edit { putBoolean("ai_second_opinion", v) } }
+
+    /**
+     * Lets the small on-device merchant reader fill in a purchase whose merchant no pattern found (marked "Check this").
+     * Internal; no screen shows it. On by default; with it off the app shows the placeholder, as before.
+     */
+    var aiMerchantFill: Boolean
+        get() = sp.getBoolean("ai_merchant_fill", true)
+        set(v) { sp.edit { putBoolean("ai_merchant_fill", v) } }
+
+    /** Shop names waiting to be sent (names-only report), as "hash<US>name". Newest last, capped. */
+    var merchantQueue: List<String>
+        get() = (sp.getString("merchant_queue", "") ?: "").split('\u001e').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("merchant_queue", v.takeLast(300).joinToString("\u001e")) } }
+
+    /** "epochDay:count" of shop names sent today (own cap, so they never crowd out the other reports). */
+    var sentMerchantsToday: String
+        get() = sp.getString("sent_merchants_today", "") ?: ""
+        set(v) { sp.edit { putString("sent_merchants_today", v) } }
+
+    /** Which category keyword set the stored "Other" rows were last re-checked against (see Repository.reapplyAutoCategories). */
+    var categoryKeywordsApplied: String
+        get() = sp.getString("category_keywords_applied", "") ?: ""
+        set(v) { sp.edit { putString("category_keywords_applied", v) } }
+
     /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
         get() = sp.getBoolean(KEY_LIVE, true)
@@ -183,7 +211,7 @@ class Prefs(context: Context) {
     /** Hashes of shapes already sent (so the same shape is never sent twice), newest last, capped. */
     var sentShapeHashes: List<String>
         get() = (sp.getString("sent_shapes", "") ?: "").split(',').filter { it.isNotEmpty() }
-        set(v) { sp.edit { putString("sent_shapes", v.takeLast(300).joinToString(",")) } }
+        set(v) { sp.edit { putString("sent_shapes", v.takeLast(2000).joinToString(",")) } }
 
     /** The last few shapes sent, so More → Settings can show exactly what leaves the phone. */
     var recentShared: List<String>
@@ -198,7 +226,15 @@ class Prefs(context: Context) {
     /** Shapes waiting to be sent: "hash<US>bank<US>country<US>kind<US>shape". Held until consent is on. */
     var shapeQueue: List<String>
         get() = (sp.getString("shape_queue", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
-        set(v) { sp.edit { putString("shape_queue", v.takeLast(20).joinToString("\u001E")) } }
+        set(v) { sp.edit { putString("shape_queue", v.takeLast(200).joinToString("\u001E")) } }
+
+    /**
+     * Messages that could not be masked safely (so were never sent), counted per day, bank and reason: "epochDay<US>bank<US>reason<US>count"
+     * lines joined by RS. Only the count and the fixed reason ("digits left", "mostly unknown words" ...) are ever reported, never any text.
+     */
+    var unmaskCounts: List<String>
+        get() = (sp.getString("unmask_counts", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("unmask_counts", v.takeLast(200).joinToString("\u001E")) } }
 
     // --- rules file
     /** Newest version of the signed rules file this phone accepted; 0 = none. */

@@ -157,6 +157,7 @@ fun TransactionsScreen(
     excluded: Set<String>,
     txns: List<TransactionEntity>,
     syncing: Boolean,
+    syncProgress: Pair<Int, Int>? = null,
     lastSyncAt: Long?,
     liveOn: Boolean,
     onSync: () -> Unit,
@@ -188,7 +189,7 @@ fun TransactionsScreen(
                 Column(Modifier.weight(1f)) {
                     Text(
                         when {
-                            syncing -> "Importing bank messages…"
+                            syncing -> syncProgress?.takeIf { it.second > 0 }?.let { "Importing: ${it.first} of ${it.second} messages…" } ?: "Importing bank messages…"
                             lastSyncAt == null -> "Not synced yet: tap ↻ to import"
                             else -> "Synced ${fmtDateTime(lastSyncAt)}"
                         },
@@ -462,6 +463,7 @@ internal fun TransactionRow(
                             com.uaefinancial.tracker.core.Checks.Kind.DUPLICATE -> "possible duplicate"
                             com.uaefinancial.tracker.core.Checks.Kind.UNUSUAL -> "unusually large"
                             com.uaefinancial.tracker.core.Checks.Kind.RESIDUAL -> "a small amount is unaccounted for"
+                            com.uaefinancial.tracker.core.Checks.Kind.INCOMPLETE -> "incomplete reading"
                         },
                         style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.sp), color = Ink.amber, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )

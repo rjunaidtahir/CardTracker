@@ -9,7 +9,7 @@ import kotlin.math.abs
  * Kept in `shared/` so both apps check the same way.
  */
 object Checks {
-    enum class Kind { BALANCE, DUPLICATE, UNUSUAL, RESIDUAL }
+    enum class Kind { BALANCE, DUPLICATE, UNUSUAL, RESIDUAL, INCOMPLETE }
 
     data class Flag(val kind: Kind, val message: String)
 
