@@ -63,6 +63,7 @@ class RealMaskedReaderMeasureTest {
         }
         val gold = rows.filter { it.kind != "UNREAD" && (it.source in setOf("rule", "pack", "user-fix") || (it.kind == "NOT_TXN" && it.source == "none")) }
         val out = StringBuilder()
+        val detail = StringBuilder() // wrong answers with their wording: written to a file that the workflow encrypts, never printed
         out.append("## Reader measurement on the real masked messages\n\n")
         out.append("${rows.size} distinct shapes in the export; ${gold.size} have a trusted answer (verified rule, signed pack, your fix, or a not-a-transaction decision). ")
         out.append("Counts are distinct wordings; \"by messages\" counts every message that shares the wording (right / wrong / unanswered).\n\n")
@@ -73,6 +74,7 @@ class RealMaskedReaderMeasureTest {
             val perBankMerchant = sortedMapOf<String, Tally>()
             val confusion = sortedMapOf<String, Int>()
             val faults = sortedMapOf<String, IntArray>() // which rule (an id from our own code, never message text) produced each wrong answer
+            fun note(r: Row, got: String, rid: String) { detail.append("$path2\t${r.bank}\t${r.kind}\t$got\t$rid\t${r.n}\t${r.shape}\n") }
             fun fault(key: String, w: Int) { val a = faults.getOrPut(key) { IntArray(2) }; a[0]++; a[1] += w }
             fun tally(k: String) = t.getOrPut(k) { Tally() }
             for (r in gold) {
@@ -88,15 +90,15 @@ class RealMaskedReaderMeasureTest {
                 if (r.kind == "NOT_TXN") {
                     val st = if (answered) 0 else 1 // a made-up transaction is wrong; ignoring it is right
                     tally("not-a-transaction (should NOT become a transaction)").add(st, w)
-                    if (answered) { confusion["NOT_TXN -> $label"] = (confusion["NOT_TXN -> $label"] ?: 0) + 1; fault("${r.bank} | not-a-transaction -> $label | rule=$rid", w) }
+                    if (answered) { note(r, "NOT_TXN->$label", rid); confusion["NOT_TXN -> $label"] = (confusion["NOT_TXN -> $label"] ?: 0) + 1; fault("${r.bank} | not-a-transaction -> $label | rule=$rid", w) }
                     continue
                 }
                 val kindState = if (!answered) -1 else if (label == r.kind) 1 else 0
                 tally("kind of message (6 kinds)").add(kindState, w)
                 tally("kind, ${r.kind}").add(kindState, w)
                 perBankKind.getOrPut(r.bank) { Tally() }.add(kindState, w)
-                if (answered && label != r.kind) { confusion["${r.kind} -> $label"] = (confusion["${r.kind} -> $label"] ?: 0) + 1; fault("${r.bank} | ${r.kind} -> $label | rule=$rid", w) }
-                if (!answered) fault("${r.bank} | ${r.kind} -> unanswered | rule=-", w)
+                if (answered && label != r.kind) { note(r, "$label", rid); confusion["${r.kind} -> $label"] = (confusion["${r.kind} -> $label"] ?: 0) + 1; fault("${r.bank} | ${r.kind} -> $label | rule=$rid", w) }
+                if (!answered) { note(r, "unanswered", "-"); fault("${r.bank} | ${r.kind} -> unanswered | rule=-", w) }
                 val gd = dir(r.kind)
                 if (gd == "out" || gd == "in") tally("money out vs in").add(if (!answered || dir(label) == "none") -1 else if (dir(label) == gd) 1 else 0, w)
                 if (r.kind != "STATEMENT") {
@@ -136,6 +138,7 @@ class RealMaskedReaderMeasureTest {
         val text = out.toString()
         File("build").mkdirs()
         File("build/qa-reader-report.md").writeText(text)
+        File("build/qa-reader-detail.txt").writeText(detail.toString())
         text.lines().forEach { println("READER $it") }
     }
 }

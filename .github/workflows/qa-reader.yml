@@ -40,3 +40,19 @@ jobs:
           wc -l reader-report.md
           echo '=====REPORT====='
           cat reader-report.md
+      - name: Encrypt the wording-level detail (only the project owner's private key opens it)
+        if: always()
+        run: |
+          test -f app/build/qa-reader-detail.txt || { echo "no detail file"; exit 0; }
+          openssl rand -hex 32 > k.txt
+          openssl enc -aes-256-cbc -pbkdf2 -pass file:k.txt -in app/build/qa-reader-detail.txt -out detail.enc
+          openssl pkeyutl -encrypt -pubin -inkey tools/qa/data/qa_detail_pub.pem -in k.txt -out k.enc
+          rm -f k.txt app/build/qa-reader-detail.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reader-detail-encrypted
+          path: |
+            detail.enc
+            k.enc
+          retention-days: 3
