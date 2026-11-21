@@ -148,7 +148,8 @@ object Masker {
             when {
                 w.startsWith("{") -> w
                 lw in whitelist || lw in keep || lw in abbreviations -> w
-                previous in nameLeads -> "{TEXT}"
+                // "to Hope Smith": the whole run of non-banking words after the lead is a name, so "Smith" goes too.
+                previous in nameLeads -> { prev = "name"; "{TEXT}" }
                 CommonWords.isCommon(w) -> { ordinaryKept++; w }
                 else -> "{TEXT}"
             }
