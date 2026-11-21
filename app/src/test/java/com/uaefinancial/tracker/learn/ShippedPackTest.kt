@@ -3,6 +3,7 @@ package com.uaefinancial.tracker.learn
 import com.uaefinancial.tracker.parser.ParseResult
 import com.uaefinancial.tracker.parser.RulesPack
 import com.uaefinancial.tracker.parser.SmsParser
+import com.uaefinancial.tracker.parser.TxnType
 import java.io.File
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -114,7 +115,7 @@ class ShippedPackTest {
         val out = RulesPack.parse(file.readText(), currentVersion = 4) as RulesPack.Outcome.Ok
         assertTrue(out.pack.version >= 12)
         RulesPack.apply(out.pack)
-        fun txn(sender: String, text: String, type: com.uaefinancial.tracker.parser.TxnType, amount: String) {
+        fun txn(sender: String, text: String, type: TxnType, amount: String) {
             val r = SmsParser.parse(sender, text, 0L)
             assertIs<ParseResult.Transaction>(r, "$sender should be read: $text -> $r")
             assertEquals(type, r.txn.type, text)
@@ -124,15 +125,14 @@ class ShippedPackTest {
             val r = SmsParser.parse(sender, text, 0L)
             assertIs<ParseResult.Ignored>(r, "$sender should be hidden: $text -> $r")
         }
-        val tp = com.uaefinancial.tracker.parser.TxnType
-        txn("ADIB", "Trx. of AED 36.50 on your card ending 1234 at ONE-TIME PAY, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", tp.PURCHASE, "36.50")
-        txn("ADIB", "Trx. of AED 80.00 on your card ending 1234 at CARREFOUR, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", tp.PURCHASE, "80")
-        txn("ENBD", "Dear Customer, the cheque number 123456 for AED 1,500.00 has been debited from account 101-12345-01 on 17/11/2026 10:20.", tp.TRANSFER_OUT, "1500")
-        txn("ENBD", "Dear Customer, the cheque number 123456 for AED 1,500.00 has been debited from account 101-12345-01 on 17/11/2026 10:20.Available Balance AED 5,000.00", tp.TRANSFER_OUT, "1500")
-        txn("KOTAKB", "INR 500.00 sent from Kotak Bank ac X1234 and credited to Kotak ac X5678 on 17-11-26 10.20 AM. UTR- 123456789012. Bal:INR 1,000.00. Use kotak.com for help. PAY A CONTACT via kotak.com", tp.TRANSFER_OUT, "500")
-        txn("KOTAKB", "Fund transfer of INR 750.00 to JOHN DOE from Kotak Bank A/c X123456 scheduled on 17-11-26 has been executed on 17-11-26. Ref No. 12345678.", tp.TRANSFER_OUT, "750")
-        txn("IDFCFB", "INR 100.00 paid from IDFC FIRST Bank A/c X1234 for UPI ref no. 5678 at SOME SHOP on 17-Nov-2026 10:20. Thank you. Bal.: INR 2,000.00.", tp.PURCHASE, "100")
-        txn("Wio", "We made an autopay of AED 250.00 towards your Wio Credit balance.", tp.PAYMENT, "250")
+        txn("ADIB", "Trx. of AED 36.50 on your card ending 1234 at ONE-TIME PAY, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", TxnType.PURCHASE, "36.50")
+        txn("ADIB", "Trx. of AED 80.00 on your card ending 1234 at CARREFOUR, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", TxnType.PURCHASE, "80")
+        txn("ENBD", "Dear Customer, the cheque number 123456 for AED 1,500.00 has been debited from account 101-12345-01 on 17/11/2026 10:20.", TxnType.TRANSFER_OUT, "1500")
+        txn("ENBD", "Dear Customer, the cheque number 123456 for AED 1,500.00 has been debited from account 101-12345-01 on 17/11/2026 10:20.Available Balance AED 5,000.00", TxnType.TRANSFER_OUT, "1500")
+        txn("KOTAKB", "INR 500.00 sent from Kotak Bank ac X1234 and credited to Kotak ac X5678 on 17-11-26 10.20 AM. UTR- 123456789012. Bal:INR 1,000.00. Use kotak.com for help. PAY A CONTACT via kotak.com", TxnType.TRANSFER_OUT, "500")
+        txn("KOTAKB", "Fund transfer of INR 750.00 to JOHN DOE from Kotak Bank A/c X123456 scheduled on 17-11-26 has been executed on 17-11-26. Ref No. 12345678.", TxnType.TRANSFER_OUT, "750")
+        txn("IDFCFB", "INR 100.00 paid from IDFC FIRST Bank A/c X1234 for UPI ref no. 5678 at SOME SHOP on 17-Nov-2026 10:20. Thank you. Bal.: INR 2,000.00.", TxnType.PURCHASE, "100")
+        txn("Wio", "We made an autopay of AED 250.00 towards your Wio Credit balance.", TxnType.PAYMENT, "250")
         hidden("KOTAKB", "Fund transfer of INR 750.00 to JOHN DOE Kotak Bank Ac X1234 is scheduled on 20-11-26 Ref: 12345678. If not by you, REPORT FRAUD on kotak.com - Kotak Bank")
         hidden("KOTAKB", "Transaction on your Kotak Bank Credit Card x1234 of INR 100.00 at EMIRATES could not be approved. Please call 18002100 for details.")
         hidden("Wio", "Payment of AED 20.00 at UBER*TRIP HOLD was reversed and the amount has been credited back to your Wio Debit card ending with 1234.")
@@ -173,7 +173,6 @@ class ShippedCategoryWordsTest {
     }
 
     @Test fun builtInFilingIsNeverChangedByThePack() {
-        val tp = com.uaefinancial.tracker.parser.TxnType.PURCHASE
         val names = listOf("CARREFOUR CITY", "EPPCO SITE 91", "GAZANIA RESTAURANT", "AMAZONUFR DI", "ADNOC 1234", "NOON FOOD", "DEWA", "SALIK", "TALABAT", "LULU HYPERMARKET")
         val before = names.map { com.uaefinancial.tracker.parser.CategoryRules.guess(it, tp) }
         val out = RulesPack.parse(packFile.readText(), currentVersion = 0) as RulesPack.Outcome.Ok
