@@ -173,6 +173,7 @@ class ShippedCategoryWordsTest {
     }
 
     @Test fun builtInFilingIsNeverChangedByThePack() {
+        val tp = com.uaefinancial.tracker.parser.TxnType.PURCHASE
         val names = listOf("CARREFOUR CITY", "EPPCO SITE 91", "GAZANIA RESTAURANT", "AMAZONUFR DI", "ADNOC 1234", "NOON FOOD", "DEWA", "SALIK", "TALABAT", "LULU HYPERMARKET")
         val before = names.map { com.uaefinancial.tracker.parser.CategoryRules.guess(it, tp) }
         val out = RulesPack.parse(packFile.readText(), currentVersion = 0) as RulesPack.Outcome.Ok
