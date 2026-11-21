@@ -1020,7 +1020,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 null -> "error"
                 is com.uaefinancial.tracker.parser.ParseResult.Transaction -> r.txn.type.name
                 is com.uaefinancial.tracker.parser.ParseResult.Statement -> "STATEMENT"
-                else -> "none"
+                // Say why nothing was read (an ignore rule's public label, or the result type), so a miss can be traced from the export.
+                is com.uaefinancial.tracker.parser.ParseResult.Ignored -> "none:" + r.reason.replace(Regex("[\\s\\t]+"), " ").take(40)
+                else -> "none:" + r::class.simpleName
             }
             val now = answer(runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull())
             val generic = answer(runCatching { SmsParser.parseAsBank("Unknown Test Bank", sms.body, sms.receivedAt) }.getOrNull())
