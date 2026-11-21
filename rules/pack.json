@@ -1,6 +1,31 @@
 {
-  "version": 11,
+  "version": 12,
   "minEngine": 5,
+  "sendMore": {
+    "banks": [
+      "Mashreq",
+      "HDFC Bank",
+      "Emirates NBD",
+      "ADCB",
+      "CBD",
+      "Sharjah Islamic Bank",
+      "HSBC",
+      "RAKBANK",
+      "Wio",
+      "ADIB",
+      "Axis Bank",
+      "FAB",
+      "Liv",
+      "Citibank",
+      "Al Hilal",
+      "ICICI Bank",
+      "Kotak Mahindra Bank",
+      "Ajman Bank",
+      "Punjab National Bank",
+      "Discover",
+      "Dubai First"
+    ]
+  },
   "banks": [
     {
       "name": "Tabby",
