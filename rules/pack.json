@@ -338,7 +338,7 @@
       "pattern": "Tabby Card total limit is now increased to [A-Z]{3}\\s*[\\d,.]+"
     },
     {
-      "label": "Statement notice without a due date (credit balance with Min Due)",
+      "label": "Statement notice with no due date",
       "pattern": "\\bCC has a credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*[\\d,.]+\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*[\\d,.]+"
     },
     {

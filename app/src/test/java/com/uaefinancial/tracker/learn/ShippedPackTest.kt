@@ -50,7 +50,7 @@ class ShippedPackTest {
         // the two notices are ignored
         val limit = SmsParser.parse("Tabby", "Your Tabby Card total limit is now increased to AED 3,000.00", 0L)
         assertIs<ParseResult.Ignored>(limit)
-        val zero = out.pack.ignore.first { it.label.startsWith("Statement notice without a due date") }
+        val zero = out.pack.ignore.first { it.label.startsWith("Statement notice with no due date") }
         val re = Regex(zero.pattern, RegexOption.IGNORE_CASE)
         // The notice carries no due date, so the app cannot track it as a statement: it is ignored whatever the amounts are.
         assertTrue(re.containsMatchIn("Your CC Statement for 526039XXXXXX2712 is generated; CC has a credit balance of AED 0 with Min Due AED 0.00")) // the real message
