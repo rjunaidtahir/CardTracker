@@ -214,10 +214,12 @@ object Masker {
                 else -> "{TEXT}"
             }
         }
-        if (loose && !fuller) {
+        if (loose) {
             // A run of two or more unknown capitalised words is a person's name (or a long merchant): hidden. A single one stays.
+            // (fuller: the runs stay too; only the internal markers are removed.)
             val run = Regex("$mark[^$mark]+$mark(?:[\\s,.&/\\-]*$mark[^$mark]+$mark)+")
-            t = t.replace(run, "{TEXT} ").replace(mark.toString(), "")
+            if (!fuller) t = t.replace(run, "{TEXT} ")
+            t = t.replace(mark.toString(), "")
         }
         // Count unknown words before neighbours are merged, so a message full of them is recognised as such.
         val rawWords = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
