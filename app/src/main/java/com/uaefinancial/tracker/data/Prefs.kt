@@ -59,6 +59,11 @@ class Prefs(context: Context) {
         get() = sp.getString("category_keywords_applied", "") ?: ""
         set(v) { sp.edit { putString("category_keywords_applied", v) } }
 
+    /** Set once the messages hidden as "not a transaction" were checked against the reader (see Repository.queueHiddenForLearning). */
+    var hiddenScanDone: String
+        get() = sp.getString("hidden_scan_done", "") ?: ""
+        set(v) { sp.edit { putString("hidden_scan_done", v) } }
+
     /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
         get() = sp.getBoolean(KEY_LIVE, true)

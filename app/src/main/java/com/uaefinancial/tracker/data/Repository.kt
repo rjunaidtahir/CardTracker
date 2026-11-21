@@ -22,6 +22,7 @@ import com.uaefinancial.tracker.parser.Money
 import com.uaefinancial.tracker.parser.ParseResult
 import com.uaefinancial.tracker.parser.CandidateScreen
 import com.uaefinancial.tracker.parser.SmsParser
+import com.uaefinancial.tracker.parser.SmartParser
 import com.uaefinancial.tracker.parser.CategoryRules
 import com.uaefinancial.tracker.parser.LearnedFormats
 import kotlinx.coroutines.sync.Mutex
@@ -195,6 +196,31 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     /** Offers the masked shape of every message waiting in Needs review (nothing is sent unless sharing is on). */
     suspend fun queueUnreadForLearning() {
         for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, "unread", null)
+        queueHiddenForLearning()
+    }
+
+    /**
+     * A message hidden as "not a transaction" (advert, declined, informational...) that the reader would still read as a transaction
+     * or a statement: the wording goes to the accuracy check (kind `hidden:<why>|reader=<TYPE>`; sharing ON; masked like any report) so
+     * a wrongly hidden purchase is found and fixed with a tested change. It stays hidden meanwhile: it is NOT put in Needs review.
+     * Messages that are already stored as ignored are checked once (the scan is remembered); new ones are checked as they arrive.
+     */
+    private fun hiddenKind(bank: String, body: String, receivedAt: Long, why: String?): String? {
+        val r = runCatching { SmartParser.read(bank, SmsParser.normalizeBody(body), receivedAt) }.getOrNull()
+        val what = when (r) { is ParseResult.Transaction -> r.txn.type.name; is ParseResult.Statement -> "STATEMENT"; else -> return null }
+        return "hidden:${(why ?: "ignored").replace('|', '/').take(40)}|reader=$what"
+    }
+
+    suspend fun queueHiddenForLearning() {
+        val version = "v1-e${SmsParser.ENGINE_VERSION}"
+        val p = prefs ?: return
+        if (p.hiddenScanDone == version) return
+        for (m in dao.allSms()) {
+            if (m.status != SmsStatus.IGNORED || m.ruleId != null) continue
+            val bank = m.bank ?: continue
+            hiddenKind(bank, m.body, m.receivedAt, m.note)?.let { onShape?.invoke(m.sender, bank, m.body, it, null) }
+        }
+        p.hiddenScanDone = version
     }
 
     suspend fun ingestSms(
@@ -246,6 +272,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 // Could not be read: offer its masked shape for learning (only if you allowed it). A standing-instruction
                 // message waiting for its account is not unread: its format is known.
                 if (outcome == IngestOutcome.FAILED && !parkedStanding) runCatching { onShape?.invoke(sender, bank.name, body, "unread", null) }
+                if (outcome == IngestOutcome.IGNORED && parsed is ParseResult.Ignored) {
+                    hiddenKind(bank.name, body, receivedAt, parsed.reason)?.let { k -> runCatching { onShape?.invoke(sender, bank.name, body, k, null) } }
+                }
                 // Read only by the generic reader (this bank has no verified rule for the wording): offer the masked shape
                 // too, so every wording of a bank like Tabby reaches the review and can get its own verified rule.
                 // When part of it fell back to a default (no merchant, no card), the record says which part, so the
