@@ -170,11 +170,11 @@ class PackTrackedSendersTest {
     }
 
     @Test fun sendMoreRequestIsParsedAndChecked() {
-        val ok = RulesPack.parse(pack("[]", extra = """"sendMore":{"hashes":["abc123def456"],"banks":["RAKBANK"]},"""))
+        val ok = RulesPack.parse("""{"version":9,"sendMore":{"hashes":["abc123def456"],"banks":["RAKBANK"]},"banks":[],"rules":[]}""")
         assertIs<RulesPack.Outcome.Ok>(ok)
         assertEquals(setOf("abc123def456"), ok.pack.sendMore.hashes)
         assertEquals(setOf("rakbank"), ok.pack.sendMore.banks)
-        assertTrue(RulesPack.parse(pack("[]", extra = """"sendMore":{"hashes":[5]},""")) is RulesPack.Outcome.Rejected)
-        assertTrue(RulesPack.parse(pack("[]")).let { it is RulesPack.Outcome.Ok && it.pack.sendMore.hashes.isEmpty() })
+        assertTrue(RulesPack.parse("""{"version":9,"sendMore":{"hashes":[5]},"banks":[],"rules":[]}""") is RulesPack.Outcome.Rejected)
+        assertTrue(RulesPack.parse("""{"version":9,"banks":[],"rules":[]}""").let { it is RulesPack.Outcome.Ok && it.pack.sendMore.hashes.isEmpty() })
     }
 }
