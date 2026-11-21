@@ -25,7 +25,7 @@ class ShippedPackV11Test {
         assertTrue(!re.containsMatchIn("Transaction on your Kotak Bank Credit Card x1234 of AED 150.00 at EMIRATES has been approved. Avl limit AED 5,000."))
         assertTrue(!re.containsMatchIn("Your Kotak Bank Credit Card x1234 has been debited with AED 150.00 at EMIRATES on 21-11-2026."))
         assertTrue(!re.containsMatchIn("Spent AED 150.00 on your Kotak Bank Credit Card x1234 at EMIRATES. Avl limit AED 5,000."))
-        // no other ignore entry was changed or added
-        assertEquals(28, out.pack.ignore.size - 0 - 1 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 + 0 - 0)
+        // exactly one entry added to the 27 of v10
+        assertEquals(28, out.pack.ignore.size)
     }
 }
