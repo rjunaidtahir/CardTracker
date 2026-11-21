@@ -677,9 +677,13 @@ object SmartParser {
     }
 
     /** "Purchase of AED 5 at X ... statement due on 26/09" is a purchase with a footer, not a statement. */
-    private fun hasPurchaseShape(text: String): Boolean =
-        Regex("""\b(?:purchase|spent|used for|transaction of|debited|paid)\b""", I).containsMatchIn(text) &&
-            (atMerchant.containsMatchIn(text) || Regex("""\bcard\b""", I).containsMatchIn(text))
+    // "Kindly ignore this message, if already paid" ends many payment-due reminders: that "paid" is not a payment that happened.
+    private val notPaidYet = Regex("""\b(?:if\s+)?already\s+paid\b|\bif\s+(?:you\s+have\s+)?(?:already\s+)?paid\b""", I)
+    private fun hasPurchaseShape(text: String): Boolean {
+        val t = notPaidYet.replace(text, " ")
+        return Regex("""\b(?:purchase|spent|used for|transaction of|debited|paid)\b""", I).containsMatchIn(t) &&
+            (atMerchant.containsMatchIn(t) || Regex("""\bcard\b""", I).containsMatchIn(t))
+    }
 
     // ------------------------------------------------------------------ senders
 

@@ -28,4 +28,18 @@ class PaymentInstructionsTest {
         assertTrue(r is ParseResult.Transaction)
         assertEquals(TxnType.PURCHASE, r.txn.type)
     }
+
+    @Test fun paymentDueReminderIsAStatementNotAPurchase() {
+        val t = "Dear Customer, Payment of AED 1,423.09 for credit card ending with (3976) is due on 25 August 2026. Please ensure sufficient funds in your account. Kindly ignore this message, if already paid."
+        for (r in listOf(read(t), SmsParser.parseAsBank("Unknown Test Bank", t, at, zone))) {
+            assertTrue(r is ParseResult.Statement, "not a statement: $r")
+            assertEquals("1423.09", r.statement.statementBalance.toString())
+        }
+    }
+
+    @Test fun aRealPurchaseThatMentionsPaidIsStillAPurchase() {
+        val r = read("Purchase of AED 45.00 on your credit card ending 3976 at ZENITH BAKERY. Paid successfully. Avl limit AED 5,000.00")
+        assertTrue(r is ParseResult.Transaction, "not read: $r")
+        assertEquals(TxnType.PURCHASE, r.txn.type)
+    }
 }
