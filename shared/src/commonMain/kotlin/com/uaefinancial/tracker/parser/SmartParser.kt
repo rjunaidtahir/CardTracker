@@ -263,6 +263,7 @@ object SmartParser {
     private val promoStart = Regex(
         """\b(?:get up to|apply for a|pay [^.]{0,40}\bin \d+ instal|learn more|visit [a-z ]{0,20}page|enjoy |save up to|stay |manage your)""", I,
     )
+    private val manyEvents = Regex("""\b(?:was used for|has been (?:reversed|debited|credited)|purchase of|a purchase)\b""", I)
     internal fun looksLikeAdvert(text: String): Boolean =
         advertAlways.containsMatchIn(text) || (advertUnlessEvent.containsMatchIn(text) && !transactionEvent.containsMatchIn(text))
     private fun refundSignal(text: String): Boolean = refundWord.containsMatchIn(cashbackOffer.replace(text, " "))
@@ -407,6 +408,8 @@ object SmartParser {
         val all = mentions(text)
         if (all.isEmpty()) return null
         if (looksLikeAdvert(text)) return null // goes to Needs review; never recorded as spending
+        // Several different transactions pasted into one message (a forwarded or combined text): reading only the first would lose the rest.
+        if (manyEvents.findAll(text).count() >= 3) return null
         // Only balances / limits (e.g. a balance update): nothing to record.
         if (all.all { it.role == Role.AVAILABLE }) return ParseResult.Ignored(bank, "Balance update")
         val found = dates(text, zone, hasMinimum = all.any { it.role == Role.MINIMUM })

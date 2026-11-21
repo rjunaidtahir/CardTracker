@@ -34,4 +34,15 @@ class ReviewTabFixesTest {
         val t = "لتعزيز الأمان، يستغرق تفعيل المستفيد على تطبيق المشرق موبايل 4 ساعات عند الدخول عبر المقاييس الحيوية و 24 ساعة عند الدخول باسم المستخدم وكلمة المرور. وخلال فترة التفعيل إجراء عمليتي تحويل كحد أقصى بإجمالي 2,000 درهم"
         assertTrue(SmsParser.parseAsBank("Mashreq", t, at, zone) is ParseResult.Ignored)
     }
+
+    @Test fun severalTransactionsInOneTextAreNotReadAsOne() {
+        val t = "An amount of EUR 1.00 has been reversed to your Credit Card XXX2777 on 11/09/2022 13:42:36 by ZORBO. Your Cr.Card XXX2777 was used for EUR 1.00 on 11/09/2022 13:42:36 at ZORBO. Your Cr.Card XXX2777 was used for AED 10768.62 on 11/09/2022 14:30:35 at ZORBO2. Avl. Cr.limit is AED 751.25"
+        assertEquals(null, read(t))
+    }
+
+    @Test fun aSingleReversalIsStillRead() {
+        val r = read("An amount of AED 25.00 has been reversed to your Credit Card XXX2777 on 11/09/2022 13:42:36 by ZORBO. Avl. Cr.limit is AED 751.25")
+        assertTrue(r is ParseResult.Transaction, "not read: $r")
+        assertEquals(TxnType.REFUND, r.txn.type)
+    }
 }
