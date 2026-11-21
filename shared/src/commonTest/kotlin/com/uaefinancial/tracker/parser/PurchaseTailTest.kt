@@ -15,14 +15,20 @@ class PurchaseTailTest {
         "Apply for a 0% EPP on school fees for up to 12 months. Learn more www.example.com T&C apply.",
         "Your August statement payment due date is 25/08/2026 Get up to 30% off at any Zorbo DG Store and online with FAB cards. Learn more www.example.com T&C apply",
         "Your July statement payment due date is 25/07/2026 Get up to 20% cashback on online shopping with ZORBOSMART. Visit Offers Page on the FAB Mobile app",
+        "Save 20% on Zorbo Air flights with FAB till 31/12/2026 www.example.com T&C apply.",
         "Available Balance AED 900.00 Apply for a 0% EPP on school fees for up to 12 months. Learn more www.example.com T&C apply.",
     )
     @Test fun purchaseWithPromotionIsStillAPurchase() {
         val out = tails.map { t ->
             val text = SmsParser.normalizeBody("$head$t")
-            val r = SmartParser.read("Unknown Test Bank", text, at, zone)
-            "${t.take(25)} -> ${r?.let { it::class.simpleName } ?: "null"} advert=${SmartParser.looksLikeAdvert(text)}"
+            val r = SmsParser.parseAsBank("Unknown Test Bank", text, at, zone)
+            "${t.take(25)} -> ${r::class.simpleName}"
         }
-        assertTrue(out.all { !it.contains("-> null") }, out.joinToString("\n"))
+        assertTrue(out.all { it.contains("-> Transaction") }, out.joinToString("\n"))
+    }
+
+    @Test fun aPureAdvertIsStillNotARecordedTransaction() {
+        val r = SmsParser.parseAsBank("Unknown Test Bank", SmsParser.normalizeBody("Enjoy 20% off at Zorbo Bakery with your credit card. Spend AED 500 or more. Learn more www.example.com T&C apply."), at, zone)
+        assertTrue(r !is ParseResult.Transaction, "advert was recorded: $r")
     }
 }

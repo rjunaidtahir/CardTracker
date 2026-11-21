@@ -368,7 +368,13 @@ object SmsParser {
         LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { return it }
 
         val done = BankRules.completedAction.containsMatchIn(text)
-        cb.ignore.firstOrNull { it.second.containsMatchIn(text) && !(done && it.first.label in BankRules.SOFT_IGNORE_LABELS) }?.let {
+        cb.ignore.firstOrNull {
+            val hit = it.second.find(text)
+            // A bank promotion tacked on AFTER a finished card event ("... Avl Bal AED 500. Learn more www... T&C apply") must not hide the
+            // purchase; the advert rule only counts when the message has not already reported a transaction before the promotion.
+            hit != null && !(done && it.first.label in BankRules.SOFT_IGNORE_LABELS) &&
+                !(it.first.label == "Advert" && BankRules.finishedCardEvent.containsMatchIn(text.substring(0, hit.range.first)))
+        }?.let {
             return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store)
         }
         packIgnore.firstOrNull { it.second.containsMatchIn(text) }?.let { return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store) }

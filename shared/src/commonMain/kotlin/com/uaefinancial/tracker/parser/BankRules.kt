@@ -677,6 +677,9 @@ object BankRules {
      * A plain "never share your OTP" footer on a purchase alert doesn't match (no code), so the
      * purchase is still parsed.
      */
+    /** Wording that reports a finished card/account event (used so a promotion after it is not taken for a pure advert). */
+    val finishedCardEvent = Regex("""\bcard no\b|available balance|\bavl bal\b|\bdebited\b""", RegexOption.IGNORE_CASE)
+
     val otpPreCheck = IgnoreRule(
         "OTP",
         """^(?=.*\b(OTP|one[\s-]?time\s+pass(word|code)|verification\s+code|activation\s+code|passcode|PIN|auth(?:entication|ori[sz]ation)?\s+code)\b)(?=.*(\b\d{6,8}\b|\b(is|:)\s*\d{4,8}\b|\b\d{4,8}\s+is\s+(your|the)\b)).*""",
