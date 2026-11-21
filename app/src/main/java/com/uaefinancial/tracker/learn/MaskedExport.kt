@@ -48,7 +48,7 @@ object MaskedExport {
         val grouped = rows.groupingBy { it }.eachCount()
         val sb = StringBuilder()
         sb.append("# Fils masked message export (for testing the message reader)\n")
-        sb.append("# Each line: count, bank, kind, direction, instrument, source, masked shape, reader-now, generic-reader (the last two are computed on the real text on your phone). No amounts, names, merchants, card digits or dates.\n")
+        sb.append("# Each line: count, bank, kind, direction, instrument, source, masked shape, reader-now, generic-reader (the last two are computed on the real text on your phone). Words are kept as written; replaced: amounts, card and account numbers, other digits, dates, times, links, emails and the merchant name.\n")
         sb.append("# source: rule = verified bank rule, pack = signed rules file, learned = from your fixes, reader = generic reader, user-fix = you corrected it.\n")
         sb.append("# Left out: $skippedUnsafe messages whose shape was not safe to export, $skippedOtp one-time-code messages.\n")
         grouped.entries.sortedWith(compareBy({ it.key.bank }, { it.key.kind }, { it.key.shape })).forEach { (r, n) ->

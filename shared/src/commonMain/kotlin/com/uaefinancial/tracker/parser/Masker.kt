@@ -93,7 +93,7 @@ object Masker {
      * [merchant] is the merchant the app read (or you typed) for this message. It is never sent: where it stands in the wording is
      * marked as {MERCHANT} instead, which is all a rule for this bank's wording needs ("... from {MERCHANT} for {CUR} {AMOUNT}").
      */
-    fun mask(body: String, bankName: String? = null, merchant: String? = null): Result {
+    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
         val name = merchant?.trim()?.replace(Regex("""\s+"""), " ")
@@ -109,13 +109,22 @@ object Masker {
             val len = m.groups["num"]?.value?.length ?: 0
             if (lead.all { it in "xX*•·#" }) "{CARD:${enc(len)}}" else "$lead {CARD:${enc(len)}}"
         }
-        t = t.replace(money, "{CUR} {AMOUNT}")
+        // keepWords (the local export only): the currency code stays, it is a public word; the amount never does.
+        t = if (keepWords) t.replace(money) { m -> (Regex("""[A-Za-z]{2,4}""").find(m.value)?.value ?: "{CUR}") + " {AMOUNT}" } else t.replace(money, "{CUR} {AMOUNT}")
         // Only how many digits, never which: "{NUM:10}" for an account or reference, "{NUM:2}" for a day.
         t = t.replace(longDigits) { m -> "{NUM:${enc(m.value.count { it.isDigit() })}}" }.replace(anyDigits) { m -> "{NUM:${enc(m.value.length)}}" }
         // Turn the letter-coded lengths back into digits now that no digit replacing is left.
         t = t.replace(Regex("""\{(CARD|NUM):([a-j]+)\}""")) { m -> "{${m.groupValues[1]}:${dec(m.groupValues[2])}}" }
 
         val keep = bankName.orEmpty().split(Regex("""[^\p{L}\d]+""")).map { it.lowercase() }.filter { it.length >= 2 }.toSet()
+        if (keepWords) {
+            // Ordinary words are public and decide what a message is, so they all stay. Only values are gone (amounts, card and
+            // account numbers, other digits, dates, times, links, emails, the merchant name).
+            t = t.replace(Regex("""\s+"""), " ").trim()
+            if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), ""))) return Result(t, false, "digits left")
+            if (t.contains('@')) return Result(t, false, "address left")
+            return Result(t, true)
+        }
         t = t.replace(wordOrToken) { m ->
             val w = m.value
             when {

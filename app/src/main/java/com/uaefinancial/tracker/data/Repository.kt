@@ -935,10 +935,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         for (sms in dao.allSms()) {
             if (sms.status == SmsStatus.IGNORED && sms.ruleId?.contains("otp", ignoreCase = true) == true) { otp++; continue }
             val bank = com.uaefinancial.tracker.learn.Learning.publicBankName(sms.sender, sms.bank)
-            val m = com.uaefinancial.tracker.parser.Masker.mask(sms.body, bank)
+            val txn = dao.txnsForSmsNow(sms.id).firstOrNull()
+            // Local file only (never sent): every ordinary word stays, so a shape shows what decided the reading. Amounts, card and
+            // account numbers, other digits, dates, links, emails and the merchant name are replaced.
+            val m = com.uaefinancial.tracker.parser.Masker.mask(sms.body, bank, merchant = txn?.merchant, keepWords = true)
             if (!m.safe) { unsafe++; continue }
             val fixed = dao.fixFor(sms.dedupKey) != null
-            val txn = dao.txnsForSmsNow(sms.id).firstOrNull()
             val stmt = if (txn == null) dao.statementsForSmsNow(sms.id).firstOrNull() else null
             val kind = when {
                 txn != null -> txn.type
