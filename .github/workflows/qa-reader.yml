@@ -5,7 +5,7 @@ name: QA reader measurement (manual)
 on:
   workflow_dispatch:
   push:
-    branches: [accuracy-measure]
+    branches: [accuracy-measure, engine-accuracy]
     paths: ['app/src/test/java/com/uaefinancial/tracker/qa/**', '.github/workflows/qa-reader.yml']
 
 permissions:
@@ -43,11 +43,12 @@ jobs:
       - name: Encrypt the wording-level detail (only the project owner's private key opens it)
         if: always()
         run: |
-          test -f app/build/qa-reader-detail.txt || { echo "no detail file"; exit 0; }
+          cat app/build/qa-reader-detail.txt app/build/qa-reader-detail-real.txt > app/build/qa-reader-detail-all.txt 2>/dev/null || true
+          test -s app/build/qa-reader-detail-all.txt || { echo "no detail file"; exit 0; }
           openssl rand -hex 32 > k.txt
-          openssl enc -aes-256-cbc -pbkdf2 -pass file:k.txt -in app/build/qa-reader-detail.txt -out detail.enc
+          openssl enc -aes-256-cbc -pbkdf2 -pass file:k.txt -in app/build/qa-reader-detail-all.txt -out detail.enc
           openssl pkeyutl -encrypt -pubin -inkey tools/qa/data/qa_detail_pub.pem -in k.txt -out k.enc
-          rm -f k.txt app/build/qa-reader-detail.txt
+          rm -f k.txt app/build/qa-reader-detail*.txt
       - name: Publish the encrypted detail to a branch (unreadable without the owner's private key)
         if: always()
         run: |

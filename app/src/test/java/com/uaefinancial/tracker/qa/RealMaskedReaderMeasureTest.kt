@@ -141,4 +141,49 @@ class RealMaskedReaderMeasureTest {
         File("build/qa-reader-detail.txt").writeText(detail.toString())
         text.lines().forEach { println("READER $it") }
     }
+
+    /**
+     * THE TRUSTWORTHY MEASUREMENT. A newer export carries two extra columns that the phone computed on the REAL text:
+     * what the reader says now, and what the generic reader alone says. Nothing is rebuilt, so nothing is an artifact.
+     * Gold = what a verified rule, the signed rules file or the owner's own fix decided (or "not a transaction").
+     */
+    @Test fun measureOnRealText() {
+        val path = System.getenv("REAL_EXPORT")
+        assumeTrue("REAL_EXPORT is not set; measurement skipped", !path.isNullOrBlank() && File(path!!).exists())
+        class R(val n: Int, val bank: String, val kind: String, val source: String, val shape: String, val now: String, val generic: String)
+        val rows = File(path).readLines().filter { it.isNotBlank() && !it.startsWith("#") }.mapNotNull {
+            val p = it.split("\t"); if (p.size < 9) null else R(p[0].toIntOrNull() ?: 1, p[1], p[2], p[5], p[6], p[7], p[8])
+        }
+        assumeTrue("the export has no reader-now / generic columns (needs a build with them)", rows.isNotEmpty())
+        val gold = rows.filter { it.kind != "UNREAD" && (it.source in setOf("rule", "pack", "user-fix") || (it.kind == "NOT_TXN" && it.source == "none")) }
+        val out = StringBuilder("## Reader measurement on the REAL text (computed on the phone, nothing rebuilt)\n\n")
+        out.append("${rows.size} distinct wordings in the export; ${gold.size} have a trusted answer.\n\n")
+        val detail = StringBuilder()
+        for (which in listOf("now", "generic")) {
+            val kind = Tally(); val dirT = Tally(); val notTxn = Tally()
+            val conf = sortedMapOf<String, Int>()
+            for (r in gold) {
+                val got = if (which == "now") r.now else r.generic
+                val answered = got != "none" && got != "error"
+                if (r.kind == "NOT_TXN") {
+                    notTxn.add(if (answered) 0 else 1, r.n)
+                    if (answered) { conf["NOT_TXN -> $got"] = (conf["NOT_TXN -> $got"] ?: 0) + 1; detail.append("real-$which\t${r.bank}\tNOT_TXN\t$got\t${r.n}\t${r.shape}\n") }
+                    continue
+                }
+                val k = if (!answered) -1 else if (got == r.kind) 1 else 0
+                kind.add(k, r.n)
+                val gd = dir(r.kind)
+                if (gd == "out" || gd == "in") dirT.add(if (!answered || dir(got) == "none") -1 else if (dir(got) == gd) 1 else 0, r.n)
+                if (k != 1) { conf["${r.kind} -> ${if (answered) got else "unanswered"}"] = (conf["${r.kind} -> ${if (answered) got else "unanswered"}"] ?: 0) + 1; detail.append("real-$which\t${r.bank}\t${r.kind}\t${if (answered) got else "unanswered"}\t${r.n}\t${r.shape}\n") }
+            }
+            out.append(if (which == "now") "### Reader as it is now (real text)\n\n" else "### Generic reader alone (real text)\n\n")
+            out.append("- **kind of message:** ${kind.line()}\n- **money out vs in:** ${dirT.line()}\n- **not-a-transaction (should NOT become one):** ${notTxn.line()}\n\nMix-ups (wanted -> got, wordings):\n")
+            if (conf.isEmpty()) out.append("- none\n") else conf.entries.sortedByDescending { it.value }.forEach { out.append("- ${it.key}: ${it.value}\n") }
+            out.append("\n")
+        }
+        File("build").mkdirs()
+        File("build/qa-reader-report-real.md").writeText(out.toString())
+        File("build/qa-reader-detail-real.txt").writeText(detail.toString())
+        out.toString().lines().forEach { println("READER $it") }
+    }
 }
