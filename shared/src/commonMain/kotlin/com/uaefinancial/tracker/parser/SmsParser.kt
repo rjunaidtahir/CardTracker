@@ -131,6 +131,12 @@ object SmsParser {
         packIgnore = rules.mapNotNull { r -> runCatching { r to Regex(r.pattern, RegexOption.IGNORE_CASE) }.getOrNull() }
     }
 
+    /** Ids of built-in reading rules switched off by the signed rules file. */
+    @kotlin.concurrent.Volatile
+    private var disabledRules: Set<String> = emptySet()
+
+    internal fun setDisabledRules(ids: Set<String>) { disabledRules = ids }
+
     /** How many rules from the rules file are active. */
     fun packRuleCount(): Int = packRules.values.sumOf { it.size }
 
@@ -338,6 +344,7 @@ object SmsParser {
         val errors = mutableListOf<String>()
 
         for ((rule, regex) in cb.rules) {
+            if (rule.id in disabledRules) continue
             val m = regex.find(text) ?: continue
             try {
                 return when (rule.kind) {

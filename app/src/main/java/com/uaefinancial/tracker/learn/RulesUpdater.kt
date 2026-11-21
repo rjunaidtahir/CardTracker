@@ -84,7 +84,8 @@ object RulesUpdater {
             // A message the rules file asked for with more words goes out in fuller form; the rest of what is still unread goes out as before.
             val ask = out.pack.sendMore
             for (m in app.repo.unreadMessages()) {
-                val kind = if (com.uaefinancial.tracker.learn.Learning.wantsMore(prefs, m.sender, m.bank, m.body, ask)) "unread-more" else "unread-again"
+                val kind = if (com.uaefinancial.tracker.learn.Learning.wantsMore(prefs, m.sender, m.bank, m.body, ask) ||
+                    com.uaefinancial.tracker.learn.Learning.takeAutoMore(prefs, m.sender, m.bank, m.body)) "unread-more" else "unread-again"
                 com.uaefinancial.tracker.learn.Learning.queue(app, prefs, m.sender, m.bank, m.body, kind)
             }
         }

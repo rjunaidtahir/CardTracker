@@ -322,7 +322,14 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }
             if (!force) guardChanges(all, oldTxns, oldStmts)
             // 2.6.1: cards held earlier for a date/time or merchant-only change are cleared; the reading you have stays.
-            for (h in dao.heldReadingsNow()) if (ReadingGuard.isSoftSummary(h.newSummary)) dao.clearReadings(h.smsId)
+            for (h in dao.heldReadingsNow()) if (ReadingGuard.isSoftSummary(h.newSummary)) {
+                val sm = dao.smsById(h.smsId)
+                // A bank the rules file says should take harmless changes: apply the new reading; otherwise keep yours.
+                if (sm != null && sm.bank?.trim()?.lowercase() in com.uaefinancial.tracker.parser.ReadingPolicy.softNewBanks) {
+                    applyParse(sm.id, sm.dedupKey, SmsParser.parse(sm.sender, sm.body, sm.receivedAt), sm.receivedAt, sm.bank)
+                }
+                dao.clearReadings(h.smsId)
+            }
             // OTP messages are only deleted when nothing was ever read from them.
             for (id in pendingOtp) if (dao.txnsForSmsNow(id).isEmpty() && dao.statementsForSmsNow(id).isEmpty()) dao.deleteSms(id)
             pendingOtp.clear()
@@ -370,7 +377,15 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             val after = linesOf(nt, ns)
             if (!ReadingGuard.isMaterial(before, after)) continue
             // Same money, only date/time or merchant text differs: keep what you have, silently, no review card.
-            val silent = ReadingGuard.keepOldSilently(before, after)
+            val firstSms = ids.minOrNull()?.let { byId[it] }
+            val applyNewForBank = firstSms?.bank?.trim()?.lowercase()?.let { it in com.uaefinancial.tracker.parser.ReadingPolicy.softNewBanks } == true
+            val silent = !applyNewForBank && ReadingGuard.keepOldSilently(before, after)
+            // The accuracy check is told about every change the re-read wanted to make (masked shape + which fields only).
+            firstSms?.let { sm ->
+                val ch = ReadingGuard.changedFields(before, after).joinToString(",").replace(" ", "-").take(60)
+                val kindOut = if (ReadingGuard.isSoftOnly(before, after)) "softchange:$ch" else "held:$ch"
+                runCatching { onShape?.invoke(sm.sender, sm.bank, sm.body, kindOut, null) }
+            }
             // Same money and the old reading had no merchant: the new reading just fills it in.
             if (!silent && ReadingGuard.isSoftOnly(before, after)) continue
             // Put the old reading back exactly as it was, for every message in the group.
