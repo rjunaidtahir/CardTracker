@@ -133,6 +133,20 @@ object Masker {
      * marked as {MERCHANT} instead, which is all a rule for this bank's wording needs ("... from {MERCHANT} for {CUR} {AMOUNT}").
      */
     /**
+     * True when a message reads like a bank alert: an amount with a currency, a card / account reference (masked number or
+     * "ending 1234"), and at least three everyday banking words. Lets a bank we have not listed (a chat the user picked by hand)
+     * be masked loosely; a private chat that mentions money has no card or account reference, so it stays strict.
+     */
+    fun looksLikeBankMessage(body: String): Boolean {
+        if (!money.containsMatchIn(body)) return false
+        val cardRef = Regex("""\b(?:card|a/c|acc(?:oun)?t|acct|iban)\b[^.\n]{0,40}(?:\d{4}|[xX*•]{2,})|[xX*•]{3,}\s?\d{3,4}\b""", RegexOption.IGNORE_CASE)
+        if (!cardRef.containsMatchIn(body)) return false
+        val banking = setOf("debited", "credited", "balance", "available", "purchase", "transaction", "payment", "limit", "transfer", "withdrawal", "statement", "due", "refund", "reversed", "spent", "avl", "bal", "txn", "pos", "atm")
+        val hits = Regex("""\p{L}+""").findAll(body.lowercase()).map { it.value }.filter { it in banking }.toSet()
+        return hits.size >= 3
+    }
+
+    /**
      * [loose] (learning reports from a recognised bank sender): every word stays, so the accuracy check can read tricky wording in any
      * language, EXCEPT a name: the word after a title or a "payee / beneficiary / request for", a capitalised word after to / from / by, and
      * any run of two or more unknown capitalised words ("Rana Muhammad Junaid Tahir"). A single unknown capitalised word (a brand, a

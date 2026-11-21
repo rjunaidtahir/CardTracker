@@ -90,4 +90,10 @@ class MaskerKeepWordsTest {
         // Learning.queue passes loose only for a recognised bank; the strict path (no bank) still refuses it.
         assertFalse(Masker.mask("Hi mum, running late, see you at the mall at 7, I will bring AED 50 for the groceries and the pizza tonight", null).safe)
     }
+
+    @Test fun anUnlistedBanksAlertIsRecognisedButAPrivateChatIsNot() {
+        assertTrue(Masker.looksLikeBankMessage("Your card ending 1234 was debited AED 50.00 for a purchase. Available balance AED 900.00"))
+        assertFalse(Masker.looksLikeBankMessage("Hi mum, I will bring AED 50 for the groceries and the pizza tonight, see you at the mall"))
+        assertFalse(Masker.looksLikeBankMessage("Send me AED 500 for the account, card payment is due tomorrow"))
+    }
 }
