@@ -952,9 +952,18 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 else -> "unknown"
             }
             val label = bank ?: com.uaefinancial.tracker.learn.Learning.publicSender(sms.sender)?.let { "Other ($it)" } ?: "Other"
+            // The reader's answers on the REAL text, computed here so a measurement never has to rebuild a message from its shape.
+            fun answer(r: com.uaefinancial.tracker.parser.ParseResult?): String = when (r) {
+                null -> "error"
+                is com.uaefinancial.tracker.parser.ParseResult.Transaction -> r.txn.type.name
+                is com.uaefinancial.tracker.parser.ParseResult.Statement -> "STATEMENT"
+                else -> "none"
+            }
+            val now = answer(runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull())
+            val generic = answer(runCatching { SmsParser.parseAsBank("Unknown Test Bank", sms.body, sms.receivedAt) }.getOrNull())
             rows += com.uaefinancial.tracker.learn.MaskedExport.Row(
                 m.shape, label, kind, com.uaefinancial.tracker.learn.MaskedExport.directionOf(kind), instrument,
-                com.uaefinancial.tracker.learn.MaskedExport.sourceOf(sms.ruleId, fixed),
+                com.uaefinancial.tracker.learn.MaskedExport.sourceOf(sms.ruleId, fixed), now, generic,
             )
         }
         return com.uaefinancial.tracker.learn.MaskedExport.render(rows, unsafe, otp)

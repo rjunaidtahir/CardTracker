@@ -20,6 +20,10 @@ object MaskedExport {
         val instrument: String,
         /** rule (verified bank rule), pack (signed rules file), learned, reader (generic reader), user-fix, none */
         val source: String,
+        /** What the reader as it is now says about the REAL text (PURCHASE, REFUND, ..., STATEMENT, none, error). */
+        val now: String = "",
+        /** What the generic reader alone (a bank with no rules) says about the REAL text. */
+        val generic: String = "",
     )
 
     fun directionOf(kind: String) = when (kind) {
@@ -44,11 +48,11 @@ object MaskedExport {
         val grouped = rows.groupingBy { it }.eachCount()
         val sb = StringBuilder()
         sb.append("# Fils masked message export (for testing the message reader)\n")
-        sb.append("# Each line: count, bank, kind, direction, instrument, source, masked shape. No amounts, names, merchants, card digits or dates.\n")
+        sb.append("# Each line: count, bank, kind, direction, instrument, source, masked shape, reader-now, generic-reader (the last two are computed on the real text on your phone). No amounts, names, merchants, card digits or dates.\n")
         sb.append("# source: rule = verified bank rule, pack = signed rules file, learned = from your fixes, reader = generic reader, user-fix = you corrected it.\n")
         sb.append("# Left out: $skippedUnsafe messages whose shape was not safe to export, $skippedOtp one-time-code messages.\n")
         grouped.entries.sortedWith(compareBy({ it.key.bank }, { it.key.kind }, { it.key.shape })).forEach { (r, n) ->
-            sb.append("$n\t${clean(r.bank)}\t${r.kind}\t${r.direction}\t${r.instrument}\t${r.source}\t${clean(r.shape)}\n")
+            sb.append("$n\t${clean(r.bank)}\t${r.kind}\t${r.direction}\t${r.instrument}\t${r.source}\t${clean(r.shape)}\t${r.now}\t${r.generic}\n")
         }
         return sb.toString()
     }

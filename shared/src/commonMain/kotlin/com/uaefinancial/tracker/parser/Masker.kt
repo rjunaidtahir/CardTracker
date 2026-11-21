@@ -77,7 +77,12 @@ object Masker {
         "transaction transactions transfer transfers sent send sending received receive receiving " +
         "dear sir madam team regards thanks thank greetings welcome " +
         "announce announced pleased profit dividend dividends credit crediting crediting disbursed disburse maturity matured " +
-        "home work office branch branches atm atms counter cheque cheques deposit deposits"
+        "home work office branch branches atm atms counter cheque cheques deposit deposits " +
+        // words that decide what a message is (they were hidden as {TEXT}, which made a shape useless for checking a rule)
+        "cr dr crdr instructions orders requests repayment repayments redeemed redemption redeem conversion converted epp " +
+        "installments instalments reversals refunds adjustments debits credits withdrawals standing-instruction si " +
+        "salaries payroll wps remitted remitting settled settlement settle cleared declined approved authorization authorisation " +
+        "purchase-return return-of cashbacks chargeback chargebacks disputed dispute pre-auth preauth bills paid-to paid-from"
         ).split(' ', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 
     // Lengths are carried as letters (a=0 … j=9) while the digit replacing runs, so it cannot touch them.
