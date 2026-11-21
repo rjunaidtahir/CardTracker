@@ -178,6 +178,8 @@ class PackTrackedSendersTest {
         assertTrue(RulesPack.parse("""{"version":9,"banks":[],"rules":[]}""").let { it is RulesPack.Outcome.Ok && it.pack.sendMore.hashes.isEmpty() })
     }
 
+    private fun packExtra(extra: String) = """{"version":3,$extra"banks":[],"rules":[]}"""
+
     // ---- 2.6.1: remote off switch for built-in rules, and the re-read policy
     private val fabOut = "Outward Remittance Debit Account XXXX8001 AED 1000.00 Date 17/09/2026 21:45 Balance AED 2386.00"
 
@@ -185,7 +187,7 @@ class PackTrackedSendersTest {
         val before = SmsParser.parseAsBank("FAB", fabOut, 0L)
         assertIs<ParseResult.Transaction>(before)
         assertEquals("fab-outward-remittance", before.ruleId)
-        val out = RulesPack.parse(pack("[]", extra = "\"disable\":[\"fab-outward-remittance\"],"))
+        val out = RulesPack.parse(packExtra("\"disable\":[\"fab-outward-remittance\"],"))
         assertIs<RulesPack.Outcome.Ok>(out)
         RulesPack.apply(out.pack)
         val after = SmsParser.parseAsBank("FAB", fabOut, 0L)
@@ -201,27 +203,27 @@ class PackTrackedSendersTest {
 
     @Test fun disableRejectsUnknownIdsPackRulesAndIgnoreLabels() {
         for (bad in listOf("\"no-such-rule\"", "\"pack:hbl-1\"", "\"Advert\"", "1", "\"\"")) {
-            assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(pack("[]", extra = "\"disable\":[$bad],")), bad)
+            assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$bad],")), bad)
         }
-        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(pack("[]", extra = "\"disable\":\"fab-outward-remittance\",")))
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":\"fab-outward-remittance\",")))
         val tooMany = (1..21).joinToString(",") { "\"fab-outward-remittance\"" }
-        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(pack("[]", extra = "\"disable\":[$tooMany],")))
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$tooMany],")))
     }
 
     @Test fun readingPolicyAcceptsKnownBanksOnly() {
-        val ok = RulesPack.parse(pack("[]", extra = "\"readingPolicy\":{\"applyNewFor\":[\"FAB\"]},"))
+        val ok = RulesPack.parse(packExtra("\"readingPolicy\":{\"applyNewFor\":[\"FAB\"]},"))
         assertIs<RulesPack.Outcome.Ok>(ok)
         assertEquals(setOf("fab"), ok.pack.softNew)
         RulesPack.apply(ok.pack)
         assertEquals(setOf("fab"), ReadingPolicy.softNewBanks)
         RulesPack.apply(null)
         assertEquals(emptySet(), ReadingPolicy.softNewBanks)
-        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(pack("[]", extra = "\"readingPolicy\":{\"applyNewFor\":[\"No Such Bank\"]},")))
-        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(pack("[]", extra = "\"readingPolicy\":{\"applyNewFor\":\"FAB\"},")))
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"readingPolicy\":{\"applyNewFor\":[\"No Such Bank\"]},")))
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"readingPolicy\":{\"applyNewFor\":\"FAB\"},")))
     }
 
     @Test fun aPackWithoutTheNewSectionsStillParses() {
-        val ok = RulesPack.parse(pack("[]"))
+        val ok = RulesPack.parse(packExtra(""))
         assertIs<RulesPack.Outcome.Ok>(ok)
         assertTrue(ok.pack.disable.isEmpty() && ok.pack.softNew.isEmpty())
     }
