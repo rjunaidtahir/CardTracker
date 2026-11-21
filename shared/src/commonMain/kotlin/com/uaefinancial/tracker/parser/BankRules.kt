@@ -678,7 +678,7 @@ object BankRules {
      * purchase is still parsed.
      */
     /** Wording that reports a finished card/account event (used so a promotion after it is not taken for a pure advert). */
-    val finishedCardEvent = Regex("""\bcard no\b|available balance|\bavl bal\b|\bdebited\b""", RegexOption.IGNORE_CASE)
+    val finishedCardEvent = Regex("""\bcard no\b|available balance|\bavl bal\b|\bdebited\b|\b(?:has|have) been credited to your\b""", RegexOption.IGNORE_CASE)
 
     val otpPreCheck = IgnoreRule(
         "OTP",

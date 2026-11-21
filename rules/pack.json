@@ -1,5 +1,5 @@
 {
-  "version": 8,
+  "version": 9,
   "minEngine": 5,
   "banks": [
     {
@@ -338,8 +338,8 @@
       "pattern": "Tabby Card total limit is now increased to [A-Z]{3}\\s*[\\d,.]+"
     },
     {
-      "label": "Statement: nothing due (zero)",
-      "pattern": "credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*0(?:\\.0+)?\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*0(?:\\.0+)?(?![\\d.,]*[1-9])"
+      "label": "Statement notice without a due date (credit balance with Min Due)",
+      "pattern": "\\bCC has a credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*[\\d,.]+\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*[\\d,.]+"
     },
     {
       "label": "Declined: card txn not processed",

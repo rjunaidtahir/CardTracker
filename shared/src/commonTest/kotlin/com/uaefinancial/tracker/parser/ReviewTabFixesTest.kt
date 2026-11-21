@@ -45,4 +45,18 @@ class ReviewTabFixesTest {
         assertTrue(r is ParseResult.Transaction, "not read: $r")
         assertEquals(TxnType.REFUND, r.txn.type)
     }
+
+    @Test fun aTermDepositPaidIntoTheAccountIsNotHiddenAsAnAdvert() {
+        val t = "Congrats! Your term deposit Savings is now mature. You've earned AED 12.50 in interest! The total amount of AED 5,012.50 in interest, along with your principal amount of AED 5,000.00, has been credited to your Current Account. Open a new Fixed Saving Space to continue earning interest."
+        val r = SmsParser.parseAsBank("Wio", t, at, zone)
+        assertTrue(r !is ParseResult.Ignored, "still hidden: $r")
+        assertTrue(r is ParseResult.Transaction, "not read: $r")
+        assertEquals(TxnType.TRANSFER_IN, r.txn.type)
+        assertEquals("5012.50", r.txn.amount.toPlainString())
+    }
+
+    @Test fun anAdvertAloneIsStillHidden() {
+        val r = SmsParser.parseAsBank("Wio", "Open a new Fixed Saving Space and earn up to 5% interest. Offer ends soon. Terms apply.", at, zone)
+        assertTrue(r is ParseResult.Ignored || r !is ParseResult.Transaction)
+    }
 }
