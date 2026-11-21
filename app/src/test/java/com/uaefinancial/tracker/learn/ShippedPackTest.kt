@@ -104,6 +104,44 @@ class ShippedPackTest {
             assertTrue(!Regex(rule.pattern, RegexOption.IGNORE_CASE).containsMatchIn(t), "${rule.label} must not hide: $t")
         }
     }
+
+    /**
+     * v12: shapes reported unread by 2.6 phones on 21 Nov (ADIB, ENBD cheque, Kotak, IDFC, Wio, ADCB, FAB). The wordings are
+     * rebuilt from the masked shapes (no real message is stored). Each must now be read as the right kind of transaction,
+     * or hidden as a notice; none of them may stay unread.
+     */
+    @Test fun v12ReadsOrHidesTheOtherUnreadShapes() {
+        val out = RulesPack.parse(file.readText(), currentVersion = 4) as RulesPack.Outcome.Ok
+        assertTrue(out.pack.version >= 12)
+        RulesPack.apply(out.pack)
+        fun txn(sender: String, text: String, type: com.uaefinancial.tracker.parser.TxnType, amount: String) {
+            val r = SmsParser.parse(sender, text, 0L)
+            assertIs<ParseResult.Transaction>(r, "$sender should be read: $text -> $r")
+            assertEquals(type, r.txn.type, text)
+            assertEquals(amount, r.txn.amount.toString().replace(",", "").removeSuffix(".00"), text)
+        }
+        fun hidden(sender: String, text: String) {
+            val r = SmsParser.parse(sender, text, 0L)
+            assertIs<ParseResult.Ignored>(r, "$sender should be hidden: $text -> $r")
+        }
+        val tp = com.uaefinancial.tracker.parser.TxnType
+        txn("ADIB", "Trx. of AED 36.50 on your card ending 1234 at ONE-TIME PAY, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", tp.PURCHASE, "36.50")
+        txn("ADIB", "Trx. of AED 80.00 on your card ending 1234 at CARREFOUR, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", tp.PURCHASE, "80")
+        txn("ENBD", "Dear Customer, the cheque number 123456 for AED 1,500.00 has been debited from account 101-12345-01 on 17/11/2026 10:20.", tp.TRANSFER_OUT, "1500")
+        txn("ENBD", "Dear Customer, the cheque number 123456 for AED 1,500.00 has been debited from account 101-12345-01 on 17/11/2026 10:20.Available Balance AED 5,000.00", tp.TRANSFER_OUT, "1500")
+        txn("KOTAKB", "INR 500.00 sent from Kotak Bank ac X1234 and credited to Kotak ac X5678 on 17-11-26 10.20 AM. UTR- 123456789012. Bal:INR 1,000.00. Use kotak.com for help. PAY A CONTACT via kotak.com", tp.TRANSFER_OUT, "500")
+        txn("KOTAKB", "Fund transfer of INR 750.00 to JOHN DOE from Kotak Bank A/c X123456 scheduled on 17-11-26 has been executed on 17-11-26. Ref No. 12345678.", tp.TRANSFER_OUT, "750")
+        txn("IDFCFB", "INR 100.00 paid from IDFC FIRST Bank A/c X1234 for UPI ref no. 5678 at SOME SHOP on 17-Nov-2026 10:20. Thank you. Bal.: INR 2,000.00.", tp.PURCHASE, "100")
+        txn("Wio", "We made an autopay of AED 250.00 towards your Wio Credit balance.", tp.PAYMENT, "250")
+        hidden("KOTAKB", "Fund transfer of INR 750.00 to JOHN DOE Kotak Bank Ac X1234 is scheduled on 20-11-26 Ref: 12345678. If not by you, REPORT FRAUD on kotak.com - Kotak Bank")
+        hidden("KOTAKB", "Transaction on your Kotak Bank Credit Card x1234 of INR 100.00 at EMIRATES could not be approved. Please call 18002100 for details.")
+        hidden("Wio", "Payment of AED 20.00 at UBER*TRIP HOLD was reversed and the amount has been credited back to your Wio Debit card ending with 1234.")
+        hidden("Wio", "Virtual card \"Online AED 500\" 1234 has been successfully created. If it wasn't you, freeze this card in the App and contact us immediately.")
+        hidden("Wio", "Your daily transaction limit for local & international transfers is now AED 50,000.00. If you didn't request this, call Wio Care at 600500000.")
+        hidden("Wio", "Your credit payment is due today. Statement amount: AED 300.00. Minimum due: AED 30.00. Auto-pay will be processed at 10:00 PM today. You can pay the full amount in the app before then.")
+        hidden("ADCB", "Dear Customer, Your request number 12345678901 for 123456 Mobile Update Contact Details has been completed for ADCB on 17/11/2026 10:20. Charges AED 0.00 Regards ADCB Cash Services")
+        hidden("FAB", "Dear Customer, Thank you for contacting to us with your FAB credit card. As to your confirmation, the request AED 1,000.00 is updated and credit card limit request has been processed.")
+    }
 }
 
 /**

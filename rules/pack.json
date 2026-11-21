@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "minEngine": 5,
   "banks": [
     {
@@ -258,6 +258,48 @@
       "cardType": "CREDIT",
       "fixedMerchant": "Reversal",
       "pattern": "Reversal of\\s+{CUR}\\s*{AMOUNT}\\s+credited to ICICI Bank Credit Card\\s+{CARD}\\s+on\\s+{DATETIME}"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-cheque-debit-20261121",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "cheque number\\s+\\d+\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+has been\\s+(?!returned|bounced|dishonou?red|stopped|rejected|cancelled)\\w+\\s+from account\\s+[\\d-]{6,20}\\s+on\\s+{DATETIME}\\.?(?:\\s*Available Balance\\s+{ANYCUR}\\s*{AVAIL})?",
+      "fixedMerchant": "Cheque"
+    },
+    {
+      "bank": "Kotak Mahindra Bank",
+      "id": "kotak-transfer-sent-20261121",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+\\w+\\s+(?:from\\s+)?Kotak Bank ac\\s+{CARD}\\s+[^.]{0,30}?\\s*to Kotak ac\\s+[X*\\d]*\\d{4}\\s+on\\s+[^.]{1,40}\\.\\s*UTR-?\\s*\\d+(?:\\.\\s*Bal:?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Kotak Mahindra Bank",
+      "id": "kotak-fund-transfer-done-20261121",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Fund transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from Kotak Bank A/c\\s+{CARD}\\s+scheduled on\\s+[^.]{1,30}?\\s+has been\\s+(?:executed|processed|completed|credited|done)\\b"
+    },
+    {
+      "bank": "IDFC FIRST Bank",
+      "id": "idfc-paid-20261121",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "ACCOUNT",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+(?:\\w+\\s+)?paid from IDFC FIRST Bank\\s+[^.]{0,30}?{CARD}\\s+for\\s+[^.]{1,30}?\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}(?:\\.[^.]{0,40}\\.\\s*Bal\\.?:?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-autopay-20261121",
+      "kind": "TRANSACTION",
+      "type": "PAYMENT",
+      "cardType": "CREDIT",
+      "pattern": "made an autopay of\\s+{CUR}\\s*{AMOUNT}\\s+\\w+\\s+your Wio Credit balance",
+      "fixedMerchant": "Autopay"
     }
   ],
   "ignore": [
@@ -404,6 +446,34 @@
     {
       "label": "Notice: wallet transfer fee change",
       "pattern": "The fee for sending .{1,40}? to .{1,40}? UAE bank account will be"
+    },
+    {
+      "label": "Kotak: transfer scheduled",
+      "pattern": "Fund \\w+ of [A-Z]{3}\\s*[\\d,.]+ to .{1,60}? is scheduled on"
+    },
+    {
+      "label": "Kotak: card txn not approved",
+      "pattern": "on your Kotak Bank Credit Card\\s+\\S+\\s+of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+at\\s+.{1,60}?\\s+could not be approved"
+    },
+    {
+      "label": "Wio: card hold released",
+      "pattern": "Payment of [A-Z]{3}\\s*[\\d,.]+ at .{1,60}? HOLD was \\w+ and the amount has been credited back to your Wio"
+    },
+    {
+      "label": "Wio: virtual card created",
+      "pattern": "Virtual card\\s+\\\".{1,60}?\\\"\\s*\\d{0,4}\\s*has been successfully created"
+    },
+    {
+      "label": "Wio: daily limit notice",
+      "pattern": "Your daily transaction limit for .{1,40}? is now [A-Z]{3}\\s*[\\d,.]+"
+    },
+    {
+      "label": "ADCB: service request notice",
+      "pattern": "Your request number \\d+ for .{1,60}? Update Contact"
+    },
+    {
+      "label": "FAB: card request update",
+      "pattern": "the request [A-Z]{3}\\s*[\\d,.]+ is updated and credit card .{1,40}? request has been"
     }
   ],
   "categories": [
