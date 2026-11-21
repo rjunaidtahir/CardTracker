@@ -57,7 +57,7 @@ class MaskerKeepWordsTest {
 
     @Test fun wordsFromTheRealExportStayVisible() {
         val r = Masker.mask(
-            "Dear Customer, you've been charged AED 150.00 per transaction on your Credit Card ending 1234 on 21 June. If this wasn't you, please go to the app for details and review your transaction. Tap to approve, or call us to avoid charges.",
+            "Dear Customer, you've been charged AED 150.00 per transaction on your Credit Card ending 1234. Your June statement is ready. If this wasn't you, please go to the app for details and review your transaction. Tap to approve, or call us to avoid charges.",
             "ADCB",
         )
         assertTrue(r.safe, r.reason ?: r.shape)
