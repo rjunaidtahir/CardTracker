@@ -1001,15 +1001,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Writes the masked message export (shapes + what the app decided) where the user chose. Nothing is uploaded. */
     fun exportMaskedMessages(uri: Uri) = viewModelScope.launch {
+        message.value = "Exporting masked messages. This can take a minute or two: keep the app open and don't share the file until you see \"Saved\"."
         try {
             val text = withContext(Dispatchers.IO) { repo.maskedExportText() }
+            val bytes = text.toByteArray(Charsets.UTF_8)
             withContext(Dispatchers.IO) {
-                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray(Charsets.UTF_8)) }
+                getApplication<Application>().contentResolver.openOutputStream(uri, "wt")?.use { it.write(bytes); it.flush() }
                     ?: error("Couldn't open the file")
             }
-            message.value = "Saved. Open the file and read it before you share it."
-        } catch (e: Exception) {
-            message.value = "Export failed: ${e.message}"
+            val lines = text.lines().count { it.isNotBlank() && !it.startsWith("#") }
+            message.value = if (lines == 0) "Saved, but no messages could be exported (${bytes.size / 1024} KB). Tell Claude."
+            else "Saved: $lines message shapes, ${maxOf(1, bytes.size / 1024)} KB. Open the file and read it before you share it."
+        } catch (e: Throwable) {
+            message.value = "Export failed: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 
