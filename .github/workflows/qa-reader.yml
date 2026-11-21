@@ -1,0 +1,59 @@
+name: QA reader measurement (manual)
+
+# Read-only measurement of the app's message reader on the owner's masked real messages (encrypted in the repo; key in the
+# QA_DATA_KEY secret). Prints counts only: no message text. Changes nothing in the app.
+on:
+  workflow_dispatch:
+  push:
+    branches: [accuracy-measure]
+    paths: ['app/src/test/java/com/uaefinancial/tracker/qa/**', '.github/workflows/qa-reader.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  measure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Decrypt the export
+        env:
+          QA_DATA_KEY: ${{ secrets.QA_DATA_KEY }}
+        run: |
+          test -n "$QA_DATA_KEY" || { echo "QA_DATA_KEY secret is not set"; exit 1; }
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:QA_DATA_KEY -in tools/qa/data/real_masked.enc | gunzip > "$RUNNER_TEMP/export.txt"
+          echo "lines: $(wc -l < "$RUNNER_TEMP/export.txt")"
+      - name: Measure
+        env:
+          REAL_EXPORT: ${{ runner.temp }}/export.txt
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:testDebugUnitTest --tests '*RealMaskedReaderMeasureTest*' --no-daemon -i > reader.log 2>&1 || { tail -40 reader.log | grep -v "READER" ; exit 1; }
+          grep -h 'READER ' reader.log | sed 's/^ *READER //' > reader-report.md
+          cat reader-report.md >> "$GITHUB_STEP_SUMMARY"
+          wc -l reader-report.md
+          echo '=====REPORT====='
+          cat reader-report.md
+      - name: Encrypt the wording-level detail (only the project owner's private key opens it)
+        if: always()
+        run: |
+          test -f app/build/qa-reader-detail.txt || { echo "no detail file"; exit 0; }
+          openssl rand -hex 32 > k.txt
+          openssl enc -aes-256-cbc -pbkdf2 -pass file:k.txt -in app/build/qa-reader-detail.txt -out detail.enc
+          openssl pkeyutl -encrypt -pubin -inkey tools/qa/data/qa_detail_pub.pem -in k.txt -out k.enc
+          rm -f k.txt app/build/qa-reader-detail.txt
+      - name: Publish the encrypted detail to a branch (unreadable without the owner's private key)
+        if: always()
+        run: |
+          test -f detail.enc || exit 0
+          mkdir -p "$RUNNER_TEMP/out" && cp detail.enc k.enc "$RUNNER_TEMP/out/"
+          cd "$RUNNER_TEMP/out"
+          git init -q -b qa-detail-out && git config user.name "qa-bot" && git config user.email "qa-bot@users.noreply.github.com"
+          git add . && git commit -q -m "encrypted reader detail run ${{ github.run_id }}"
+          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" qa-detail-out
