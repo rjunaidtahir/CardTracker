@@ -115,14 +115,20 @@ class ShippedPackTest {
         val out = RulesPack.parse(file.readText(), currentVersion = 4) as RulesPack.Outcome.Ok
         assertTrue(out.pack.version >= 12)
         RulesPack.apply(out.pack)
+        // Kotak and IDFC are directory banks: the phone reads them once the user has made the sender a bank (parseAsBank).
+        fun read(sender: String, text: String) = when (sender) {
+            "KOTAKB" -> SmsParser.parseAsBank("Kotak Mahindra Bank", text, 0L)
+            "IDFCFB" -> SmsParser.parseAsBank("IDFC FIRST Bank", text, 0L)
+            else -> SmsParser.parse(sender, text, 0L)
+        }
         fun txn(sender: String, text: String, type: TxnType, amount: String) {
-            val r = SmsParser.parse(sender, text, 0L)
+            val r = read(sender, text)
             assertIs<ParseResult.Transaction>(r, "$sender should be read: $text -> $r")
             assertEquals(type, r.txn.type, text)
             assertEquals(amount, r.txn.amount.toString().replace(",", "").removeSuffix(".00"), text)
         }
         fun hidden(sender: String, text: String) {
-            val r = SmsParser.parse(sender, text, 0L)
+            val r = read(sender, text)
             assertIs<ParseResult.Ignored>(r, "$sender should be hidden: $text -> $r")
         }
         txn("ADIB", "Trx. of AED 36.50 on your card ending 1234 at ONE-TIME PAY, UAE is Approved. Avl. card bal is 12345.67. Trx Date: 17/11/2026 10:20:46", TxnType.PURCHASE, "36.50")
