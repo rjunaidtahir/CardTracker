@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 class GenericReaderCoverageTest {
     private val zone = SmsParser.UAE_ZONE
     private val at = DateTime.of(2026, 11, 19, 12, 0).toEpochMillis(zone)
-    private fun read(bank: String, s: String) = SmartParser.read(bank, SmsParser.normalizeBody(s), at, zone)
+    private fun read(bank: String, s: String) = SmsParser.parseAsBank("Unknown Test Bank", s, at, zone)
 
     private fun purchase(bank: String, s: String, amount: String) {
         val r = read(bank, s)
