@@ -78,10 +78,10 @@ class ReReadGuardDbTest {
         assertEquals(before, txns().single()); assertEquals(1, held().size)
         assertTrue(held().single().newSummary.contains("card"))
     }
-    @Test fun a_changed_date_is_held() {
+    @Test fun a_changed_date_alone_keeps_the_old_reading_silently() {
+        // 2.6.1: same money, only the date differs: no review card, the reading you have stays
         val before = baseline(); setBody(smsId(), laterDay); reread()
-        assertEquals(before, txns().single()); assertEquals(1, held().size)
-        assertTrue(held().single().newSummary.contains("date"))
+        assertEquals(before, txns().single()); assertEquals(0, held().size)
     }
     @Test fun a_message_the_new_reader_cannot_read_keeps_its_transaction() {
         val before = baseline(); setBody(smsId(), "Hello, balance enquiry received."); reread()

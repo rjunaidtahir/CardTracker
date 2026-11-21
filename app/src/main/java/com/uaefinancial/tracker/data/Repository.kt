@@ -367,6 +367,10 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             val nt = ids.flatMap { newTxns[it].orEmpty() }; val ns = ids.flatMap { newStmts[it].orEmpty() }
             val after = linesOf(nt, ns)
             if (!ReadingGuard.isMaterial(before, after)) continue
+            // Same money, only date/time or merchant text differs: keep what you have, silently, no review card.
+            val silent = ReadingGuard.keepOldSilently(before, after)
+            // Same money and the old reading had no merchant: the new reading just fills it in.
+            if (!silent && ReadingGuard.isSoftOnly(before, after)) continue
             // Put the old reading back exactly as it was, for every message in the group.
             for (id in ids) { dao.deleteTxnsForSms(id); dao.deleteStatementsForSms(id) }
             ot.forEach { dao.restoreTxn(it) }
@@ -378,6 +382,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 pendingOtp.remove(s.id)
             }
             val first = ids.minOrNull() ?: continue
+            if (silent) continue
             dao.insertReading(
                 SmsReadingEntity(
                     smsId = first, engineVersion = SmsParser.ENGINE_VERSION, createdAt = now,

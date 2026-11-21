@@ -35,6 +35,22 @@ object ReadingGuard {
         return before.map { it.text() }.sorted() != after.map { it.text() }.sorted()
     }
 
+    private fun core(l: Line) = listOf(l.kind, l.type, l.direction, l.amountMinor, l.currency, l.bank, l.cardKey, l.last4).joinToString("|")
+
+    /**
+     * True when the two readings agree on every money field (kind, type, direction, amount, currency, bank, card,
+     * last four) and differ only in date/time and/or merchant text. Such a change is never put to the user: the
+     * reading you already have is kept (see [keepOldSilently]).
+     */
+    fun isSoftOnly(before: List<Line>, after: List<Line>): Boolean {
+        if (before.isEmpty() || before.size != after.size) return false
+        return before.map { core(it) }.sorted() == after.map { core(it) }.sorted()
+    }
+
+    /** A soft change keeps the old reading, unless the old reading had no merchant at all (then the new one fills it in). */
+    fun keepOldSilently(before: List<Line>, after: List<Line>): Boolean =
+        isSoftOnly(before, after) && before.none { it.merchant.isBlank() }
+
     /** Names of the fields that differ (first reading of each side), for the review card. */
     fun changedFields(before: List<Line>, after: List<Line>): List<String> {
         val b = before.firstOrNull() ?: return emptyList()

@@ -44,4 +44,33 @@ class ReadingGuardTest {
         assertEquals("purchase AED 125.50 · Carrefour · FAB 1234", ReadingGuard.describe(listOf(debit)))
         assertEquals("no transaction", ReadingGuard.describe(emptyList()))
     }
+
+    // --- 2.6.1: soft changes (same money, only date/time or merchant differ) are not put to the user ---
+    @Test fun fabTransferPayeeLostIsSoftAndKeptSilently() {
+        val old = Line("TXN", "TRANSFER_OUT", 578_600, "AED", 1_700_000_000_000, "FAB", "FAB 8001", "8001", "ENBD Junaid CC")
+        val new = old.copy(merchant = "Outward remittance", timestamp = old.timestamp + 3_600_000)
+        assertTrue(ReadingGuard.isMaterial(listOf(old), listOf(new)))
+        assertTrue(ReadingGuard.isSoftOnly(listOf(old), listOf(new)))
+        assertTrue(ReadingGuard.keepOldSilently(listOf(old), listOf(new)))
+    }
+    @Test fun amountChangeIsNotSoft() = assertFalse(ReadingGuard.isSoftOnly(listOf(debit), listOf(debit.copy(amountMinor = 100, merchant = "X"))))
+    @Test fun directionOrTypeChangeIsNotSoft() = assertFalse(ReadingGuard.isSoftOnly(listOf(debit), listOf(debit.copy(type = "REFUND"))))
+    @Test fun cardOrBankChangeIsNotSoft() {
+        assertFalse(ReadingGuard.isSoftOnly(listOf(debit), listOf(debit.copy(cardKey = "FAB ·9999"))))
+        assertFalse(ReadingGuard.isSoftOnly(listOf(debit), listOf(debit.copy(bank = "ADCB"))))
+    }
+    @Test fun lostOrExtraReadingIsNotSoft() {
+        assertFalse(ReadingGuard.isSoftOnly(listOf(debit), emptyList()))
+        assertFalse(ReadingGuard.isSoftOnly(listOf(debit), listOf(debit, debit.copy(amountMinor = 5))))
+    }
+    @Test fun blankOldMerchantTakesTheNewOne() {
+        val old = debit.copy(merchant = "")
+        val new = debit.copy(merchant = "Lulu")
+        assertTrue(ReadingGuard.isSoftOnly(listOf(old), listOf(new)))
+        assertFalse(ReadingGuard.keepOldSilently(listOf(old), listOf(new)))
+    }
+    @Test fun softOnlyIgnoresOrder() {
+        val b = debit.copy(amountMinor = 5)
+        assertTrue(ReadingGuard.isSoftOnly(listOf(debit, b), listOf(b.copy(merchant = "Z"), debit.copy(timestamp = 1))))
+    }
 }
