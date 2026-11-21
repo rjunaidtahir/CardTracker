@@ -96,4 +96,14 @@ class MaskerKeepWordsTest {
         assertFalse(Masker.looksLikeBankMessage("Hi mum, I will bring AED 50 for the groceries and the pizza tonight, see you at the mall"))
         assertFalse(Masker.looksLikeBankMessage("Send me AED 500 for the account, card payment is due tomorrow"))
     }
+
+    @Test fun fullerKeepsUnknownCapitalisedRunsButStillHidesNamesAfterLeads() {
+        val body = "Dear Rose, AED 500.00 was debited from your Credit Card ending 1234 for Zorbo Retail Hub on 21/09/2026. Beneficiary request for PAPPU done."
+        val loose = Masker.mask(body, "FAB", loose = true)
+        assertFalse(loose.shape.contains("Zorbo"), "loose should hide a run of unknown capitalised words: ${loose.shape}")
+        val fuller = Masker.mask(body, "FAB", loose = true, fuller = true)
+        assertTrue(fuller.safe, fuller.reason ?: fuller.shape)
+        assertTrue(fuller.shape.contains("Zorbo Retail Hub"), fuller.shape)
+        for (n in listOf("Rose", "PAPPU", "500", "1234")) assertFalse(fuller.shape.contains(n), "$n leaked: ${fuller.shape}")
+    }
 }

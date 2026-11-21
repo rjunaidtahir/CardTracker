@@ -150,9 +150,10 @@ object Masker {
      * [loose] (learning reports from a recognised bank sender): every word stays, so the accuracy check can read tricky wording in any
      * language, EXCEPT a name: the word after a title or a "payee / beneficiary / request for", a capitalised word after to / from / by, and
      * any run of two or more unknown capitalised words ("Rana Muhammad Junaid Tahir"). A single unknown capitalised word (a brand, a
-     * place, an acronym) is kept. Never for a sender we do not recognise (a private chat): that stays strict.
+     * place, an acronym) is kept. [fuller] (only when a rules file asks for more words for a message it could not understand): runs of
+     * unknown capitalised words stay too; a name after a title / payee / to / from / by is still hidden. Never for a sender we do not recognise (a private chat): that stays strict.
      */
-    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false): Result {
+    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false, fuller: Boolean = false): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
         val name = merchant?.trim()?.replace(Regex("""\s+"""), " ")
@@ -213,7 +214,7 @@ object Masker {
                 else -> "{TEXT}"
             }
         }
-        if (loose) {
+        if (loose && !fuller) {
             // A run of two or more unknown capitalised words is a person's name (or a long merchant): hidden. A single one stays.
             val run = Regex("$mark[^$mark]+$mark(?:[\\s,.&/\\-]*$mark[^$mark]+$mark)+")
             t = t.replace(run, "{TEXT} ").replace(mark.toString(), "")
@@ -224,7 +225,7 @@ object Masker {
         t = t.replace(tokenText, "{TEXT} ")
         t = t.replace(Regex("""\s+"""), " ").trim()
 
-        val maxLen = if (loose) 700 else MAX_LEN
+        val maxLen = if (fuller) 1000 else if (loose) 700 else MAX_LEN
         if (t.length > maxLen) return Result(t.take(maxLen), false, "too long")
         // Final guard: nothing personal may remain.
         if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), ""))) return Result(t, false, "digits left")

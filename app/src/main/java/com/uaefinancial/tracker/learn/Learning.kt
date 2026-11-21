@@ -38,7 +38,7 @@ object Learning {
     private const val F_KIND = "entry.69027038"
     private const val F_APP = "entry.1715899320"
 
-    const val DAILY_CAP = 50
+    const val DAILY_CAP = 300
     /** A message still unread after this many new rules files is not sent again (it stays in Needs review for you). */
     const val MAX_RESENDS = 3
     /** Shop names are sent under their own daily cap. */
@@ -84,6 +84,16 @@ object Learning {
         else -> "wording"
     }
 
+    /** True when a rules file asks for this still-unread message again with more words (its shape hash is listed, or its bank is). */
+    fun wantsMore(prefs: Prefs, sender: String, bankName: String?, body: String, req: com.uaefinancial.tracker.parser.RulesPack.SendMore): Boolean {
+        if (req.hashes.isEmpty() && req.banks.isEmpty()) return false
+        val bank = publicBankName(sender, bankName)
+        if (bank != null && bank.lowercase() in req.banks) return true
+        val r = Masker.mask(body, bank, null, loose = bank != null || Masker.looksLikeBankMessage(body))
+        val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+        return hash("$label|${r.shape}") in req.hashes
+    }
+
     /** What would be sent for [body], for the preview. Null when it would not be sent. */
     fun previewShape(sender: String, bankName: String?, body: String): String? {
         val b = publicBankName(sender, bankName)
@@ -96,11 +106,13 @@ object Learning {
         if (!enabled(prefs)) return false
         // "unread-again": a message a new rules file still could not read. It may be sent once more per new rules file (at most MAX_RESENDS times).
         val again = rawKind == "unread-again"
-        val kind = if (again) "unread" else rawKind
+        // "unread-more": a rules file asked for this message again with more words kept (see Masker's fuller mode).
+        val more = rawKind == "unread-more"
+        val kind = if (again || more) "unread" else rawKind
         val bank = publicBankName(sender, bankName)
         // A recognised bank's message, or any message that reads like a bank alert (a bank we have not listed), keeps every word except names (loose);
         // anything else (a private chat picked by hand) stays strict.
-        val r = Masker.mask(body, bank, merchant, loose = bank != null || Masker.looksLikeBankMessage(body))
+        val r = Masker.mask(body, bank, merchant, loose = more || bank != null || Masker.looksLikeBankMessage(body), fuller = more)
         if (!r.safe) {
             // Never sent, but counted (bank + fixed reason only, no text), so the review knows how much it cannot see.
             countUnmasked(prefs, bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other", r.reason ?: "unsafe")
@@ -110,8 +122,8 @@ object Learning {
         // A bank we do not know yet: send its sender ID as the bank's own name for its messages ("HBL", "AX-HDFCBK-S").
         // That is public (every customer sees it); a phone number or a contact name is never sent.
         val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
-        var sentKind = if (kind == "unread") "unread/" + reason(r.shape) else kind
-        val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:")) "|$kind" else "")
+        var sentKind = if (more) "unread-more/" + reason(r.shape) else if (kind == "unread") "unread/" + reason(r.shape) else kind
+        val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:")) "|$kind" else if (more) "|more${prefs.packVersion}" else "")
         if (prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
         if (hash in prefs.sentShapeHashes) {
             if (!again) return false

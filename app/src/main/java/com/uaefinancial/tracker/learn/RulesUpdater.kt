@@ -80,7 +80,14 @@ object RulesUpdater {
         // Messages that could not be read before may be readable now.
         runCatching { app.repo.reparseAll() }
         // Whatever the new rules still could not read goes to the accuracy check again (the loop continues until Needs review is clear).
-        if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { app.repo.queueUnreadForLearning(again = true) }
+        if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching {
+            // A message the rules file asked for with more words goes out in fuller form; the rest of what is still unread goes out as before.
+            val ask = out.pack.sendMore
+            for (m in app.repo.unreadMessages()) {
+                val kind = if (com.uaefinancial.tracker.learn.Learning.wantsMore(prefs, m.sender, m.bank, m.body, ask)) "unread-more" else "unread-again"
+                com.uaefinancial.tracker.learn.Learning.queue(app, prefs, m.sender, m.bank, m.body, kind)
+            }
+        }
         // New category words in the rules file: re-check what the app itself filed under Other.
         runCatching { app.repo.reapplyAutoCategories() }
         return true

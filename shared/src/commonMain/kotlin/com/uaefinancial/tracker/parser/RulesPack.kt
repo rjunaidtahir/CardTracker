@@ -44,7 +44,11 @@ object RulesPack {
         val version: Int, val banks: List<GlobalBanks.DirBank>, val rules: List<PackRule>,
         val ignore: List<IgnoreRule> = emptyList(), val words: Words = Words(),
         val categories: List<Pair<Long, List<String>>> = emptyList(),
+        val sendMore: SendMore = SendMore(),
     )
+
+    /** A request to send certain still-unread messages again with more words kept: by the shape's hash, or for every unread message of a bank. */
+    data class SendMore(val hashes: Set<String> = emptySet(), val banks: Set<String> = emptySet())
 
     sealed class Outcome {
         data class Ok(val pack: Pack) : Outcome()
@@ -146,7 +150,17 @@ object RulesPack {
             categories += id to words
         }
 
-        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories))
+        val sm = o["sendMore"] as? Map<*, *>
+        fun smList(key: String, maxItems: Int, maxLen: Int): Set<String>? {
+            val l = sm?.get(key) ?: return emptySet()
+            val list = l as? List<*> ?: return null
+            if (list.size > maxItems) return null
+            return list.map { (it as? String)?.trim()?.takeIf { x -> x.length in 3..maxLen } ?: return null }.toSet()
+        }
+        val smHashes = smList("hashes", 500, 40) ?: return Outcome.Rejected("bad sendMore hashes")
+        val smBanks = smList("banks", 50, 60) ?: return Outcome.Rejected("bad sendMore banks")
+
+        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet())))
     }
 
     private const val MAX_CATEGORY_GROUPS = 40

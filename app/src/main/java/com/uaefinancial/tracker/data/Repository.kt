@@ -211,6 +211,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         return "hidden:${(why ?: "ignored").replace('|', '/').take(40)}|reader=$what"
     }
 
+    /** The messages in Needs review that are still unread (a standing instruction waiting for its account is not one). */
+    suspend fun unreadMessages(): List<SmsEntity> = dao.failedSmsList().filter { it.ruleId != SI_RULE }
+
     suspend fun queueHiddenForLearning() {
         val version = "v1-e${SmsParser.ENGINE_VERSION}"
         val p = prefs ?: return
