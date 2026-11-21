@@ -966,6 +966,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             rows += com.uaefinancial.tracker.learn.MaskedExport.Row(
                 m.shape, label, kind, com.uaefinancial.tracker.learn.MaskedExport.directionOf(kind), instrument,
                 com.uaefinancial.tracker.learn.MaskedExport.sourceOf(sms.ruleId, fixed), now, generic,
+                sms.status, (sms.note ?: "").replace(Regex("\\d"), "#").take(90),
             )
         }
         return com.uaefinancial.tracker.learn.MaskedExport.render(rows, unsafe, otp)
