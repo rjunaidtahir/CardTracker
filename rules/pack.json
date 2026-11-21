@@ -1,5 +1,5 @@
 {
-  "version": 11,
+  "version": 12,
   "minEngine": 5,
   "banks": [
     {
@@ -75,6 +75,17 @@
     {
       "name": "Xpence",
       "country": "AE"
+    },
+    {
+      "name": "duPay",
+      "country": "AE",
+      "aliases": [
+        "du Pay"
+      ],
+      "senderIds": [
+        "duPay"
+      ],
+      "track": true
     }
   ],
   "rules": [
@@ -258,6 +269,14 @@
       "cardType": "CREDIT",
       "fixedMerchant": "Reversal",
       "pattern": "Reversal of\\s+{CUR}\\s*{AMOUNT}\\s+credited to ICICI Bank Credit Card\\s+{CARD}\\s+on\\s+{DATETIME}"
+    },
+    {
+      "bank": "duPay",
+      "id": "dupay-card-used-20261121",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Your du Pay Card ending in\\s+{CARD}\\s+has been used for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\.\\s+Your available balance is(?: now)?\\s+{ANYCUR}\\s*{AVAIL}(?:\\s+and your transaction ID is\\s+\\S+)?"
     }
   ],
   "ignore": [
