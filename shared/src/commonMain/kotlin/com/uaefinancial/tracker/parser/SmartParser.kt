@@ -237,6 +237,13 @@ object SmartParser {
             """terugbetaling|restitutie|teruggestort)$R|استرداد|استرجاع|مرتجع""",
         I,
     )
+    /** An offer tacked on to a message ("up to 10% cashback on online ...", "earn cashback"): not money coming back. */
+    private val cashbackOffer = Regex(
+        """(?:\bup\s+to\s+)?\d+(?:[.,]\d+)?\s*%\s*(?:instant\s+)?cash\s?back\b|""" +
+            """\b(?:earn|get|enjoy|win|avail|unlock|collect)\b[^.\n]{0,25}\bcash\s?back\b|\bcash\s?back\s+(?:offers?|deals?|rewards?|up\s+to)\b""",
+        I,
+    )
+    private fun refundSignal(text: String): Boolean = refundWord.containsMatchIn(cashbackOffer.replace(text, " "))
     private val paymentReceived = Regex(
         """\bthank(?:s| you) for (?:your |the )?payment\b|\b(?:payment|paid)\b.{0,80}\b(?:received|towards|against)\b|\breceived\b.{0,40}\bpayment\b|""" +
             """$L(?:pago\s+recibido|hemos\s+recibido\s+(?:tu|su)\s+pago|pagamento\s+(?:recebido|ricevuto)|paiement\s+re[çc]u|""" +
@@ -452,9 +459,9 @@ object SmartParser {
             }
             // Paying back a loan (money out) vs. a credit card / credit line (a payment to that card).
             repayment && loanWord.containsMatchIn(text) -> { type = TxnType.TRANSFER_OUT; fixed = "Loan repayment" }
-            repayment && !refundWord.containsMatchIn(text) -> { type = TxnType.PAYMENT; fixed = "Card payment received" }
+            repayment && !refundSignal(text) -> { type = TxnType.PAYMENT; fixed = "Card payment received" }
             cardCtx && paymentReceived.containsMatchIn(text) -> { type = TxnType.PAYMENT; fixed = "Card payment received" }
-            refundWord.containsMatchIn(text) && !cashbackCard -> {
+            refundSignal(text) && !cashbackCard -> {
                 type = TxnType.REFUND
                 if (Regex("""cash\s?back""", I).containsMatchIn(text)) fixed = "Cashback"
             }
