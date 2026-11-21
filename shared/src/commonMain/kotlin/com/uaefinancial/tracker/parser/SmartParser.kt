@@ -279,7 +279,7 @@ object SmartParser {
         I,
     )
     private val creditWord = Regex(
-        """\b(?:credited|deposited|received?\s?d|deposit|salary|inward|incoming|added to your)\b|""" +
+        """\b(?:credited|deposited|receive\s?d|deposit|salary|inward|incoming|added to your)\b|""" +
             // Not "crédito" / "credit" alone: "tarjeta de crédito" is a credit CARD.
             """$L(?:abono|abonad[ao]|ingreso|ingresad[ao]|dep[óo]sito|depositad[ao]|recibid[ao]|creditad[ao]|recebid[ao]|cr[ée]dit[ée]e?|""" +
             """re[çc]u|versement|gutgeschrieben|gutschrift|zahlungseingang|eingang|eingegangen|accreditat[ao]|accredito|ricevut[ao]|versamento|""" +
