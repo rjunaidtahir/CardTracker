@@ -304,7 +304,10 @@ object SmartParser {
     )
     /** Paying one of your cards from an account: "payment of AED 100 for card 5492XXXXXXXX3115 has been processed". */
     private val payingACard = Regex(
-        """\bcard payment request\b|\bpayment (?:of\s+\S+\s+\S+\s+)?(?:for|to|towards)\s+(?:your\s+)?(?:credit\s+)?card\b.{0,60}\b(?:processed|successful)""",
+        """\bcard payment request\b|\bpayment (?:of\s+\S+\s+\S+\s+)?(?:for|to|towards)\s+(?:your\s+)?(?:credit\s+)?card\b.{0,60}\b(?:processed|successful)|""" +
+            // "Your payment instructions of AED 500.00 to 5425********0831 has been processed": the payee is a card or account NUMBER
+            // (a bill to a named company says "to HomeInternet for consumer number ..." and stays a purchase).
+            """\bpayment instructions?\s+of\s+\S+\s+[\d,.]+\s+to\s+[\dXx*]{4}[\dXx* -]{6,}\s+(?:has|have)\s+been\s+(?:processed|completed|executed)""",
         I,
     )
     private val strongTransfer = Regex(
