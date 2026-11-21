@@ -31,7 +31,7 @@ class MaskerKeepWordsTest {
     }
 
     @Test fun normalMaskingIsUnchanged() {
-        val r = Masker.mask("A Cr. transaction of AED 1,250.50 on your account number 1234567890 was successful. Thank you for banking with us", "ADCB")
+        val r = Masker.mask("A Cr. transaction of AED 1,250.50 on your account number 1234567890 was successful. Thank you for banking with Zorbo Quibble", "ADCB")
         assertTrue(r.shape.contains("{TEXT}"), r.shape)
     }
 }
