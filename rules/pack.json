@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "minEngine": 5,
   "banks": [
     {
@@ -368,6 +368,10 @@
     {
       "label": "Notice: refund pending at merchant",
       "pattern": "a credit refund of amount of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is notified by merchant"
+    },
+    {
+      "label": "Declined: Kotak credit card txn",
+      "pattern": "on your Kotak Bank Credit Card\\s+\\S{1,12}\\s+of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+at\\s+.{1,60}?\\s+could not be approved"
     }
   ],
   "categories": [
