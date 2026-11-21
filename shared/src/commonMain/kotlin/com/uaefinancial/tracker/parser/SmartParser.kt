@@ -63,6 +63,7 @@ object SmartParser {
             """outstanding(?:\s+balance)?|closing\s+balance|amount\s+due|new\s+balance|total\s+due[^:]{0,40}:?)""" +
             """[^a-z0-9]*(?:(?:is|of|amount)\b[^a-z0-9]*){0,2}$""",
     )
+    private val termDepositMatured = Regex("""\bterm deposit\b.{0,80}\bmatur(?:e|ed|es|ity)\b""", I)
     private val taxOnFee = Regex("""^\s*(?:&|and|\+|,|plus)?\s*(?:sales\s+)?(?:tax|vat|gst|fed|wht)\b[^\d]{0,12}([\d,]+(?:\.\d+)?)""", I)
     private val feeLabel = Regex("""\b(?:fee|charges?|vat|\+\s*[\d.]+\s*%)[^a-z0-9]*(?:(?:of|is)\b[^a-z0-9]*)?$""")
 
@@ -451,7 +452,10 @@ object SmartParser {
         if (!reversedBack && !creditedWith && (notDone.containsMatchIn(doneText) || notDoneIntl.containsMatchIn(doneText))) return null
         // Only a fee in the message ("Annual fee of AED 300 has been charged"): the fee is the transaction.
         val feeOnly = all.none { it.role == Role.TXN } && takenWord.containsMatchIn(text)
-        val txnAmount = all.firstOrNull { it.role == Role.TXN } ?: all.firstOrNull { feeOnly && it.role == Role.FEE } ?: return null
+        // A matured term deposit pays principal and interest into the account together; the biggest figure in the message is what arrives
+        // (never more than was credited, whichever way the bank words its "total").
+        val deposit = if (termDepositMatured.containsMatchIn(text)) all.maxWithOrNull { a, b -> a.amount.compareTo(b.amount) } else null
+        val txnAmount = deposit ?: all.firstOrNull { it.role == Role.TXN } ?: all.firstOrNull { feeOnly && it.role == Role.FEE } ?: return null
         if (txnAmount.amount.signum() <= 0) return null
         // "SMS Alerts Monthly Fee PKR 250.00 & Tax 40.00 Debited ...": the tax on a fee comes out of the account with it (no currency printed).
         val feeTax: Decimal = if (feeOnly && txnAmount.role == Role.FEE) {
