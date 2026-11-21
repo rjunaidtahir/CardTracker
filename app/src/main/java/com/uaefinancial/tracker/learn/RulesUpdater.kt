@@ -79,6 +79,8 @@ object RulesUpdater {
         }
         // Messages that could not be read before may be readable now.
         runCatching { app.repo.reparseAll() }
+        // Whatever the new rules still could not read goes to the accuracy check again (the loop continues until Needs review is clear).
+        if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { app.repo.queueUnreadForLearning(again = true) }
         // New category words in the rules file: re-check what the app itself filed under Other.
         runCatching { app.repo.reapplyAutoCategories() }
         return true

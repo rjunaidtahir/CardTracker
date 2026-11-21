@@ -39,6 +39,8 @@ object Learning {
     private const val F_APP = "entry.1715899320"
 
     const val DAILY_CAP = 50
+    /** A message still unread after this many new rules files is not sent again (it stays in Needs review for you). */
+    const val MAX_RESENDS = 3
     /** Shop names are sent under their own daily cap. */
     const val MERCHANT_CAP = 40
     private const val MERCHANT_KIND = "merchant-other"
@@ -90,8 +92,11 @@ object Learning {
     }
 
     /** Masks [body] and queues its shape. Returns true when something was queued. Does nothing unless sharing is on. */
-    fun queue(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, kind: String, merchant: String? = null): Boolean {
+    fun queue(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, rawKind: String, merchant: String? = null): Boolean {
         if (!enabled(prefs)) return false
+        // "unread-again": a message a new rules file still could not read. It may be sent once more per new rules file (at most MAX_RESENDS times).
+        val again = rawKind == "unread-again"
+        val kind = if (again) "unread" else rawKind
         val bank = publicBankName(sender, bankName)
         // A recognised bank's message, or any message that reads like a bank alert (a bank we have not listed), keeps every word except names (loose);
         // anything else (a private chat picked by hand) stays strict.
@@ -105,9 +110,18 @@ object Learning {
         // A bank we do not know yet: send its sender ID as the bank's own name for its messages ("HBL", "AX-HDFCBK-S").
         // That is public (every customer sees it); a phone number or a contact name is never sent.
         val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
-        val sentKind = if (kind == "unread") "unread/" + reason(r.shape) else kind
+        var sentKind = if (kind == "unread") "unread/" + reason(r.shape) else kind
         val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:")) "|$kind" else "")
-        if (hash in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
+        if (prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
+        if (hash in prefs.sentShapeHashes) {
+            if (!again) return false
+            val st = prefs.resendState
+            val old = st.firstOrNull { it.startsWith("$hash:") }?.split(':')
+            val n = old?.getOrNull(1)?.toIntOrNull() ?: 0
+            if (n >= MAX_RESENDS || old?.getOrNull(2)?.toIntOrNull() == prefs.packVersion) return false
+            prefs.resendState = st.filterNot { it.startsWith("$hash:") } + "$hash:${n + 1}:${prefs.packVersion}"
+            sentKind = "unread-again/${n + 1}/" + reason(r.shape)
+        }
         prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, sentKind, r.shape).joinToString(US.toString()))
         schedule(context)
         return true

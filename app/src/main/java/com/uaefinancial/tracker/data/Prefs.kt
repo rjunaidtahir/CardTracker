@@ -218,6 +218,11 @@ class Prefs(context: Context) {
         get() = (sp.getString("sent_shapes", "") ?: "").split(',').filter { it.isNotEmpty() }
         set(v) { sp.edit { putString("sent_shapes", v.takeLast(2000).joinToString(",")) } }
 
+    /** Shapes sent again because a new rules file did not clear them: "hash:attempts:packVersionOfLastSend", capped. */
+    var resendState: List<String>
+        get() = (sp.getString("resend_state", "") ?: "").split(',').filter { it.isNotEmpty() }
+        set(v) { sp.edit { putString("resend_state", v.takeLast(500).joinToString(",")) } }
+
     /** The last few shapes sent, so More → Settings can show exactly what leaves the phone. */
     var recentShared: List<String>
         get() = (sp.getString("recent_shared", "") ?: "").split('\u001E').filter { it.isNotEmpty() }

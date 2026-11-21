@@ -194,9 +194,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     private var parkedStanding = false
 
     /** Offers the masked shape of every message waiting in Needs review (nothing is sent unless sharing is on). */
-    suspend fun queueUnreadForLearning() {
-        for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, "unread", null)
-        queueHiddenForLearning()
+    suspend fun queueUnreadForLearning(again: Boolean = false) {
+        for (m in dao.failedSmsList()) if (m.ruleId != SI_RULE) onShape?.invoke(m.sender, m.bank, m.body, if (again) "unread-again" else "unread", null)
+        if (!again) queueHiddenForLearning()
     }
 
     /**
