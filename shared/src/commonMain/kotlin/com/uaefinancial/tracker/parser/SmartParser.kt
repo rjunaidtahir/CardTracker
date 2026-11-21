@@ -259,6 +259,9 @@ object SmartParser {
     private val transactionEvent = Regex(
         """credited|debited|has been|have been|was used|\bpurchase\b.{0,15}\b(?:card|at)\b|available balance|avl bal|card no|\bspent\b""", I,
     )
+    private val promoStart = Regex(
+        """\b(?:get up to|apply for a|pay [^.]{0,40}\bin \d+ instal|learn more|visit [a-z ]{0,20}page|enjoy |save up to|stay |manage your)""", I,
+    )
     internal fun looksLikeAdvert(text: String): Boolean =
         advertAlways.containsMatchIn(text) || (advertUnlessEvent.containsMatchIn(text) && !transactionEvent.containsMatchIn(text))
     private fun refundSignal(text: String): Boolean = refundWord.containsMatchIn(cashbackOffer.replace(text, " "))
@@ -434,7 +437,11 @@ object SmartParser {
         val reversedBack = reversedAndCredited.containsMatchIn(text)
         // "Your account has been successfully credited with PKR 1,000. ... fee will be deducted": the credit is done.
         val creditedWith = creditedWithAmount.containsMatchIn(text)
-        if (!reversedBack && !creditedWith && (notDone.containsMatchIn(text) || notDoneIntl.containsMatchIn(text))) return null
+        // A bank promotion tacked on after a finished transaction ("... Visit Offers Page on the app") must not make the whole message
+        // look like an offer: only the part before the promotion is checked for "not done" words.
+        val promoCut = promoStart.find(text)?.takeIf { transactionEvent.containsMatchIn(text.substring(0, it.range.first)) }
+        val doneText = promoCut?.let { text.substring(0, it.range.first) } ?: text
+        if (!reversedBack && !creditedWith && (notDone.containsMatchIn(doneText) || notDoneIntl.containsMatchIn(doneText))) return null
         // Only a fee in the message ("Annual fee of AED 300 has been charged"): the fee is the transaction.
         val feeOnly = all.none { it.role == Role.TXN } && takenWord.containsMatchIn(text)
         val txnAmount = all.firstOrNull { it.role == Role.TXN } ?: all.firstOrNull { feeOnly && it.role == Role.FEE } ?: return null
