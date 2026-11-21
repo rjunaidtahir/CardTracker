@@ -32,7 +32,7 @@ internal object CommonWords {
         if (w.length < 3) return false
         if (w in all) return true
         for (suf in SUFFIXES) {
-            if (w.length > suf.length + 2 && w.endsWith(suf)) {
+            if (w.length > suf.length + 1 && w.endsWith(suf)) {
                 val stem = w.dropLast(suf.length)
                 if (stem in all || (stem + "e") in all || (stem.length > 3 && stem.last() == stem[stem.length - 2] && stem.dropLast(1) in all)) return true
             }

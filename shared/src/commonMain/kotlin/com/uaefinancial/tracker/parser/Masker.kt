@@ -93,6 +93,32 @@ object Masker {
         "pos atm sms otp pin cvv"
         ).split(' ').filter { it.isNotEmpty() }.toSet()
 
+    /**
+     * Ordinary words the dictionary list lacks, found in the owner's real export (21 Nov 2026: "details", "under", "review", month names,
+     * "you've") plus the short everyday words the dictionary check skips (it ignores words under three letters). No names, no places.
+     */
+    private val extraWords: Set<String> = (
+        "details using per into under discount representative device review input queries supplementary unavailable enquiries remind " +
+        "clarifications inconvenience delivery documentation dispatch notifications upto replacement nearest telecom uninterrupted " +
+        "registration read deducted deregistered discounts customised enquiry subscription apologise authenticate verification retail " +
+        "reset overlimit earliest complimentary programme favourite unfrozen relocated pls intermittent solution promotion increased " +
+        "highest notification interruptions resolution optout automatically cancellation unlimited centre currencies complementary " +
+        "unsuccessful profile chequebook unregistered hrs solutions replaces returns incredible communication congratulations " +
+        "unrecognised replaced promocode installation unmatched irresistible authentication whatsapp festivities finalise categories " +
+        "inputs disregard transparency reactivate entities requesting inactive unfreeze minimise resort universities internationally " +
+        "jewellery fastest entries preferential securities recover simplified communications earlier cardless countries default enrol " +
+        "conducting authorise modification tnc tncs tc tcs cs " +
+        "january february march april june july august september october november december jan feb mar apr jun jul aug sep sept oct nov dec " +
+        "monday tuesday wednesday thursday friday saturday sunday tue tues wed thu thur thurs fri sat sun " +
+        "go do am pm up us me my so we he she it if or an as at be by in is no of on to ok oh hi id tv uk " +
+        "wasn't haven't you've we've didn't it's you're you'd you'll don't can't won't they've there's couldn't isn't aren't doesn't " +
+        "hasn't hadn't weren't shouldn't wouldn't i'm i've i'll let's that's what's bank's merchant's"
+        ).split(' ').filter { it.isNotEmpty() }.toSet()
+
+    /** A title or "payee": the word after it is a person's name, always hidden. After "to / from / by" a lowercase ordinary word is a verb ("to avoid"), not a name. */
+    private val strongLeads = setOf("dear", "mr", "mrs", "ms", "miss", "hi", "hello", "payee", "beneficiary", "name")
+    private val weakLeads = setOf("to", "from", "by")
+
     private val nameLeads = setOf("dear", "mr", "mrs", "ms", "miss", "hi", "hello", "to", "from", "by", "payee", "beneficiary", "name")
 
     // Lengths are carried as letters (a=0 … j=9) while the digit replacing runs, so it cannot touch them.
@@ -148,9 +174,11 @@ object Masker {
             when {
                 w.startsWith("{") -> w
                 lw in whitelist || lw in keep || lw in abbreviations -> w
+                // "to avoid", "to enrol": a lowercase ordinary word after to / from / by is a verb, not a name.
+                previous in weakLeads && w == w.lowercase() && (CommonWords.isCommon(w) || lw in extraWords) -> { ordinaryKept++; w }
                 // "to Hope Smith": the whole run of non-banking words after the lead is a name, so "Smith" goes too.
                 previous in nameLeads -> { prev = "name"; "{TEXT}" }
-                CommonWords.isCommon(w) -> { ordinaryKept++; w }
+                CommonWords.isCommon(w) || lw in extraWords -> { ordinaryKept++; w }
                 else -> "{TEXT}"
             }
         }

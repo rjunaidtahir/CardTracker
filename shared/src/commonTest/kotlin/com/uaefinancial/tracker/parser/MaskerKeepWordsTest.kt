@@ -54,4 +54,21 @@ class MaskerKeepWordsTest {
     @Test fun aPrivateChatIsStillRefused() {
         assertFalse(Masker.mask("Hi mum, running late, see you at the mall at 7, I will bring AED 50 for the groceries and the pizza tonight", null).safe)
     }
+
+    @Test fun wordsFromTheRealExportStayVisible() {
+        val r = Masker.mask(
+            "Dear Customer, you've been charged AED 150.00 per transaction on your Credit Card ending 1234 on 21 June. If this wasn't you, please go to the app for details and review your transaction. Tap to approve, or call us to avoid charges.",
+            "ADCB",
+        )
+        assertTrue(r.safe, r.reason ?: r.shape)
+        for (w in listOf("you've", "per", "wasn't", "go", "details", "review", "approve", "avoid", "June", "us")) {
+            assertTrue(r.shape.contains(w), "$w was hidden: ${r.shape}")
+        }
+    }
+
+    @Test fun aCapitalisedNameAfterToOrFromIsStillHidden() {
+        val r = Masker.mask("AED 500.00 sent to Rose Khan from Mary Jones on 21/09/2026, Credit Card ending 1234 was used, available balance AED 90.00", "ADCB")
+        assertTrue(r.safe, r.reason ?: r.shape)
+        for (n in listOf("Rose", "Khan", "Mary", "Jones")) assertFalse(r.shape.contains(n), "$n leaked: ${r.shape}")
+    }
 }
