@@ -946,6 +946,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 txn != null -> txn.type
                 stmt != null -> "STATEMENT"
                 sms.status == SmsStatus.IGNORED -> "NOT_TXN"
+                // Counted as part of another message's transaction (the debit message and the standing-instruction message of one transfer).
+                sms.status == SmsStatus.TRANSACTION -> "MERGED"
                 else -> "UNREAD"
             }
             val instrument = when {
