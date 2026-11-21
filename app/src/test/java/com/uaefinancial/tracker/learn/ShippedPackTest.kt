@@ -63,6 +63,47 @@ class ShippedPackTest {
         val stmt = SmsParser.parse("Tabby", "Your statement for AED 511.06 is ready. We'll charge a minimum amount of AED 127.78 to your default payment method on 30 Jun, 2026.", 0L)
         assertTrue(stmt !is ParseResult.Ignored)
     }
+
+    /**
+     * v11: telecom / prepaid notices and the older RAKBANK statement wording that the app could not read (15 reports, 21 Nov).
+     * The wordings below are rebuilt from the masked shapes (no real message is stored); each class is hidden, and the
+     * ordinary spend / credit wordings that sit next to them are not.
+     */
+    @Test fun v11HidesTheTelecomNoticesAndTheOlderRakbankStatement() {
+        val out = RulesPack.parse(file.readText(), currentVersion = 4) as RulesPack.Outcome.Ok
+        assertTrue(out.pack.version >= 11)
+        RulesPack.apply(out.pack)
+        fun hidden(label: String, vararg texts: String) {
+            val rule = out.pack.ignore.first { it.label == label }
+            val re = Regex(rule.pattern, RegexOption.IGNORE_CASE)
+            for (t in texts) assertTrue(re.containsMatchIn(t), "$label should hide: $t")
+        }
+        hidden("Statement notice: credit balance",
+            "Your Card Statement for 526039XXXXXX2712 is generated; Card has a credit balance of AED 0 with Min Due AED 0.00",
+            "Your Card Statement for 526039XXXXXX2712 is generated; CC has a credit balance of AED 1,234.50 with Minimum Due AED 62.00")
+        hidden("Telecom: account credited balance", "Your account has been credited successfully. Your new balance is AED 25.50. Dial *135# to check now.")
+        hidden("Telecom: recharge thanks", "Thanks for the recharge. Your new balance for 0551234567 is AED 30.00. Manage from the du App https://du.ae or dial *135#.")
+        hidden("Telecom: recharge credit added", "Thanks for using Du Pay. AED 5.00 cashback on recharge has been credited on your prepaid number, valid for 30 days.")
+        hidden("Telecom: top-up receipt", "Dear Customer, You have successfully topped up your number successfully via Pay Mobile number:971551234567 Amount: AED 50.00 Transaction Type: Topup Transaction ID: 123456789012 Date: 17/11/2026 17:22:46")
+        hidden("Telecom: spend limit set", "You have successfully changed the limit to AED 500.00. You can change the cooling time by sending LIMIT your-amount to 1234. To set a limit of AED 100, send LIM 1 For AED 200, send LIM 2")
+        hidden("Telecom: spend limit reached", "The transaction you are trying to make is exceeding your spend limit. your monthly limit is AED 500.00 and you have spent AED 480.00. To change your monthly limit, send LIMIT your-amount to 1234.")
+        hidden("Telecom: international pack", "You have successfully subscribed to Make Your Calls on with 100 international minutes to Pakistan , for AED 25.00 (incl 5% VAT) as a one-time charge and valid for 30 days. To cancel your pack, please dial *135# or visit https://eand.ae")
+        hidden("Notice: wallet transfer fee change", "We have updated our terms & conditions. Please visit https://dupay.ae Note: The fee for sending money to any UAE bank account will be changed to AED 3.00 (excl VAT), effective 01/12/2026. For help contact us at 600566666.")
+        // the older RAKBANK statement is now ignored end to end
+        val r = SmsParser.parse("RAKBANK", "Your Card Statement for 526039XXXXXX2712 is generated; Card has a credit balance of AED 0 with Min Due AED 0.00", 0L)
+        assertIs<ParseResult.Ignored>(r)
+        // nothing real is swallowed: card spends, credits and statements with a due date keep reading
+        val keep = listOf(
+            "Your credit card ending 2712 was used for AED 45.00 at CARREFOUR on 17/11/2026. Available limit is AED 5,000.00",
+            "AED 500.00 has been credited to your account 123456XXXX on 17/11/2026. Balance is AED 1,500.00",
+            "You have spent AED 480.00 on your card ending 1234 at NOON. Your spend limit is AED 500.00 and you have spent AED 480.00 this month",
+            "Your statement for AED 511.06 is ready. Minimum due AED 127.78 on 30 Jun 2026.",
+            "Fee of AED 3.00 for sending money to your UAE bank account has been charged",
+        )
+        for (t in keep) for (rule in out.pack.ignore.takeLast(9)) {
+            assertTrue(!Regex(rule.pattern, RegexOption.IGNORE_CASE).containsMatchIn(t), "${rule.label} must not hide: $t")
+        }
+    }
 }
 
 /**

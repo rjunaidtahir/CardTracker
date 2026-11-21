@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "minEngine": 5,
   "banks": [
     {
@@ -368,6 +368,42 @@
     {
       "label": "Notice: refund pending at merchant",
       "pattern": "a credit refund of amount of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is notified by merchant"
+    },
+    {
+      "label": "Statement notice: credit balance",
+      "pattern": "\\bStatement for\\s+\\S{6,20}\\s+is\\s+.{1,30}?\\s+has a credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*[\\d,.]+\\s+with Min(?:imum)? Due"
+    },
+    {
+      "label": "Telecom: account credited balance",
+      "pattern": "Your account has been credited successfully\\. Your new balance is\\s+[A-Z]{3}"
+    },
+    {
+      "label": "Telecom: recharge thanks",
+      "pattern": "Thanks for the recharge\\. Your new balance for"
+    },
+    {
+      "label": "Telecom: recharge credit added",
+      "pattern": "on recharge has been credited on your prepaid number"
+    },
+    {
+      "label": "Telecom: top-up receipt",
+      "pattern": "Pay Mobile number:\\s*\\d{6,15}\\s+Amount:.{1,30}?Transaction \\w+:\\s*Topup\\b"
+    },
+    {
+      "label": "Telecom: spend limit set",
+      "pattern": "You can change the .{1,30}? time by sending .{1,40}? to \\d{3,5}\\b"
+    },
+    {
+      "label": "Telecom: spend limit reached",
+      "pattern": "limit is [A-Z]{3}\\s*[\\d,.]+ and you have spent [A-Z]{3}\\s*[\\d,.]+\\. To change your monthly"
+    },
+    {
+      "label": "Telecom: international pack",
+      "pattern": "international .{1,40}? to .{1,30}?, for [A-Z]{3}\\s*[\\d,.]+ \\(.{1,30}?VAT\\) as a one-time"
+    },
+    {
+      "label": "Notice: wallet transfer fee change",
+      "pattern": "The fee for sending .{1,40}? to .{1,40}? UAE bank account will be"
     }
   ],
   "categories": [
