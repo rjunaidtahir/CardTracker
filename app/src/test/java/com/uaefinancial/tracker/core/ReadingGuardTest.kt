@@ -73,4 +73,16 @@ class ReadingGuardTest {
         val b = debit.copy(amountMinor = 5)
         assertTrue(ReadingGuard.isSoftOnly(listOf(debit, b), listOf(b.copy(merchant = "Z"), debit.copy(timestamp = 1))))
     }
+    @Test fun heldCardsWithOnlyDateOrMerchantChangesAreSoft() {
+        assertTrue(ReadingGuard.isSoftSummary("transfer out AED 1.00 (changes: date and time, merchant)"))
+        assertTrue(ReadingGuard.isSoftSummary("x (changes: merchant)"))
+        assertTrue(ReadingGuard.isSoftSummary("x (changes: date and time)"))
+    }
+    @Test fun heldCardsWithMoneyChangesAreNotSoft() {
+        assertFalse(ReadingGuard.isSoftSummary("purchase PKR 290.00 (changes: amount)"))
+        assertFalse(ReadingGuard.isSoftSummary("x (changes: date and time, amount)"))
+        assertFalse(ReadingGuard.isSoftSummary("no transaction"))
+        assertFalse(ReadingGuard.isSoftSummary("x (changes: reading removed)"))
+        assertFalse(ReadingGuard.isSoftSummary("x (changes: number of readings)"))
+    }
 }

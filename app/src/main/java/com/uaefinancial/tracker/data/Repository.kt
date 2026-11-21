@@ -321,6 +321,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 counts[o] = (counts[o] ?: 0) + 1
             }
             if (!force) guardChanges(all, oldTxns, oldStmts)
+            // 2.6.1: cards held earlier for a date/time or merchant-only change are cleared; the reading you have stays.
+            for (h in dao.heldReadingsNow()) if (ReadingGuard.isSoftSummary(h.newSummary)) dao.clearReadings(h.smsId)
             // OTP messages are only deleted when nothing was ever read from them.
             for (id in pendingOtp) if (dao.txnsForSmsNow(id).isEmpty() && dao.statementsForSmsNow(id).isEmpty()) dao.deleteSms(id)
             pendingOtp.clear()

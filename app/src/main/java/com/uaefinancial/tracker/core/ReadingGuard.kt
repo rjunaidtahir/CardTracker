@@ -70,6 +70,16 @@ object ReadingGuard {
         return out
     }
 
+    /**
+     * True when a held card's "(changes: ...)" text names only date/time and/or merchant: the same kind of change that
+     * 2.6.1 no longer puts to the user. Used to clear cards that were held before the update.
+     */
+    fun isSoftSummary(newSummary: String): Boolean {
+        val list = Regex("""\(changes: ([^)]*)\)""").find(newSummary)?.groupValues?.get(1) ?: return false
+        val parts = list.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        return parts.isNotEmpty() && parts.all { it == "date and time" || it == "merchant" }
+    }
+
     /** A short human description for the Needs review card. */
     fun describe(lines: List<Line>): String =
         if (lines.isEmpty()) "no transaction"
