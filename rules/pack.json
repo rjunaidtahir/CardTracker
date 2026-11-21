@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "minEngine": 5,
   "banks": [
     {
@@ -368,6 +368,90 @@
     {
       "label": "Notice: refund pending at merchant",
       "pattern": "a credit refund of amount of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is notified by merchant"
+    }
+  ],
+  "categories": [
+    {
+      "category": "Groceries",
+      "words": [
+        "SUNRISE CITY SPMKT",
+        "HYPER MARKET",
+        "WESTZONE",
+        "EMIRATES COOP",
+        "ORGANIC MAGIC",
+        "FRESH HOUSE SUPER"
+      ]
+    },
+    {
+      "category": "Dining & delivery",
+      "words": [
+        "BIRYANI",
+        "ALBAIK",
+        "BAIK AL MADEENA",
+        "HAJI ALI JUICE",
+        "BON VOYAGE JUICE",
+        "GEEK REST",
+        "CHEESE CAKE",
+        "RED RIBBON",
+        "KABAB",
+        "MOMOS",
+        "COFFE",
+        "ZOMATO"
+      ]
+    },
+    {
+      "category": "Fuel & transport",
+      "words": [
+        "SERVICE STATION",
+        "SER. STATION"
+      ]
+    },
+    {
+      "category": "Shopping",
+      "words": [
+        "MINISO",
+        "DAISO",
+        "MARKS N SPENCER",
+        "ALIEXPRESS",
+        "NISHAT LINEN",
+        "SHOE MART",
+        "BATH N BODY",
+        "BRANDS FOR LESS",
+        "SACOOR BROTHERS",
+        "GIFTS VILLAGE"
+      ]
+    },
+    {
+      "category": "Travel",
+      "words": [
+        "SOFITEL"
+      ]
+    },
+    {
+      "category": "Government & fees",
+      "words": [
+        "EVISA",
+        "MINISTRY OF INTERIOR"
+      ]
+    },
+    {
+      "category": "Education",
+      "words": [
+        "LIWA COLLEGE",
+        "ABU DHABI UNIVERS"
+      ]
+    },
+    {
+      "category": "Insurance",
+      "words": [
+        "ROYAL AND SUN"
+      ]
+    },
+    {
+      "category": "Utilities & bills",
+      "words": [
+        "HOME INTERNET"
+      ]
     }
   ]
 }
