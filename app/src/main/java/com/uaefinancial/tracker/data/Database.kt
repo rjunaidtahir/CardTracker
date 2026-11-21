@@ -469,6 +469,10 @@ interface AppDao {
     @Query("SELECT * FROM sms WHERE ruleId = :ruleId AND status = 'FAILED' AND note LIKE :notePrefix || '%' ORDER BY receivedAt ASC")
     suspend fun pendingStanding(ruleId: String, notePrefix: String): List<SmsEntity>
 
+    /** Standing-instruction messages that already have a place (own transaction, or counted inside a debit message). */
+    @Query("SELECT * FROM sms WHERE ruleId = :ruleId AND status = 'TRANSACTION'")
+    suspend fun smsByRuleDone(ruleId: String): List<SmsEntity>
+
     @Query("SELECT * FROM transactions WHERE inferred = 1 AND smsId IS NOT NULL")
     suspend fun inferredTxns(): List<TransactionEntity>
 

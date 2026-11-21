@@ -63,6 +63,7 @@ object SmartParser {
             """outstanding(?:\s+balance)?|closing\s+balance|amount\s+due|new\s+balance|total\s+due[^:]{0,40}:?)""" +
             """[^a-z0-9]*(?:(?:is|of|amount)\b[^a-z0-9]*){0,2}$""",
     )
+    private val taxOnFee = Regex("""^\s*(?:&|and|\+|,|plus)?\s*(?:sales\s+)?(?:tax|vat|gst|fed|wht)\b[^\d]{0,12}([\d,]+(?:\.\d+)?)""", I)
     private val feeLabel = Regex("""\b(?:fee|charges?|vat|\+\s*[\d.]+\s*%)[^a-z0-9]*(?:(?:of|is)\b[^a-z0-9]*)?$""")
 
     private fun mentions(text: String): List<Mention> = money.findAll(text).mapNotNull { m ->
@@ -278,7 +279,7 @@ object SmartParser {
         I,
     )
     private val creditWord = Regex(
-        """\b(?:credited|deposited|received|deposit|salary|inward|incoming|added to your)\b|""" +
+        """\b(?:credited|deposited|received?\s?d|deposit|salary|inward|incoming|added to your)\b|""" +
             // Not "crédito" / "credit" alone: "tarjeta de crédito" is a credit CARD.
             """$L(?:abono|abonad[ao]|ingreso|ingresad[ao]|dep[óo]sito|depositad[ao]|recibid[ao]|creditad[ao]|recebid[ao]|cr[ée]dit[ée]e?|""" +
             """re[çc]u|versement|gutgeschrieben|gutschrift|zahlungseingang|eingang|eingegangen|accreditat[ao]|accredito|ricevut[ao]|versamento|""" +
@@ -449,6 +450,10 @@ object SmartParser {
         val feeOnly = all.none { it.role == Role.TXN } && takenWord.containsMatchIn(text)
         val txnAmount = all.firstOrNull { it.role == Role.TXN } ?: all.firstOrNull { feeOnly && it.role == Role.FEE } ?: return null
         if (txnAmount.amount.signum() <= 0) return null
+        // "SMS Alerts Monthly Fee PKR 250.00 & Tax 40.00 Debited ...": the tax on a fee comes out of the account with it (no currency printed).
+        val feeTax: Decimal = if (feeOnly && txnAmount.role == Role.FEE) {
+            taxOnFee.find(text.substring(txnAmount.end))?.groupValues?.get(1)?.let { runCatching { SmsParser.parseAmount(it, txnAmount.currency) }.getOrNull() } ?: Decimal.ZERO
+        } else Decimal.ZERO
         val available = all.firstOrNull { it.role == Role.AVAILABLE && it.start > txnAmount.start }
 
         val cardCtx = cardWord.containsMatchIn(text)
@@ -591,7 +596,7 @@ object SmartParser {
                 cardLast4 = ref?.last4,
                 cardType = cardType,
                 merchant = merchant,
-                amount = txnAmount.amount.abs(),
+                amount = (if (feeTax.signum() == 0) txnAmount.amount else Decimal((txnAmount.amount.toMinor() + feeTax.toMinor()).toString()).movePointRight(-2)).abs(),
                 currency = txnAmount.currency,
                 type = type,
                 timestamp = ts,

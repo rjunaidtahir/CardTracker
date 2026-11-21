@@ -767,7 +767,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             val accounts = dao.accountTxns(group.first, group.second).filter { it.cardKey != null }.groupBy { it.cardKey!! }
                 .map { (k, v) -> StandingGap.Account(k, v.map { StandingGap.Entry(it.id, it.timestamp, it.type, it.amountMinor, it.availableLimitMinor) }) }
             val waiting = list.map { StandingGap.Standing(it.sms.id, it.parsed.txn.timestamp, Money.toMinor(it.parsed.txn.amount)) }
-            for (o in StandingGap.resolve(accounts, waiting)) {
+            // Placed and already-counted ones first, so a payee's history is complete before a waiting one is judged.
+            val outcomes = StandingGap.resolve(accounts, waiting).sortedBy { it is StandingGap.Outcome.Unplaced }
+            for (o in outcomes) {
                 val item = list.first { it.sms.id == o.standingId }
                 val sms = item.sms
                 when (o) {
@@ -780,15 +782,40 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                         )
                     }
                     is StandingGap.Outcome.Unplaced -> {
-                        val t = item.parsed.txn
-                        val what = "${t.currency} ${t.amount.toPlainString()} to ${t.merchant}"
-                        val why = if (o.why == StandingGap.Why.AMBIGUOUS) "the messages fit more than one account, so the app can't tell which."
-                        else "no account's balances show it yet. It is placed automatically if a later message settles it."
-                        dao.setSmsResult(sms.id, SmsStatus.FAILED, t.bank, SI_RULE, "$SI_PENDING_NOTE_PREFIX ($what): $why")
+                        // A standing instruction repeats from the same account: if at least two earlier ones to the same payee were
+                        // settled (by a debit message or by the balances) and all came from one account, this one did too.
+                        val same = recurringAccount(item.sms, item.parsed.txn, group.first, group.second)
+                        if (same != null) {
+                            val last4 = dao.allCards().firstOrNull { it.cardKey == same }?.last4
+                            applyTransaction(
+                                sms.id, sms.dedupKey, item.parsed,
+                                placement = Placement(same, last4, item.parsed.txn.timestamp, 0L, notify = sms.id !in placedBefore),
+                            )
+                            dao.setSmsResult(sms.id, SmsStatus.TRANSACTION, group.first, SI_RULE, SI_RECURRING_NOTE)
+                        } else {
+                            val t = item.parsed.txn
+                            val what = "${t.currency} ${t.amount.toPlainString()} to ${t.merchant}"
+                            val why = if (o.why == StandingGap.Why.AMBIGUOUS) "the messages fit more than one account, so the app can't tell which."
+                            else "no account's balances show it yet. It is placed automatically if a later message settles it."
+                            dao.setSmsResult(sms.id, SmsStatus.FAILED, t.bank, SI_RULE, "$SI_PENDING_NOTE_PREFIX ($what): $why")
+                        }
                     }
                 }
             }
         }
+    }
+
+    /** The one account that paid at least two earlier, settled standing instructions to the same payee; null if none or if they disagree. */
+    private suspend fun recurringAccount(self: SmsEntity, txn: com.uaefinancial.tracker.parser.ParsedTransaction, bank: String, currency: String): String? {
+        val counts = HashMap<String, Int>()
+        for (m in dao.smsByRuleDone(SI_RULE)) {
+            if (m.id == self.id || m.note == SI_RECURRING_NOTE) continue
+            val p = SmsParser.parse(m.sender, m.body, m.receivedAt) as? ParseResult.Transaction ?: continue
+            if (p.txn.bank != bank || p.txn.currency != currency || p.txn.merchant != txn.merchant || p.txn.toLast4 != txn.toLast4) continue
+            val key = dao.txnsForSmsNow(m.id).firstOrNull()?.cardKey ?: continue
+            counts[key] = (counts[key] ?: 0) + 1
+        }
+        return counts.keys.singleOrNull()?.takeIf { counts.values.sum() >= 2 }
     }
 
     private suspend fun applyParse(smsId: Long, dedupKey: String, r: ParseResult, receivedAt: Long, bank: String?): IngestOutcome {
@@ -1138,6 +1165,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         const val SI_RULE = "fab-standing-instruction"
         const val SI_PENDING_NOTE_PREFIX = "Money left one of your accounts"
         const val SI_PENDING_NOTE = "$SI_PENDING_NOTE_PREFIX, but the messages can't tell which one or when yet. It is placed automatically if a later message settles it; otherwise check your statement and use Fix."
+        const val SI_RECURRING_NOTE = "Placed on the account that paid the same standing instruction before (at least two earlier ones agree). Use Fix if it is wrong."
         const val SI_PLACED_NOTE = "Placed from the standing-instruction message: no debit message arrived. Account and time come from your balances."
     }
 

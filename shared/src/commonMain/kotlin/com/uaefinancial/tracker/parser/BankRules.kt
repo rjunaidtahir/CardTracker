@@ -784,7 +784,7 @@ object BankRules {
         IgnoreRule("Payment reminder", """Payment for .{0,40}card ending \d{4} is due"""),
         IgnoreRule(
             "Card setting / service notice",
-            """\bsetting for your Credit Card\b|\bdigital card\b|\bService Request\b|\bbeneficiary has been added\b|""" +
+            """تفعيل المستفيد|\bsetting for your Credit Card\b|\bdigital card\b|\bService Request\b|\bbeneficiary has been added\b|""" +
                 """\bbeneficiary\b.{0,80}\bactivat|\bpush notification|\baccount has been opened\b|\bunder process\b|""" +
                 """\bprovisional\b.{0,40}\blimit\b|\bLast Stmt\b|\binvoice\b|\blounge\b|\bsupplementary\b.{0,80}\blimit\b""",
         ),
