@@ -1,5 +1,5 @@
 {
-  "version": 12,
+  "version": 13,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -23,7 +23,13 @@
       "Ajman Bank",
       "Punjab National Bank",
       "Discover",
-      "Dubai First"
+      "Dubai First",
+      "Dubai Islamic Bank",
+      "Emirates Islamic",
+      "State Bank of India",
+      "Bank of Baroda",
+      "SAB",
+      "Pakistan bank 8810/8812/9225"
     ]
   },
   "banks": [
@@ -100,6 +106,31 @@
     {
       "name": "Xpence",
       "country": "AE"
+    },
+    {
+      "name": "Dubai Islamic Bank",
+      "country": "AE",
+      "senderIds": ["DIB-SMS"]
+    },
+    {
+      "name": "SAB",
+      "country": "AE",
+      "senderIds": ["SAB"]
+    },
+    {
+      "name": "State Bank of India",
+      "country": "IN",
+      "senderIds": ["CBSSBI", "SBIUPI"]
+    },
+    {
+      "name": "Bank of Baroda",
+      "country": "IN",
+      "senderIds": ["BOBSMS"]
+    },
+    {
+      "name": "Pakistan bank 8810/8812/9225",
+      "country": "PK",
+      "senderIds": ["8810", "8812", "9225"]
     }
   ],
   "rules": [
