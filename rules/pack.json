@@ -1,5 +1,5 @@
 {
-  "version": 13,
+  "version": 14,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -424,6 +424,10 @@
     {
       "label": "Notice: refund pending at merchant",
       "pattern": "a credit refund of amount of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is notified by merchant"
+    },
+    {
+      "label": "Notice: HDFC daily balance",
+      "pattern": "Available Bal in HDFC Bank A/c\\s+\\S{1,12}\\s+as on yesterday"
     },
     {
       "label": "Declined: Kotak credit card txn",
