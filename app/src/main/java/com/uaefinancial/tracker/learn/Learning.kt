@@ -84,7 +84,8 @@ object Learning {
 
     /** What would be sent for [body], for the preview. Null when it would not be sent. */
     fun previewShape(sender: String, bankName: String?, body: String): String? {
-        val r = Masker.mask(body, publicBankName(sender, bankName))
+        val b = publicBankName(sender, bankName)
+        val r = Masker.mask(body, b, loose = b != null)
         return r.shape.takeIf { r.safe }
     }
 
@@ -92,7 +93,8 @@ object Learning {
     fun queue(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, kind: String, merchant: String? = null): Boolean {
         if (!enabled(prefs)) return false
         val bank = publicBankName(sender, bankName)
-        val r = Masker.mask(body, bank, merchant)
+        // A recognised bank's message keeps every word except names (loose); a sender we do not recognise stays strict.
+        val r = Masker.mask(body, bank, merchant, loose = bank != null)
         if (!r.safe) {
             // Never sent, but counted (bank + fixed reason only, no text), so the review knows how much it cannot see.
             countUnmasked(prefs, bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other", r.reason ?: "unsafe")

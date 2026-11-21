@@ -119,7 +119,10 @@ object Masker {
     private val strongLeads = setOf("dear", "mr", "mrs", "ms", "miss", "hi", "hello", "payee", "beneficiary", "name")
     private val weakLeads = setOf("to", "from", "by")
 
-    private val nameLeads = setOf("dear", "mr", "mrs", "ms", "miss", "hi", "hello", "to", "from", "by", "payee", "beneficiary", "name")
+    private val nameLeads = setOf(
+        "dear", "mr", "mrs", "ms", "miss", "hi", "hello", "to", "from", "by", "payee", "beneficiary", "name",
+        "regards", "sincerely", "attn", "attention", "holder", "عزيزي", "عزيزتي", "السيد", "السيدة", "الأخ",
+    )
 
     // Lengths are carried as letters (a=0 … j=9) while the digit replacing runs, so it cannot touch them.
     private fun enc(n: Int) = n.toString().map { 'a' + (it - '0') }.joinToString("")
@@ -129,7 +132,13 @@ object Masker {
      * [merchant] is the merchant the app read (or you typed) for this message. It is never sent: where it stands in the wording is
      * marked as {MERCHANT} instead, which is all a rule for this bank's wording needs ("... from {MERCHANT} for {CUR} {AMOUNT}").
      */
-    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false): Result {
+    /**
+     * [loose] (learning reports from a recognised bank sender): every word stays, so the accuracy check can read tricky wording in any
+     * language, EXCEPT a name: the word after a title or a "payee / beneficiary / request for", a capitalised word after to / from / by, and
+     * any run of two or more unknown capitalised words ("Rana Muhammad Junaid Tahir"). A single unknown capitalised word (a brand, a
+     * place, an acronym) is kept. Never for a sender we do not recognise (a private chat): that stays strict.
+     */
+    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
         val name = merchant?.trim()?.replace(Regex("""\s+"""), " ")
@@ -166,35 +175,49 @@ object Masker {
         // a title or a "to / from / by" is where a person's name stands, so there only banking words are kept.
         var ordinaryKept = 0
         var prev = ""
+        var prev2 = ""
+        val mark = '\u0001'
         t = t.replace(wordOrToken) { m ->
             val w = m.value
             val lw = w.lowercase().replace('’', '\'')
             val previous = prev
+            val previous2 = prev2
+            prev2 = prev
             prev = lw
+            // "beneficiary creation request for PAPPU", "on behalf of Ali": a name stands here too.
+            val nameHere = previous in nameLeads || (previous == "for" && previous2 == "request") || (previous == "of" && previous2 == "behalf")
             when {
                 w.startsWith("{") -> w
                 lw in whitelist || lw in keep || lw in abbreviations -> w
                 // "to avoid", "to enrol": a lowercase ordinary word after to / from / by is a verb, not a name.
                 previous in weakLeads && w == w.lowercase() && (CommonWords.isCommon(w) || lw in extraWords) -> { ordinaryKept++; w }
                 // "to Hope Smith": the whole run of non-banking words after the lead is a name, so "Smith" goes too.
-                previous in nameLeads -> { prev = "name"; "{TEXT}" }
+                nameHere -> { prev = "name"; "{TEXT}" }
                 CommonWords.isCommon(w) || lw in extraWords -> { ordinaryKept++; w }
+                // Loose: keep it, unless it is a capitalised Latin word (maybe a name): marked now, kept only if it stands alone.
+                loose -> if (w[0] in 'A'..'Z') "$mark$w$mark" else w
                 else -> "{TEXT}"
             }
         }
+        if (loose) {
+            // A run of two or more unknown capitalised words is a person's name (or a long merchant): hidden. A single one stays.
+            val run = Regex("$mark[^$mark]+$mark(?:[\\s,.&/\\-]*$mark[^$mark]+$mark)+")
+            t = t.replace(run, "{TEXT} ").replace(mark.toString(), "")
+        }
         // Count unknown words before neighbours are merged, so a message full of them is recognised as such.
         val rawWords = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
-        val textShare = (rawWords.count { it == "{TEXT}" } + ordinaryKept).toDouble() / maxOf(1, rawWords.size)
+        val textShare = (rawWords.count { it == "{TEXT}" } + if (loose) 0 else ordinaryKept).toDouble() / maxOf(1, rawWords.size)
         t = t.replace(tokenText, "{TEXT} ")
         t = t.replace(Regex("""\s+"""), " ").trim()
 
-        if (t.length > MAX_LEN) return Result(t.take(MAX_LEN), false, "too long")
+        val maxLen = if (loose) 700 else MAX_LEN
+        if (t.length > maxLen) return Result(t.take(maxLen), false, "too long")
         // Final guard: nothing personal may remain.
         if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), ""))) return Result(t, false, "digits left")
         if (t.contains('@')) return Result(t, false, "address left")
         val words = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
         if (words.size < MIN_WORDS) return Result(t, false, "too short")
-        if (textShare > MAX_TEXT_SHARE) return Result(t, false, "mostly unknown words")
+        if (!loose && textShare > MAX_TEXT_SHARE) return Result(t, false, "mostly unknown words")
         if (words.none { it == "{AMOUNT}" }) return Result(t, false, "no amount")
         return Result(t, true)
     }

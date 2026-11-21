@@ -71,4 +71,23 @@ class MaskerKeepWordsTest {
         assertTrue(r.safe, r.reason ?: r.shape)
         for (n in listOf("Rose", "Khan", "Mary", "Jones")) assertFalse(r.shape.contains(n), "$n leaked: ${r.shape}")
     }
+
+    @Test fun looseKeepsBrandsAndForeignWordsButHidesNames() {
+        val body = "Dear Rose, AED 500.00 was debited from your Credit Card ending 1234 for Samsung Pay on 21/09/2026. Beneficiary request for PAPPU done. Regards, Rana Muhammad Junaid Tahir"
+        val r = Masker.mask(body, "FAB", loose = true)
+        assertTrue(r.safe, r.reason ?: r.shape)
+        assertTrue(r.shape.contains("Samsung"), r.shape)
+        for (n in listOf("Rose", "PAPPU", "Rana", "Muhammad", "Junaid", "Tahir")) assertFalse(r.shape.contains(n), "$n leaked: ${r.shape}")
+    }
+
+    @Test fun looseAcceptsAMessageInAnotherLanguage() {
+        val body = "تم خصم مبلغ AED 100.00 من بطاقتك الائتمانية المنتهية بالرقم 1234 لدى مطعم الشاطئ في 21/09/2026"
+        assertTrue(Masker.mask(body, "FAB", loose = true).safe)
+        assertFalse(Masker.mask(body, "FAB", loose = false).safe)
+    }
+
+    @Test fun looseDoesNotMakeAPrivateChatAcceptable() {
+        // Learning.queue passes loose only for a recognised bank; the strict path (no bank) still refuses it.
+        assertFalse(Masker.mask("Hi mum, running late, see you at the mall at 7, I will bring AED 50 for the groceries and the pizza tonight", null).safe)
+    }
 }
