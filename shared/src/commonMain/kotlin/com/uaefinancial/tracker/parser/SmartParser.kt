@@ -243,6 +243,24 @@ object SmartParser {
             """\b(?:earn|get|enjoy|win|avail|unlock|collect)\b[^.\n]{0,25}\bcash\s?back\b|\bcash\s?back\s+(?:offers?|deals?|rewards?|up\s+to)\b""",
         I,
     )
+    /**
+     * Adverts that read like a transaction ("Pay as low as AED 250 for the purchase of AED 1000 at ...", "Earn AED 50 cashback when
+     * you spend ...", "To register SMS REG to 2626"). Found on the owner's real messages (20 Nov 2026): the generic reader recorded
+     * them as spending. They are not hidden: the message goes to Needs review where the owner can still mark it or fix it.
+     * A real transaction message with an advert tacked on (a purchase, a debit, a balance) is never held back.
+     */
+    private val advertAlways = Regex(
+        """\bpay as (?:low|little|small) as\b|\btransfer your salary\b|\b(?:sms|text|send|whatsapp)\b[^.\n]{0,40}\bto\s+\d{4}\b""", I,
+    )
+    private val advertUnlessEvent = Regex(
+        """\bregister\b|\binterest rate\b|\b(?:earn|win|get|enjoy|avail|unlock)\b[^.\n]{0,40}\bcash\s?back\b|""" +
+            """(?:\bAED\s*[\d,.]+|\d+(?:\.\d+)?\s*%)\s*(?:instant\s+)?(?:as\s+)?cash\s?back|\bcash\s?back\s*(?:up\s+to|!)|\bup\s+to\b[^.\n]{0,20}\bcash\s?back""", I,
+    )
+    private val transactionEvent = Regex(
+        """credited|debited|has been|have been|was used|\bpurchase\b.{0,15}\b(?:card|at)\b|available balance|avl bal|card no|\bspent\b""", I,
+    )
+    internal fun looksLikeAdvert(text: String): Boolean =
+        advertAlways.containsMatchIn(text) || (advertUnlessEvent.containsMatchIn(text) && !transactionEvent.containsMatchIn(text))
     private fun refundSignal(text: String): Boolean = refundWord.containsMatchIn(cashbackOffer.replace(text, " "))
     private val paymentReceived = Regex(
         """\bthank(?:s| you) for (?:your |the )?payment\b|\b(?:payment|paid)\b.{0,80}\b(?:received|towards|against)\b|\breceived\b.{0,40}\bpayment\b|""" +
@@ -381,6 +399,7 @@ object SmartParser {
     fun read(bank: String, text: String, receivedAt: Long, zone: Int = SmsParser.zoneAt(receivedAt)): ParseResult? {
         val all = mentions(text)
         if (all.isEmpty()) return null
+        if (looksLikeAdvert(text)) return null // goes to Needs review; never recorded as spending
         // Only balances / limits (e.g. a balance update): nothing to record.
         if (all.all { it.role == Role.AVAILABLE }) return ParseResult.Ignored(bank, "Balance update")
         val found = dates(text, zone, hasMinimum = all.any { it.role == Role.MINIMUM })
