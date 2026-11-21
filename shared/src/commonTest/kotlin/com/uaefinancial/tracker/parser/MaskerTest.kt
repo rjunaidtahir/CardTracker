@@ -9,7 +9,7 @@ class MaskerTest {
     @Test fun masksAPurchase() {
         val r = Masker.mask("Your Visa card ending 1234 was used for AED 45.50 at NOON on 03-10-2026 14:22. Avl bal AED 9,876.00", "Emirates NBD")
         assertTrue(r.safe, r.reason ?: r.shape)
-        assertEquals("Your Visa card ending {CARD:4} was used for {CUR} {AMOUNT} at {TEXT} on {DATE} {TIME}. Avl bal {CUR} {AMOUNT}", r.shape)
+        assertEquals("Your Visa card ending {CARD:4} was used for {CUR} {AMOUNT} at NOON on {DATE} {TIME}. Avl bal {CUR} {AMOUNT}", r.shape)
     }
 
     @Test fun keepsNothingPersonal() {

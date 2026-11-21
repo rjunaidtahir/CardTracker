@@ -34,4 +34,24 @@ class MaskerKeepWordsTest {
         val r = Masker.mask("A Cr. transaction of AED 1,250.50 on your account number 1234567890 was successful. Thank you for banking with Zorbo Quibble", "ADCB")
         assertTrue(r.shape.contains("{TEXT}"), r.shape)
     }
+
+    @Test fun decisiveAndAbbreviatedWordsStayInNormalMasking() {
+        val r = Masker.mask("A Cr. transaction of AED 1,250.50 on your account number 1234567890 was successful. Avl Bal AED 9,000.00 Pur reversal instructions", "ADCB")
+        assertTrue(r.safe, r.reason ?: r.shape)
+        assertTrue(r.shape.contains("A Cr. transaction"), r.shape)
+        assertTrue(r.shape.contains("Avl Bal"), r.shape)
+        assertTrue(r.shape.contains("reversal instructions"), r.shape)
+    }
+
+    @Test fun aNameAfterDearOrToIsHiddenEvenIfItIsAnOrdinaryWord() {
+        val r = Masker.mask("Dear Rose, AED 500.00 debited from your account ending 1234 and sent to Hope Smith on 21/09/2026", "ADCB")
+        assertTrue(r.safe, r.reason ?: r.shape)
+        assertFalse(r.shape.contains("Rose"), r.shape)
+        assertFalse(r.shape.contains("Hope"), r.shape)
+        assertFalse(r.shape.contains("Smith"), r.shape)
+    }
+
+    @Test fun aPrivateChatIsStillRefused() {
+        assertFalse(Masker.mask("Hi mum, running late, see you at the mall at 7, I will bring AED 50 for the groceries and the pizza tonight", null).safe)
+    }
 }

@@ -85,6 +85,16 @@ object Masker {
         "purchase-return return-of cashbacks chargeback chargebacks disputed dispute pre-auth preauth bills paid-to paid-from"
         ).split(' ', '\n').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.toSet()
 
+    /** Short forms banks print instead of the word ("Avl Bal", "Pur"): not in a dictionary, but public and they decide what a message is. */
+    private val abbreviations: Set<String> = (
+        "avl avail avlbl bal balc amt txn txns trx trxn tran trans trn pur purch purchs acct acc acnt chq chqs cheq wdl wd dep depo " +
+        "int intl ccy curr stmt stmnt pmt pymt paymt pmnt ref refno rrn cr dr crdr drcr cc dc fx emi ach ecs nach ib ibft cdm adm " +
+        "inst instl instal msg mob tel ph nos num min mnth mth yr yrs mgmt auth autho authd decl rev revsl rtn rtrn disc cshbk cshback " +
+        "pos atm sms otp pin cvv"
+        ).split(' ').filter { it.isNotEmpty() }.toSet()
+
+    private val nameLeads = setOf("dear", "mr", "mrs", "ms", "miss", "hi", "hello", "to", "from", "by", "payee", "beneficiary", "name")
+
     // Lengths are carried as letters (a=0 … j=9) while the digit replacing runs, so it cannot touch them.
     private fun enc(n: Int) = n.toString().map { 'a' + (it - '0') }.joinToString("")
     private fun dec(s: String) = s.map { '0' + (it - 'a') }.joinToString("")
@@ -125,17 +135,27 @@ object Masker {
             if (t.contains('@')) return Result(t, false, "address left")
             return Result(t, true)
         }
+        // An ordinary dictionary word is kept (it is public and often decides what the message is), but it still counts toward
+        // "mostly unknown words" exactly as before, so a private chat full of ordinary words is never accepted. A word that follows
+        // a title or a "to / from / by" is where a person's name stands, so there only banking words are kept.
+        var ordinaryKept = 0
+        var prev = ""
         t = t.replace(wordOrToken) { m ->
             val w = m.value
+            val lw = w.lowercase().replace('’', '\'')
+            val previous = prev
+            prev = lw
             when {
                 w.startsWith("{") -> w
-                w.lowercase().replace('’', '\'') in whitelist || w.lowercase() in keep -> w
+                lw in whitelist || lw in keep || lw in abbreviations -> w
+                previous in nameLeads -> "{TEXT}"
+                CommonWords.isCommon(w) -> { ordinaryKept++; w }
                 else -> "{TEXT}"
             }
         }
         // Count unknown words before neighbours are merged, so a message full of them is recognised as such.
         val rawWords = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
-        val textShare = rawWords.count { it == "{TEXT}" }.toDouble() / maxOf(1, rawWords.size)
+        val textShare = (rawWords.count { it == "{TEXT}" } + ordinaryKept).toDouble() / maxOf(1, rawWords.size)
         t = t.replace(tokenText, "{TEXT} ")
         t = t.replace(Regex("""\s+"""), " ").trim()
 
