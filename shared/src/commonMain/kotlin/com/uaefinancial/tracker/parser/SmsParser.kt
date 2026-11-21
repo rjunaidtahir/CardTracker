@@ -137,6 +137,12 @@ object SmsParser {
 
     internal fun setDisabledRules(ids: Set<String>) { disabledRules = ids }
 
+    /** Labels of built-in ignore rules switched off by the signed rules file. */
+    @kotlin.concurrent.Volatile
+    private var disabledIgnore: Set<String> = emptySet()
+
+    internal fun setDisabledIgnore(labels: Set<String>) { disabledIgnore = labels }
+
     /** How many rules from the rules file are active. */
     fun packRuleCount(): Int = packRules.values.sumOf { it.size }
 
@@ -376,6 +382,7 @@ object SmsParser {
 
         val done = BankRules.completedAction.containsMatchIn(text)
         cb.ignore.firstOrNull {
+            if (it.first.label in disabledIgnore) return@firstOrNull false
             val hit = it.second.find(text)
             // A bank promotion tacked on AFTER a finished card event ("... Avl Bal AED 500. Learn more www... T&C apply") must not hide the
             // purchase; the advert rule only counts when the message has not already reported a transaction before the promotion.

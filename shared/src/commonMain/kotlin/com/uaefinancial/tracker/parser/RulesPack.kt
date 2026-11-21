@@ -51,6 +51,8 @@ object RulesPack {
         val disable: Set<String> = emptySet(),
         /** Banks (lower case) whose date/time- or merchant-only re-read changes apply the new reading instead of keeping the old one. */
         val softNew: Set<String> = emptySet(),
+        /** Labels of built-in "not a transaction" (ignore) rules to switch off, so wrongly hidden messages can be read again. */
+        val disableIgnore: Set<String> = emptySet(),
     )
 
     /** A request to send certain still-unread messages again with more words kept: by the shape's hash, or for every unread message of a bank. */
@@ -177,6 +179,17 @@ object RulesPack {
             id
         }.toSet()
 
+        // ---- built-in ignore rules to switch off (a wrongly hidden message class), by exact label of an existing built-in ignore rule
+        val builtInIgnoreLabels = (BankRules.banks.flatMap { b -> b.ignore.map { it.label } } + BankRules.globalIgnore.map { it.label }).toSet()
+        val diRaw = o["disableIgnore"] ?: emptyList<Any?>()
+        val diList = diRaw as? List<*> ?: return Outcome.Rejected("bad disableIgnore list")
+        if (diList.size > MAX_DISABLE) return Outcome.Rejected("too many disabled ignore rules")
+        val disableIgnore = diList.map { d ->
+            val label = (d as? String)?.trim() ?: return Outcome.Rejected("bad disabled ignore label")
+            if (label !in builtInIgnoreLabels) return Outcome.Rejected("disableIgnore: no built-in ignore rule $label")
+            label
+        }.toSet()
+
         // ---- re-read policy: banks whose harmless (date/time, merchant) re-read changes apply the new reading
         val softRaw = (o["readingPolicy"] as? Map<*, *>)?.get("applyNewFor") ?: emptyList<Any?>()
         val softList = softRaw as? List<*> ?: return Outcome.Rejected("bad readingPolicy")
@@ -187,7 +200,7 @@ object RulesPack {
             name
         }.toSet()
 
-        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet()), disable, softNew))
+        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet()), disable, softNew, disableIgnore))
     }
 
     private const val MAX_CATEGORY_GROUPS = 40
@@ -250,6 +263,7 @@ object RulesPack {
         SmsParser.setPackIgnore(pack?.ignore.orEmpty())
         CategoryRules.setPackKeywords(pack?.categories.orEmpty(), pack?.version ?: 0)
         SmsParser.setDisabledRules(pack?.disable.orEmpty())
+        SmsParser.setDisabledIgnore(pack?.disableIgnore.orEmpty())
         ReadingPolicy.softNewBanks = pack?.softNew.orEmpty()
         SmartParser.setExtraWords(pack?.words?.debit.orEmpty(), pack?.words?.credit.orEmpty(), pack?.words?.transfer.orEmpty())
     }

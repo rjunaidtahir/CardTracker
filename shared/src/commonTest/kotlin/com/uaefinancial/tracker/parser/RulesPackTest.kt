@@ -227,4 +227,29 @@ class PackTrackedSendersTest {
         assertIs<RulesPack.Outcome.Ok>(ok)
         assertTrue(ok.pack.disable.isEmpty() && ok.pack.softNew.isEmpty())
     }
+
+    private val enbdReminder = "Payment for Credit Card ending 1234 is due on 05/12/2026. Total Amt - AED 500.00; Min Amt - AED 100.00. Please pay by due date to avoid charges."
+
+    @Test fun disableIgnoreSwitchesOffOneBuiltInIgnoreRuleOnly() {
+        val before = SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L)
+        assertIs<ParseResult.Ignored>(before)
+        assertEquals("Payment reminder", before.reason)
+        val out = RulesPack.parse(packExtra("\"disableIgnore\":[\"Payment reminder\"],"))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        val after = SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L)
+        assertTrue(after !is ParseResult.Ignored || after.reason != "Payment reminder")
+        // other built-in ignore rules keep working
+        val advert = SmsParser.parseAsBank("Emirates NBD", "Payment for Credit Card ending 1234 is due. Use Code: SAVE10 for 20% off.", 0L)
+        RulesPack.apply(null)
+        assertIs<ParseResult.Ignored>(SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L))
+        assertTrue(advert !is ParseResult.Transaction)
+    }
+
+    @Test fun disableIgnoreRejectsUnknownLabelsAndBadShapes() {
+        for (bad in listOf("\"No such ignore\"", "1", "\"\"", "\"Declined: insufficient balance\"")) {
+            assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disableIgnore\":[$bad],")), bad)
+        }
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disableIgnore\":\"Payment reminder\",")))
+    }
 }
