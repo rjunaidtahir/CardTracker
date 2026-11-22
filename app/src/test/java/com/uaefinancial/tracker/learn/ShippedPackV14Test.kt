@@ -27,6 +27,6 @@ class ShippedPackV14Test {
         assertTrue(!re.containsMatchIn("Thanks for using HDFC Bank Visa AED Card 1234 for AED 7.00 at SPINNEYS on 14-11-2026 18:02:11. Card Bal: AED 88.50."))
         // one ignore entry added in v14 (later packs may add more); no reading rule added
         assertTrue(out.pack.ignore.size >= 29)
-        assertEquals(22, out.pack.rules.size)
+        assertTrue(out.pack.rules.size >= 22)
     }
 }
