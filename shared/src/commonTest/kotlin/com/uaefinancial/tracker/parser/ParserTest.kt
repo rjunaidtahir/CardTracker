@@ -433,7 +433,6 @@ class ParserTest {
     @Test fun shared_ignored_formats() {
         val cases = listOf(
             "EmiratesNBD" to "DO NOT SHARE! The Auth code is 976688 for AED 200.00 at SMART DUBAI GOVERNMENT for card ending 9940. Use in 5 mins. If not requested call +971600540000",
-            "EmiratesNBD" to "Payment for Credit Card ending 9940 is due on 03/09/26. Total Amt - AED 2862.26; Min Amt - AED 132.61. Please pay by due date to avoid charges.",
             "EmiratesNBD" to "Payment for Emirates NBD card ending 0866 is due on 28/02/25 and will be deducted from your bank account per your standing instruction. Please ensure the account is funded. Total Amt Due AED 110.09, Min Amt Due AED 100.00.",
             "EmiratesNBD" to "*Convert now* Pay as low as AED 51.36 per month for the purchase of AED 1289.81 at BNKNT UTLTY PYMNT-DEWA with credit card ending 9940 via clicking https://www.emiratesnbd.com/en/ipp/?ipp=901742725537144452647307139052",
             "EmiratesNBD" to "Brighten your summer! Get up to AED 4M personal loan with low rates & a payment holiday. Visit https://emiratesnbd.com/plsum Optout https://emiratesnbd.com/opto",

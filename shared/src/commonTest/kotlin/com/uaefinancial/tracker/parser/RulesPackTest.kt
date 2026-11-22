@@ -228,7 +228,8 @@ class PackTrackedSendersTest {
         assertTrue(ok.pack.disable.isEmpty() && ok.pack.softNew.isEmpty())
     }
 
-    private val enbdReminder = "Payment for Credit Card ending 1234 is due on 05/12/2026. Total Amt - AED 500.00; Min Amt - AED 100.00. Please pay by due date to avoid charges."
+    // The "will be deducted ... standing instruction" variant stays hidden as "Payment reminder" (it pays itself).
+    private val enbdReminder = "Payment for Emirates NBD card ending 1234 is due on 05/12/26 and will be deducted from your bank account per your standing instruction. Please ensure the account is funded. Total Amt Due AED 500.00, Min Amt Due AED 100.00."
 
     @Test fun disableIgnoreSwitchesOffOneBuiltInIgnoreRuleOnly() {
         val before = SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L)
