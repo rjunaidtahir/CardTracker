@@ -3,6 +3,7 @@ package com.uaefinancial.tracker.report
 import android.content.Context
 import android.net.Uri
 import com.uaefinancial.tracker.core.Glyph
+import com.uaefinancial.tracker.core.GlyphSize
 import com.uaefinancial.tracker.core.PrintedLine
 import com.uaefinancial.tracker.core.StatementReader
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
@@ -28,7 +29,7 @@ object PdfText {
                 t = text.characterCodes.filter { it in 32..0xFFFF }.map { it.toChar() }.joinToString("")
             }
             if (!t.isNullOrEmpty()) {
-                glyphs += Glyph(currentPageNo - 1, text.xDirAdj, text.yDirAdj, text.widthDirAdj, text.fontSizeInPt, t)
+                glyphs += Glyph(currentPageNo - 1, text.xDirAdj, text.yDirAdj, text.widthDirAdj, GlyphSize.displayed(text.fontSizeInPt, text.heightDir), t)
             }
         }
     }

@@ -5,6 +5,17 @@ import kotlin.math.abs
 /** One printed character with its position on the page (points, origin top-left), as read from the PDF. */
 data class Glyph(val page: Int, val x: Float, val y: Float, val width: Float, val size: Float, val text: String)
 
+/**
+ * Some PDFs (HSBC Live+) report a font size many times larger than the text shown, because the size is 1 or 100 and the
+ * page scales it. Line grouping and word gaps use the size, so a reported size 5x too big merges neighbouring lines and
+ * glues words together. When the reported size is far larger than the glyph's own displayed height, the displayed height
+ * is the real size.
+ */
+object GlyphSize {
+    fun displayed(reported: Float, displayedHeight: Float): Float =
+        if (displayedHeight > 0f && reported > displayedHeight * 2.5f) displayedHeight else reported
+}
+
 /** A printed line: its text with the x position of every character, so columns can be recognised. */
 class PrintedLine(val page: Int, val y: Float, val text: String, val xs: FloatArray) {
     fun xAt(i: Int): Float = xs[i.coerceIn(0, xs.size - 1)]
@@ -536,7 +547,8 @@ object StatementReader {
         var i = 0
         while (i < lines.size) {
             val l = lines[i]
-            if (otherTableHeading.containsMatchIn(l.text) && amountsIn(l).isEmpty()) { otherTable = true; cols = null; pending = null; i++; continue }
+            // A heading is a short line ("Your Installment Plans"); a long line that merely starts with those words is a row's description.
+            if (l.text.trim().length <= 40 && otherTableHeading.containsMatchIn(l.text) && amountsIn(l).isEmpty()) { otherTable = true; cols = null; pending = null; i++; continue }
             val hdr = headerAt(lines, i)
             if (hdr != null) {
                 val band = (maxOf(0, i - 2)..minOf(lines.lastIndex, i + 2)).filter { lines[it].page == l.page && abs(lines[it].y - l.y) < 25 }
