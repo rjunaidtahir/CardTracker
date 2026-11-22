@@ -1,5 +1,5 @@
 {
-  "version": 16,
+  "version": 17,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -327,6 +327,23 @@
       "cardType": "CREDIT",
       "fixedMerchant": "Reversal",
       "pattern": "Reversal of\\s+{CUR}\\s*{AMOUNT}\\s+credited to ICICI Bank Credit Card\\s+{CARD}\\s+on\\s+{DATETIME}"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-debit-card-linked-used-20261122",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "debit card\\s+{CARD}\\s+linked to acc\\.?\\s+\\S+\\s+was used for\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}\\s+at\\s+{MERCHANT}\\s*\\.\\s*Avl\\.?\\s*Bal\\.?\\s*{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-everyday-cashback-credit-20261122",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Cashback",
+      "pattern": "Congrats,?\\s*{CUR}\\s*{AMOUNT}\\s+has been credited to your Credit Card ending(?: with)?\\s+(?=[X*]*\\d{4}\\b){CARD}\\s+as part of Everyday Cashback offers"
     }
   ],
   "ignore": [
@@ -457,6 +474,22 @@
     {
       "label": "Declined: Kotak credit card txn",
       "pattern": "on your Kotak Bank Credit Card\\s+\\S{1,12}\\s+of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+at\\s+.{1,60}?\\s+could not be approved"
+    },
+    {
+      "label": "Notice: HDFC third-party limit",
+      "pattern": "HDFC Bank Third Party Transfer limit is now set to"
+    },
+    {
+      "label": "Request: UPI collect (through UPI)",
+      "pattern": "has requested\\s+.{1,60}?\\s+from you through UPI\\.\\s*To authorize debit"
+    },
+    {
+      "label": "Notice: FAB Easy Payment Plan closed",
+      "pattern": "for an Easy Payment Plan for\\s+\\d+\\s+months with a\\s+[\\d.]+% interest rate and an\\s+[A-Z]{3}\\s*[\\d,.]+\\s+processing fee was approved and closed"
+    },
+    {
+      "label": "Notice: RAKBANK cashback approved",
+      "pattern": "cashback\\s.{1,60}?\\bis approved and will be credited to your card account"
     }
   ],
   "categories": [
