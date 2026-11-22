@@ -25,8 +25,8 @@ class ShippedPackV14Test {
         assertTrue(!re.containsMatchIn("HDFC Bank: Rs 500.00 debited from A/c XX1234 on 21-11-26 to VPA x@y. Available Bal Rs 12,000.00. Not you? Call 18002586161"))
         assertTrue(!re.containsMatchIn("Rs 5,000.00 credited to HDFC Bank A/c XX1234 on 21-11-26 by UPI. Available Bal in HDFC Bank A/c XX1234 is Rs 9,000.00"))
         assertTrue(!re.containsMatchIn("Thanks for using HDFC Bank Visa AED Card 1234 for AED 7.00 at SPINNEYS on 14-11-2026 18:02:11. Card Bal: AED 88.50."))
-        // exactly one ignore entry added to the 28 of v13; no reading rule added
-        assertEquals(29, out.pack.ignore.size)
+        // one ignore entry added in v14 (later packs may add more); no reading rule added
+        assertTrue(out.pack.ignore.size >= 29)
         assertEquals(22, out.pack.rules.size)
     }
 }
