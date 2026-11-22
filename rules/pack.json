@@ -1,5 +1,5 @@
 {
-  "version": 17,
+  "version": 18,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -344,6 +344,40 @@
       "cardType": "CREDIT",
       "fixedMerchant": "Cashback",
       "pattern": "Congrats,?\\s*{CUR}\\s*{AMOUNT}\\s+has been credited to your Credit Card ending(?: with)?\\s+(?=[X*]*\\d{4}\\b){CARD}\\s+as part of Everyday Cashback offers"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-cashback-credited-spends-20261122",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Cashback",
+      "pattern": "Cashback of\\s+{CUR}\\s*{AMOUNT}\\s+is credited to your Credit Card ending(?: with)?\\s+{CARD}\\s+for\\s+[A-Za-z]{3,9}['’]?\\d{2,4}\\s+e-commerce spends"
+    },
+    {
+      "bank": "HDFC Bank",
+      "id": "hdfc-autopay-emandate-success-20261122",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "AutoPay \\(E-mandate\\) Success(?:ful)?!\\s+For\\s+{MERCHANT}(?:\\s*\\.\\.)?\\s+(?:Current\\s+)?Txn Amt:\\s*{CUR}\\s*{AMOUNT}\\s+(?:Date|Dt):\\s*{DATETIME}\\s+Via:\\s*(?:E-mandate on\\s+)?HDFC Bank (?:Credit Card|CC)\\s+{CARD}\\b"
+    },
+    {
+      "bank": "HDFC Bank",
+      "id": "hdfc-credit-card-spent-on-at-20261122",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "You['’]ve spent\\s+{CUR}\\s*{AMOUNT}\\s+On HDFC Bank CREDIT Card\\s+{CARD}\\s+At\\s+{MERCHANT}\\s+On\\s+{DATETIME}:\\d{1,2}:\\d{2}(?::\\d{2})?\\s*Avl bal:?\\s*{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Punjab National Bank",
+      "id": "pnb-account-debited-thru-upi-20261122",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "UPI payment",
+      "pattern": "A/c\\s+{CARD}\\s+has been debited with\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}\\s*thru UPI"
     }
   ],
   "ignore": [
@@ -490,6 +524,22 @@
     {
       "label": "Notice: RAKBANK cashback approved",
       "pattern": "cashback\\s.{1,60}?\\bis approved and will be credited to your card account"
+    },
+    {
+      "label": "Failed: HDFC autopay notice",
+      "pattern": "Autopay Failed:\\s*[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+on\\s.{1,30}?via HDFC Bank Card"
+    },
+    {
+      "label": "Failed: HDFC card transaction notice",
+      "pattern": "Transaction failed!\\s*For\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+To\\s.{1,60}?On HDFC Bank Credit Card\\s+\\S{1,12}\\.?\\s*Reason:"
+    },
+    {
+      "label": "Notice: PNB failed-ATM charge",
+      "pattern": "charge of\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\+GST shall be levied on failed domestic ATM cash withdrawal"
+    },
+    {
+      "label": "Advert: Liv fees changed",
+      "pattern": "Our fees have changed!\\s*Send money to\\s"
     }
   ],
   "categories": [
