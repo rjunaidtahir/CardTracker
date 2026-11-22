@@ -26,6 +26,7 @@ class UnknownSenderDbTest {
         val ctx = ApplicationProvider.getApplicationContext<Context>()
         db = Room.inMemoryDatabaseBuilder(ctx, AppDatabase::class.java).allowMainThreadQueries().build()
         repo = Repository(db)
+        UnknownSenderPolicy.keep = true // the dormant path; the default is off (see the two tests at the end)
         SmsParser.setHomeCurrency("AED")
         SmsParser.setMonthFirstDates(false)
         SmsParser.setCustomSenders(emptyMap())
@@ -33,6 +34,7 @@ class UnknownSenderDbTest {
     }
 
     @After fun tearDown() {
+        UnknownSenderPolicy.keep = false
         SmsParser.setCustomSenders(emptyMap())
         SmsParser.setExcludedBanks(emptySet())
         db.close()
@@ -171,5 +173,31 @@ class UnknownSenderDbTest {
         val c = open().single()
         assertTrue(c.shapeKey.isNotEmpty())
         assertTrue(!c.shapeKey.contains("9090") && !c.shapeKey.contains("60.00"))
+    }
+
+    @Test fun by_default_nothing_from_an_unknown_sender_is_kept() {
+        UnknownSenderPolicy.keep = false
+        assertEquals(IngestOutcome.NOT_BANK, ingest("MYBANKX", purchase))
+        assertEquals(0, candidates().size)
+    }
+
+    @Test fun the_one_time_cleanup_closes_waiting_ones_and_leaves_accepted_and_muted_alone() {
+        ingest("MYBANKX", purchase)
+        ingest("OTHERX", laterPurchase)
+        ingest("MUTEDX", purchase)
+        runBlocking { repo.muteSender("MUTEDX") }
+        runBlocking { repo.acceptSender("OTHERX", "Other Bank") }
+        val before = candidates()
+        val waiting = before.count { it.state == "OPEN" }
+        assertTrue(waiting >= 1)
+        val closed = runBlocking { repo.closeWaitingUnknownSenders() }
+        assertEquals(waiting, closed)
+        val after = candidates()
+        assertEquals(0, after.count { it.state == "OPEN" })
+        assertEquals(before.count { it.state == "MUTED" }, after.count { it.state == "MUTED" })
+        assertEquals(before.count { it.state == "ACCEPTED" }, after.count { it.state == "ACCEPTED" })
+        // A second run finds nothing more.
+        assertEquals(0, runBlocking { repo.closeWaitingUnknownSenders() })
+        assertEquals("ok", integrity())
     }
 }

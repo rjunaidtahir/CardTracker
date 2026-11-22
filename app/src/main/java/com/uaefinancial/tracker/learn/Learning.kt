@@ -94,6 +94,26 @@ object Learning {
         return hash("$label|${r.shape}") in req.hashes
     }
 
+    /**
+     * True when a message is still unread after [MAX_RESENDS] - 1 resends and has not yet been asked for in fuller form
+     * twice: then it goes out with more words by itself, without waiting for a rules file to ask (the accuracy loop must
+     * not depend on a manual step). Records the fuller send so it happens at most twice per message shape.
+     */
+    fun takeAutoMore(prefs: Prefs, sender: String, bankName: String?, body: String): Boolean {
+        val bank = publicBankName(sender, bankName)
+        val r = Masker.mask(body, bank, null, loose = bank != null || Masker.looksLikeBankMessage(body))
+        val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+        val hash = hash("$label|${r.shape}")
+        val st = prefs.resendState
+        val n = st.firstOrNull { it.startsWith("$hash:") }?.split(':')?.getOrNull(1)?.toIntOrNull() ?: 0
+        if (n < MAX_RESENDS - 1) return false
+        val key = "M$hash:"
+        val done = st.firstOrNull { it.startsWith(key) }?.removePrefix(key)?.toIntOrNull() ?: 0
+        if (done >= 2) return false
+        prefs.resendState = st.filterNot { it.startsWith(key) } + (key + (done + 1))
+        return true
+    }
+
     /** What would be sent for [body], for the preview. Null when it would not be sent. */
     fun previewShape(sender: String, bankName: String?, body: String): String? {
         val b = publicBankName(sender, bankName)
@@ -123,7 +143,7 @@ object Learning {
         // That is public (every customer sees it); a phone number or a contact name is never sent.
         val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
         var sentKind = if (more) "unread-more/" + reason(r.shape) else if (kind == "unread") "unread/" + reason(r.shape) else kind
-        val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:")) "|$kind" else if (more) "|more${prefs.packVersion}" else "")
+        val hash = hash("$label|${r.shape}" + if (kind.startsWith("choice:") || kind.startsWith("held:") || kind.startsWith("softchange:")) "|$kind" else if (more) "|more${prefs.packVersion}" else "")
         if (prefs.shapeQueue.any { it.startsWith("$hash$US") }) return false
         if (hash in prefs.sentShapeHashes) {
             if (!again) return false

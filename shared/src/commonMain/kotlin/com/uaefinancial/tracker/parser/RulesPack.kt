@@ -30,6 +30,8 @@ object RulesPack {
     private const val MAX_PATTERN = 700
     private const val MAX_IGNORE = 200
     private const val MAX_WORDS = 100
+    private const val MAX_DISABLE = 20
+    private const val MAX_SOFT_BANKS = 50
 
     /** Ordinary purchase and debit messages that no ignore rule may swallow. */
     private val canaries = listOf(
@@ -45,6 +47,12 @@ object RulesPack {
         val ignore: List<IgnoreRule> = emptyList(), val words: Words = Words(),
         val categories: List<Pair<Long, List<String>>> = emptyList(),
         val sendMore: SendMore = SendMore(),
+        /** Ids of built-in reading rules to switch off (remote off switch). Only ids of existing built-in rules are accepted. */
+        val disable: Set<String> = emptySet(),
+        /** Banks (lower case) whose date/time- or merchant-only re-read changes apply the new reading instead of keeping the old one. */
+        val softNew: Set<String> = emptySet(),
+        /** Labels of built-in "not a transaction" (ignore) rules to switch off, so wrongly hidden messages can be read again. */
+        val disableIgnore: Set<String> = emptySet(),
     )
 
     /** A request to send certain still-unread messages again with more words kept: by the shape's hash, or for every unread message of a bank. */
@@ -160,7 +168,39 @@ object RulesPack {
         val smHashes = smList("hashes", 500, 40) ?: return Outcome.Rejected("bad sendMore hashes")
         val smBanks = smList("banks", 50, 60) ?: return Outcome.Rejected("bad sendMore banks")
 
-        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet())))
+        // ---- remote off switch: ids of BUILT-IN reading rules only (never ignore entries, never a typo that matches nothing)
+        val builtInIds = BankRules.banks.flatMap { b -> b.rules.map { it.id } }.toSet()
+        val disableRaw = o["disable"] ?: emptyList<Any?>()
+        val disableList = disableRaw as? List<*> ?: return Outcome.Rejected("bad disable list")
+        if (disableList.size > MAX_DISABLE) return Outcome.Rejected("too many disabled rules")
+        val disable = disableList.map { d ->
+            val id = (d as? String)?.trim() ?: return Outcome.Rejected("bad disabled rule id")
+            if (id !in builtInIds) return Outcome.Rejected("disable: no built-in rule $id")
+            id
+        }.toSet()
+
+        // ---- built-in ignore rules to switch off (a wrongly hidden message class), by exact label of an existing built-in ignore rule
+        val builtInIgnoreLabels = (BankRules.banks.flatMap { b -> b.ignore.map { it.label } } + BankRules.globalIgnore.map { it.label }).toSet()
+        val diRaw = o["disableIgnore"] ?: emptyList<Any?>()
+        val diList = diRaw as? List<*> ?: return Outcome.Rejected("bad disableIgnore list")
+        if (diList.size > MAX_DISABLE) return Outcome.Rejected("too many disabled ignore rules")
+        val disableIgnore = diList.map { d ->
+            val label = (d as? String)?.trim() ?: return Outcome.Rejected("bad disabled ignore label")
+            if (label !in builtInIgnoreLabels) return Outcome.Rejected("disableIgnore: no built-in ignore rule $label")
+            label
+        }.toSet()
+
+        // ---- re-read policy: banks whose harmless (date/time, merchant) re-read changes apply the new reading
+        val softRaw = (o["readingPolicy"] as? Map<*, *>)?.get("applyNewFor") ?: emptyList<Any?>()
+        val softList = softRaw as? List<*> ?: return Outcome.Rejected("bad readingPolicy")
+        if (softList.size > MAX_SOFT_BANKS) return Outcome.Rejected("too many banks in readingPolicy")
+        val softNew = softList.map { b ->
+            val name = (b as? String)?.trim()?.lowercase() ?: return Outcome.Rejected("bad readingPolicy bank")
+            if (name !in knownNames) return Outcome.Rejected("readingPolicy: unknown bank $name")
+            name
+        }.toSet()
+
+        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet()), disable, softNew, disableIgnore))
     }
 
     private const val MAX_CATEGORY_GROUPS = 40
@@ -222,6 +262,16 @@ object RulesPack {
         SmsParser.setPackRules(pack?.rules.orEmpty().groupBy({ it.bank.trim().lowercase() }, { it.rule }))
         SmsParser.setPackIgnore(pack?.ignore.orEmpty())
         CategoryRules.setPackKeywords(pack?.categories.orEmpty(), pack?.version ?: 0)
+        SmsParser.setDisabledRules(pack?.disable.orEmpty())
+        SmsParser.setDisabledIgnore(pack?.disableIgnore.orEmpty())
+        ReadingPolicy.softNewBanks = pack?.softNew.orEmpty()
         SmartParser.setExtraWords(pack?.words?.debit.orEmpty(), pack?.words?.credit.orEmpty(), pack?.words?.transfer.orEmpty())
     }
+}
+
+/** Re-read policy delivered by the signed rules file. */
+object ReadingPolicy {
+    /** Lower-case bank names whose date/time- or merchant-only re-read changes apply the new reading. */
+    @kotlin.concurrent.Volatile
+    var softNewBanks: Set<String> = emptySet()
 }

@@ -340,6 +340,14 @@ object BankRules {
                     kind = RuleKind.STATEMENT,
                     pattern = """Mini Stmt for Card ending {CARD}:?\s*Statement date {STMTDATE}\.?\s+Total Amt Due {CUR}\s*{TOTAL},?\s+Due Date {DUE}\.?\s+Min Amt Due {ANYCUR}\s*{MIN}""",
                 ),
+                // Payment for Credit Card ending 9940 is due on 03/09/26. Total Amt - AED 2862.26; Min Amt - AED 132.61. Please pay by due date...
+                // A payment-due notice with a due date, total and minimum: a statement reading (was hidden as "Payment reminder").
+                // The variant that says it "will be deducted ... per your standing instruction" is paid by itself and stays hidden.
+                Rule(
+                    id = "enbd-payment-due",
+                    kind = RuleKind.STATEMENT,
+                    pattern = """Payment for (?:{CARDTYPE}\s+)?Card ending {CARD} is due on {DUE}\.\s*Total Amt\s*-\s*{CUR}\s*{TOTAL}\s*;\s*Min Amt\s*-\s*{ANYCUR}\s*{MIN}""",
+                ),
             ),
         ),
 
@@ -764,7 +772,7 @@ object BankRules {
      * ("has been processed", "debited"...) is not ignored by them: it goes on to the smart reader, and if that can't
      * read it either, it lands in Needs review instead of vanishing.
      */
-    val SOFT_IGNORE_LABELS: Set<String> = setOf("Standing instruction")
+    val SOFT_IGNORE_LABELS: Set<String> = setOf("Standing instruction", "Upcoming debit notice")
 
     /** Wording for "this has been carried out", used with [SOFT_IGNORE_LABELS]. */
     val completedAction: Regex = Regex(
@@ -805,6 +813,11 @@ object BankRules {
                 """^(?:Enjoy|Earn|Get|Win|Shop|Spend|Dine|Grow|Gift|Travel|School|Hassle|Make|Your summer|Limited time|Tailored|Repay|Amazon\.ae|Branch Teller|Congrats)\b""",
         ),
         IgnoreRule("Limit change", """\blimit\b.*\b(has been|was)\s+(changed|updated|increased|decreased|set)\b|\blimit change\b"""),
+        // 22 Nov owner decision: "will be debited on <date> from card ... for MERCHANT" (HDFC) and "will be debited ... UPI Autopay on <date>"
+        // (PNB) are notices of a future debit, not money that moved. The real debit arrives as its own message. Yields to
+        // completed-action wording (see SOFT_IGNORE_LABELS), so a message that also says "has been debited" is still read.
+        // A UPI money REQUEST ("... requested money ... will be debited on approving") keeps its own label from the rules file.
+        IgnoreRule("Upcoming debit notice", """(?s)^(?!.*\b(?:requested\s+money|approv(?:e|ing)\s+the\s+request|(?:has|have|had|was|were)\s+(?:been\s+)?(?:successfully\s+)?(?:debited|charged|deducted|spent|used))\b).*\bwill\s+be\s+(?:auto[\s-]?)?debited\b"""),
     )
 
     /** Approximate rates, "1 unit = x AED", for every currency the app knows (see Currencies.kt). Edit freely in the app. */

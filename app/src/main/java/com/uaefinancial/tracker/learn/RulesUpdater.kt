@@ -71,11 +71,12 @@ object RulesUpdater {
         val trackedBefore = SmsParser.trackedIds()
         RulesPack.apply(out.pack)
         prefs.packVersion = out.pack.version
-        // A sender the rules file now tracks: read what is waiting from it and re-import the inbox on the next Sync,
-        // so its older messages come in too (nothing duplicates: every message has a unique key).
-        if (SmsParser.trackedIds().any { it !in trackedBefore }) {
+        // A sender the rules file now tracks: its older messages come in on the next Sync (only that sender's, not the
+        // whole inbox; nothing duplicates: every message has a unique key).
+        val newlyTracked = SmsParser.trackedIds() - trackedBefore
+        if (newlyTracked.isNotEmpty()) {
             runCatching { app.repo.adoptTrackedCandidates() }
-            prefs.lastSyncAt = null
+            prefs.pendingSenderReads = prefs.pendingSenderReads + newlyTracked
         }
         // Messages that could not be read before may be readable now.
         runCatching { app.repo.reparseAll() }
@@ -84,7 +85,8 @@ object RulesUpdater {
             // A message the rules file asked for with more words goes out in fuller form; the rest of what is still unread goes out as before.
             val ask = out.pack.sendMore
             for (m in app.repo.unreadMessages()) {
-                val kind = if (com.uaefinancial.tracker.learn.Learning.wantsMore(prefs, m.sender, m.bank, m.body, ask)) "unread-more" else "unread-again"
+                val kind = if (com.uaefinancial.tracker.learn.Learning.wantsMore(prefs, m.sender, m.bank, m.body, ask) ||
+                    com.uaefinancial.tracker.learn.Learning.takeAutoMore(prefs, m.sender, m.bank, m.body)) "unread-more" else "unread-again"
                 com.uaefinancial.tracker.learn.Learning.queue(app, prefs, m.sender, m.bank, m.body, kind)
             }
         }

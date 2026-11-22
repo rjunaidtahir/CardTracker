@@ -74,10 +74,34 @@ object InboxReader {
                 val addr = c.getString(iAddr) ?: continue
                 val body = c.getString(iBody) ?: ""
                 val date = c.getLong(iDate)
-                // Your banks, plus any other sender whose message could be financial (kept for review, never posted).
-                if (SmsParser.bankFor(addr) == null && CandidateScreen.screen(addr, body, date) == null) continue
+                // Your banks only. Other senders are not kept (a chat becomes a bank when you add it).
+                if (SmsParser.bankFor(addr) == null) continue
                 val sent = if (c.isNull(iSent)) null else c.getLong(iSent).takeIf { it > 0 }
                 out += InboxSms(addr, body, date, sent)
+            }
+        }
+        return out
+    }
+
+    /** The whole inbox, but only the messages of the given sender IDs (a sender just added or newly tracked). */
+    fun readSenders(context: Context, senderIds: Set<String>): List<InboxSms> {
+        if (senderIds.isEmpty()) return emptyList()
+        if (!hasPermission(context)) throw SecurityException("READ_SMS not granted")
+        val out = mutableListOf<InboxSms>()
+        context.contentResolver.query(
+            Telephony.Sms.Inbox.CONTENT_URI,
+            arrayOf(Telephony.Sms.ADDRESS, Telephony.Sms.BODY, Telephony.Sms.DATE, Telephony.Sms.DATE_SENT),
+            null, null, "${Telephony.Sms.DATE} ASC",
+        )?.use { c ->
+            val iAddr = c.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
+            val iBody = c.getColumnIndexOrThrow(Telephony.Sms.BODY)
+            val iDate = c.getColumnIndexOrThrow(Telephony.Sms.DATE)
+            val iSent = c.getColumnIndexOrThrow(Telephony.Sms.DATE_SENT)
+            while (c.moveToNext()) {
+                val addr = c.getString(iAddr) ?: continue
+                if (senderIds.none { SmsParser.senderMatches(addr, it) } || SmsParser.bankFor(addr) == null) continue
+                val sent = if (c.isNull(iSent)) null else c.getLong(iSent).takeIf { it > 0 }
+                out += InboxSms(addr, c.getString(iBody) ?: "", c.getLong(iDate), sent)
             }
         }
         return out

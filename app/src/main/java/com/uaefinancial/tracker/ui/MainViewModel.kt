@@ -747,7 +747,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "bank-added", sender, name, sample, "candidate")
         val n = repo.acceptSender(sender, name)
         runCatching { repo.autoFillCardDays() }
-        resetSyncPointerQuietly()
+        readOlderOf(listOf(sender))
         message.value = "Added $name and read $n message${if (n == 1) "" else "s"}. Anything unclear is below."
         refreshWidget()
     }
@@ -1157,7 +1157,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             com.uaefinancial.tracker.learn.Learning.queueEvent(getApplication(), prefs, "bank-added", s, b, sample, via)
         }
         clean.forEach { (s, b) -> repo.addSender(s, b) }
-        resetSyncPointerQuietly()
+        readOlderOf(clean.map { it.first })
         // The scan list should no longer offer what was just added.
         scan.value = scan.value.copy(result = scan.value.result?.let { r -> r.copy(suggestions = r.suggestions.filterNot { sug -> clean.any { it.first.equals(sug.sender, true) } }) })
         message.value = if (clean.size == 1) "Added ${clean[0].first}" else "Added ${clean.size} senders"
@@ -1167,6 +1167,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun removeSender(sender: String) = viewModelScope.launch {
         repo.removeSender(sender)
         message.value = "Removed $sender. Its messages already imported stay until you tap Re-read stored messages."
+    }
+
+    /** The next Sync also reads the older messages of these senders (only theirs, not the whole inbox). */
+    private fun readOlderOf(senders: Collection<String>) {
+        prefs.pendingSenderReads = prefs.pendingSenderReads + senders.map { it.trim() }.filter { it.isNotEmpty() }
     }
 
     private fun resetSyncPointerQuietly() {
@@ -1289,8 +1294,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         repo.reparseAll()
         runCatching { repo.autoFillCardDays() }
         if (tracked) {
-            // Its older messages were never imported: the next Sync reads the whole inbox again.
-            resetSyncPointerQuietly()
+            // Its older messages were never imported: the next Sync reads that bank's messages from the whole inbox.
+            readOlderOf(SmsParser.senderIdsOfBank(bank))
             message.value = "Tracking $bank again. Tap Sync to bring in its messages."
         } else {
             message.value = "Stopped tracking $bank. Its transactions are hidden; tick it again to bring them back."

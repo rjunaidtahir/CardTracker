@@ -177,4 +177,80 @@ class PackTrackedSendersTest {
         assertTrue(RulesPack.parse("""{"version":9,"sendMore":{"hashes":[5]},"banks":[],"rules":[]}""") is RulesPack.Outcome.Rejected)
         assertTrue(RulesPack.parse("""{"version":9,"banks":[],"rules":[]}""").let { it is RulesPack.Outcome.Ok && it.pack.sendMore.hashes.isEmpty() })
     }
+
+    private fun packExtra(extra: String) = """{"version":3,$extra"banks":[],"rules":[]}"""
+
+    // ---- 2.6.1: remote off switch for built-in rules, and the re-read policy
+    private val fabOut = "Outward Remittance Debit Account XXXX8001 AED 1000.00 Date 17/09/2026 21:45 Balance AED 2386.00"
+
+    @Test fun disableSwitchesOffNamedBuiltInRuleOnly() {
+        val before = SmsParser.parseAsBank("FAB", fabOut, 0L)
+        assertIs<ParseResult.Transaction>(before)
+        assertEquals("fab-outward-remittance", before.ruleId)
+        val out = RulesPack.parse(packExtra("\"disable\":[\"fab-outward-remittance\"],"))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        val after = SmsParser.parseAsBank("FAB", fabOut, 0L)
+        assertTrue(after !is ParseResult.Transaction || after.ruleId != "fab-outward-remittance")
+        // another built-in rule of the same bank still works
+        val other = SmsParser.parseAsBank("FAB", "Inward Remittance Credit Account XXXX8001 AED 500.00 Date 17/09/2026 21:45 Balance AED 2886.00", 0L)
+        assertIs<ParseResult.Transaction>(other)
+        assertEquals("fab-inward-remittance", other.ruleId)
+        // withdrawing the switch (a newer file without it) turns the rule back on
+        RulesPack.apply(null)
+        assertEquals("fab-outward-remittance", (SmsParser.parseAsBank("FAB", fabOut, 0L) as ParseResult.Transaction).ruleId)
+    }
+
+    @Test fun disableRejectsUnknownIdsPackRulesAndIgnoreLabels() {
+        for (bad in listOf("\"no-such-rule\"", "\"pack:hbl-1\"", "\"Advert\"", "1", "\"\"")) {
+            assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$bad],")), bad)
+        }
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":\"fab-outward-remittance\",")))
+        val tooMany = (1..21).joinToString(",") { "\"fab-outward-remittance\"" }
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$tooMany],")))
+    }
+
+    @Test fun readingPolicyAcceptsKnownBanksOnly() {
+        val ok = RulesPack.parse(packExtra("\"readingPolicy\":{\"applyNewFor\":[\"FAB\"]},"))
+        assertIs<RulesPack.Outcome.Ok>(ok)
+        assertEquals(setOf("fab"), ok.pack.softNew)
+        RulesPack.apply(ok.pack)
+        assertEquals(setOf("fab"), ReadingPolicy.softNewBanks)
+        RulesPack.apply(null)
+        assertEquals(emptySet(), ReadingPolicy.softNewBanks)
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"readingPolicy\":{\"applyNewFor\":[\"No Such Bank\"]},")))
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"readingPolicy\":{\"applyNewFor\":\"FAB\"},")))
+    }
+
+    @Test fun aPackWithoutTheNewSectionsStillParses() {
+        val ok = RulesPack.parse(packExtra(""))
+        assertIs<RulesPack.Outcome.Ok>(ok)
+        assertTrue(ok.pack.disable.isEmpty() && ok.pack.softNew.isEmpty())
+    }
+
+    // The "will be deducted ... standing instruction" variant stays hidden as "Payment reminder" (it pays itself).
+    private val enbdReminder = "Payment for Emirates NBD card ending 1234 is due on 05/12/26 and will be deducted from your bank account per your standing instruction. Please ensure the account is funded. Total Amt Due AED 500.00, Min Amt Due AED 100.00."
+
+    @Test fun disableIgnoreSwitchesOffOneBuiltInIgnoreRuleOnly() {
+        val before = SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L)
+        assertIs<ParseResult.Ignored>(before)
+        assertEquals("Payment reminder", before.reason)
+        val out = RulesPack.parse(packExtra("\"disableIgnore\":[\"Payment reminder\"],"))
+        assertIs<RulesPack.Outcome.Ok>(out)
+        RulesPack.apply(out.pack)
+        val after = SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L)
+        assertTrue(after !is ParseResult.Ignored || after.reason != "Payment reminder")
+        // other built-in ignore rules keep working
+        val advert = SmsParser.parseAsBank("Emirates NBD", "Payment for Credit Card ending 1234 is due. Use Code: SAVE10 for 20% off.", 0L)
+        RulesPack.apply(null)
+        assertIs<ParseResult.Ignored>(SmsParser.parseAsBank("Emirates NBD", enbdReminder, 0L))
+        assertTrue(advert !is ParseResult.Transaction)
+    }
+
+    @Test fun disableIgnoreRejectsUnknownLabelsAndBadShapes() {
+        for (bad in listOf("\"No such ignore\"", "1", "\"\"", "\"Declined: insufficient balance\"")) {
+            assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disableIgnore\":[$bad],")), bad)
+        }
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disableIgnore\":\"Payment reminder\",")))
+    }
 }
