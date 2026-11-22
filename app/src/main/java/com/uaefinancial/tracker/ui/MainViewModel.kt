@@ -1170,7 +1170,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** The next Sync also reads the older messages of these senders (only theirs, not the whole inbox). */
-    private fun readOlderOf(senders: List<String>) {
+    private fun readOlderOf(senders: Collection<String>) {
         prefs.pendingSenderReads = prefs.pendingSenderReads + senders.map { it.trim() }.filter { it.isNotEmpty() }
     }
 

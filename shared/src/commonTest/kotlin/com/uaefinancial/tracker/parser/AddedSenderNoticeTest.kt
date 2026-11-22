@@ -18,10 +18,16 @@ class AddedSenderNoticeTest {
         return SmsParser.parse(sender, body, now)
     }
 
-    @Test fun a_promotion_from_an_added_sender_is_hidden_with_the_notice_reason() {
-        val r = added("AD-MyAdded", "Invite friends to MyAdded and earn up to AED 2,000 in rewards this month. T&Cs apply.")
-        val ig = assertIs<ParseResult.Ignored>(r)
-        assertEquals(CandidateScreen.HIDDEN_NOTICE, ig.reason)
+    @Test fun promotions_from_an_added_sender_are_hidden_not_left_in_needs_review() {
+        val promos = listOf(
+            "Invite friends to MyAdded and earn up to AED 2,000 in rewards this month. T&Cs apply.",
+            "Your data bundle of AED 55.00 renews tomorrow. Top up now to keep your plan.",
+            "Win AED 1,000 every day with our weekly prize draw. Enter now.",
+        )
+        for (p in promos) {
+            val r = added("AD-MyAdded", p)
+            assertIs<ParseResult.Ignored>(r, p) // Advert rule or the notice rule; never Failed (unread)
+        }
     }
 
     @Test fun a_due_reminder_with_an_amount_from_an_added_sender_is_hidden() {
