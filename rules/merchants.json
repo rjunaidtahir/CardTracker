@@ -1,5 +1,5 @@
 {
-  "lastTimestamp": "11/21/2026 16:46:11",
+  "lastTimestamp": "11/22/2026 9:26:25",
   "examples": [
     {
       "name": "SUNRISE CITY SPMKT OUD",
@@ -152,6 +152,106 @@
     {
       "name": "HOME INTERNET",
       "category": "Utilities & bills"
+    },
+    {
+      "name": "LA BRIOCHE AL AHLIA GE",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "SUBWAY",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "VAPIANO ADH",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "CHOWKING ORIENT REST",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "HARDEES-TOURIST CLUB A ABU DHABI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "BROASTED AND SHAWARM",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "JORDANA RESTAUR",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "SWIGGY",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "DELIVERY HERO TALABA",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "CRREFOUR-MAF MKT DALMA",
+      "category": "Groceries"
+    },
+    {
+      "name": "CHOITHRAM GREEN",
+      "category": "Groceries"
+    },
+    {
+      "name": "NAHR AL MADINA GROCE",
+      "category": "Groceries"
+    },
+    {
+      "name": "HOME CENTRE",
+      "category": "Shopping"
+    },
+    {
+      "name": "ADIDAS ABUDHABI",
+      "category": "Shopping"
+    },
+    {
+      "name": "AMERICAN EAGLE",
+      "category": "Shopping"
+    },
+    {
+      "name": "DECATHLON DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "KIDOOS ENTERTAINMENT S",
+      "category": "Entertainment"
+    },
+    {
+      "name": "GLOBAL VILLAGE",
+      "category": "Entertainment"
+    },
+    {
+      "name": "NMC ROYAL WOMENS HOS",
+      "category": "Health"
+    },
+    {
+      "name": "AL FUTTAIM HEALTHCAR",
+      "category": "Health"
+    },
+    {
+      "name": "MAKEMYTRIP TRAVEL AN",
+      "category": "Travel"
+    },
+    {
+      "name": "ADDRESS BEACH RESORT",
+      "category": "Travel"
+    },
+    {
+      "name": "FEDERAL TAX AUT",
+      "category": "Government & fees"
+    },
+    {
+      "name": "MINISTRY OF INDUSTRY N",
+      "category": "Government & fees"
+    },
+    {
+      "name": "VIRGIN MOBILE U",
+      "category": "Utilities & bills"
     }
   ],
   "skipped": [
@@ -177,6 +277,18 @@
     "CSRA US EMBASSY",
     "SHEHZAD IFTIKHAR REST",
     "ATER ALROOH LADIES SAL",
-    "FOUR SEASON CITY GAR"
+    "FOUR SEASON CITY GAR",
+    "BATEEL",
+    "ALPINE CHOCOLATES",
+    "FITNESS FIRST",
+    "ROAD AND TRANSP",
+    "POP MART",
+    "SIAM TAKASHIMAYA",
+    "UDRIVE RENT A CAR",
+    "ADVANCED RENT A CAR",
+    "PROFICIENCY HEALTHCA",
+    "ALOFT",
+    "ONE97 COMMUNICATIONS",
+    "PVR LIMITED"
   ]
 }

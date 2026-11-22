@@ -1,5 +1,5 @@
 {
-  "version": 15,
+  "version": 16,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -110,27 +110,40 @@
     {
       "name": "Dubai Islamic Bank",
       "country": "AE",
-      "senderIds": ["DIB-SMS"]
+      "senderIds": [
+        "DIB-SMS"
+      ]
     },
     {
       "name": "SAB",
       "country": "AE",
-      "senderIds": ["SAB"]
+      "senderIds": [
+        "SAB"
+      ]
     },
     {
       "name": "State Bank of India",
       "country": "IN",
-      "senderIds": ["CBSSBI", "SBIUPI"]
+      "senderIds": [
+        "CBSSBI",
+        "SBIUPI"
+      ]
     },
     {
       "name": "Bank of Baroda",
       "country": "IN",
-      "senderIds": ["BOBSMS"]
+      "senderIds": [
+        "BOBSMS"
+      ]
     },
     {
       "name": "Pakistan bank 8810/8812/9225",
       "country": "PK",
-      "senderIds": ["8810", "8812", "9225"]
+      "senderIds": [
+        "8810",
+        "8812",
+        "9225"
+      ]
     }
   ],
   "rules": [
@@ -455,7 +468,10 @@
         "WESTZONE",
         "EMIRATES COOP",
         "ORGANIC MAGIC",
-        "FRESH HOUSE SUPER"
+        "FRESH HOUSE SUPER",
+        "CRREFOUR",
+        "CHOITHRAM",
+        "GROCE"
       ]
     },
     {
@@ -473,7 +489,16 @@
         "KABAB",
         "MOMOS",
         "COFFE",
-        "ZOMATO"
+        "ZOMATO",
+        "LA BRIOCHE",
+        "SUBWAY",
+        "VAPIANO",
+        "CHOWKING",
+        "HARDEES",
+        "BROASTED",
+        "RESTAU",
+        "SWIGGY",
+        "TALABA"
       ]
     },
     {
@@ -495,20 +520,28 @@
         "BATH N BODY",
         "BRANDS FOR LESS",
         "SACOOR BROTHERS",
-        "GIFTS VILLAGE"
+        "GIFTS VILLAGE",
+        "HOME CENTRE",
+        "ADIDAS",
+        "AMERICAN EAGLE",
+        "DECATHLON"
       ]
     },
     {
       "category": "Travel",
       "words": [
-        "SOFITEL"
+        "SOFITEL",
+        "MAKEMYTRIP",
+        "ADDRESS BEACH"
       ]
     },
     {
       "category": "Government & fees",
       "words": [
         "EVISA",
-        "MINISTRY OF INTERIOR"
+        "MINISTRY OF INTERIOR",
+        "FEDERAL TAX",
+        "MINISTRY OF"
       ]
     },
     {
@@ -527,7 +560,22 @@
     {
       "category": "Utilities & bills",
       "words": [
-        "HOME INTERNET"
+        "HOME INTERNET",
+        "VIRGIN MOBILE"
+      ]
+    },
+    {
+      "category": "Entertainment",
+      "words": [
+        "KIDOOS",
+        "GLOBAL VILLAGE"
+      ]
+    },
+    {
+      "category": "Health",
+      "words": [
+        "NMC ROYAL",
+        "AL FUTTAIM HEAL"
       ]
     }
   ]
