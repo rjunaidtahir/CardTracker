@@ -1,6 +1,37 @@
 {
-  "version": 9,
+  "version": 15,
   "minEngine": 5,
+  "sendMore": {
+    "banks": [
+      "Mashreq",
+      "HDFC Bank",
+      "Emirates NBD",
+      "ADCB",
+      "CBD",
+      "Sharjah Islamic Bank",
+      "HSBC",
+      "RAKBANK",
+      "Wio",
+      "ADIB",
+      "Axis Bank",
+      "FAB",
+      "Liv",
+      "Citibank",
+      "Al Hilal",
+      "ICICI Bank",
+      "Kotak Mahindra Bank",
+      "Ajman Bank",
+      "Punjab National Bank",
+      "Discover",
+      "Dubai First",
+      "Dubai Islamic Bank",
+      "Emirates Islamic",
+      "State Bank of India",
+      "Bank of Baroda",
+      "SAB",
+      "Pakistan bank 8810/8812/9225"
+    ]
+  },
   "banks": [
     {
       "name": "Tabby",
@@ -75,6 +106,31 @@
     {
       "name": "Xpence",
       "country": "AE"
+    },
+    {
+      "name": "Dubai Islamic Bank",
+      "country": "AE",
+      "senderIds": ["DIB-SMS"]
+    },
+    {
+      "name": "SAB",
+      "country": "AE",
+      "senderIds": ["SAB"]
+    },
+    {
+      "name": "State Bank of India",
+      "country": "IN",
+      "senderIds": ["CBSSBI", "SBIUPI"]
+    },
+    {
+      "name": "Bank of Baroda",
+      "country": "IN",
+      "senderIds": ["BOBSMS"]
+    },
+    {
+      "name": "Pakistan bank 8810/8812/9225",
+      "country": "PK",
+      "senderIds": ["8810", "8812", "9225"]
     }
   ],
   "rules": [
@@ -368,6 +424,111 @@
     {
       "label": "Notice: refund pending at merchant",
       "pattern": "a credit refund of amount of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is notified by merchant"
+    },
+    {
+      "label": "Notice: HDFC daily balance",
+      "pattern": "Available Bal in HDFC Bank A/c\\s+\\S{1,12}\\s+as on yesterday"
+    },
+    {
+      "label": "Notice: HDFC avg balance maintenance",
+      "pattern": "Avg\\. bal\\. maintained as on\\s.{1,60}?Avoid non-maintenance charges"
+    },
+    {
+      "label": "Payment request: CRED approval",
+      "pattern": "has requested money from you on CRED\\.\\s*On approving the request"
+    },
+    {
+      "label": "Reminder: HDFC amount due (PayZapp)",
+      "pattern": "Amt Due:?\\s*[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+on HDFC Bank (?:Credit )?Card\\s+\\S{1,8}\\.?\\s*Pay (?:Instant )?with PayZapp"
+    },
+    {
+      "label": "Declined: Kotak credit card txn",
+      "pattern": "on your Kotak Bank Credit Card\\s+\\S{1,12}\\s+of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+at\\s+.{1,60}?\\s+could not be approved"
+    }
+  ],
+  "categories": [
+    {
+      "category": "Groceries",
+      "words": [
+        "SUNRISE CITY SPMKT",
+        "HYPER MARKET",
+        "WESTZONE",
+        "EMIRATES COOP",
+        "ORGANIC MAGIC",
+        "FRESH HOUSE SUPER"
+      ]
+    },
+    {
+      "category": "Dining & delivery",
+      "words": [
+        "BIRYANI",
+        "PUNJABI DHABA",
+        "ALBAIK",
+        "BAIK AL MADEENA",
+        "HAJI ALI JUICE",
+        "BON VOYAGE JUICE",
+        "GEEK REST",
+        "CHEESE CAKE",
+        "RED RIBBON",
+        "KABAB",
+        "MOMOS",
+        "COFFE",
+        "ZOMATO"
+      ]
+    },
+    {
+      "category": "Fuel & transport",
+      "words": [
+        "SERVICE STATION",
+        "SER. STATION"
+      ]
+    },
+    {
+      "category": "Shopping",
+      "words": [
+        "MINISO",
+        "DAISO",
+        "MARKS N SPENCER",
+        "ALIEXPRESS",
+        "NISHAT LINEN",
+        "SHOE MART",
+        "BATH N BODY",
+        "BRANDS FOR LESS",
+        "SACOOR BROTHERS",
+        "GIFTS VILLAGE"
+      ]
+    },
+    {
+      "category": "Travel",
+      "words": [
+        "SOFITEL"
+      ]
+    },
+    {
+      "category": "Government & fees",
+      "words": [
+        "EVISA",
+        "MINISTRY OF INTERIOR"
+      ]
+    },
+    {
+      "category": "Education",
+      "words": [
+        "LIWA COLLEGE",
+        "ABU DHABI UNIVERS"
+      ]
+    },
+    {
+      "category": "Insurance",
+      "words": [
+        "ROYAL AND SUN"
+      ]
+    },
+    {
+      "category": "Utilities & bills",
+      "words": [
+        "HOME INTERNET"
+      ]
     }
   ]
 }

@@ -1,4 +1,182 @@
 {
-  "lastTimestamp": "",
-  "examples": []
+  "lastTimestamp": "11/21/2026 16:46:11",
+  "examples": [
+    {
+      "name": "SUNRISE CITY SPMKT OUD",
+      "category": "Groceries"
+    },
+    {
+      "name": "K M HYPER MARKET LLC",
+      "category": "Groceries"
+    },
+    {
+      "name": "WZD WESTZONE FRESH SUP DUBAI",
+      "category": "Groceries"
+    },
+    {
+      "name": "EMIRATES COOP SOCIETY",
+      "category": "Groceries"
+    },
+    {
+      "name": "ORGANIC MAGIC VEGETABL",
+      "category": "Groceries"
+    },
+    {
+      "name": "FRESH HOUSE SUPER",
+      "category": "Groceries"
+    },
+    {
+      "name": "DAILY BIRYANI REST",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "PUNJABI DHABA REST LLC DUBAI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "ALBAIK",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "BAIK AL MADEENA RESTAU ABU DHABI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "HAJI ALI JUICE",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "BON VOYAGE JUICE",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "THE GEEK REST-LAL QI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "THE CHEESE CAKE FACTOR",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "RED RIBBON CAKES",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "SPECIAL AL KABAB",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "MUMAS MOMOS FOOD STUFF",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "THE HUP COFFE LLC",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "ZOMATO DUBAI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "ALKARAMA SERVICE STATION DUBAI",
+      "category": "Fuel & transport"
+    },
+    {
+      "name": "AL KARAMA SER. STATION DUBAI",
+      "category": "Fuel & transport"
+    },
+    {
+      "name": "MINISO GENERAL TRADING",
+      "category": "Shopping"
+    },
+    {
+      "name": "DAISOJAPANVALUE STORE",
+      "category": "Shopping"
+    },
+    {
+      "name": "MARKS N SPENCER DEIRA",
+      "category": "Shopping"
+    },
+    {
+      "name": "ALIEXPRESS LONDON GBR",
+      "category": "Shopping"
+    },
+    {
+      "name": "NISHAT LINEN TRADING DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "SHOE MART LLC",
+      "category": "Shopping"
+    },
+    {
+      "name": "BATH N BODY D560",
+      "category": "Shopping"
+    },
+    {
+      "name": "BRANDS FOR LESS BFL FZ DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "SACOOR BROTHERS DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "GIFTS VILLAGE DISCOUNT DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "SOFITEL JUMEIRAH DUBAI",
+      "category": "Travel"
+    },
+    {
+      "name": "EVISA.GOV.AZ/AZ/S",
+      "category": "Government & fees"
+    },
+    {
+      "name": "MINISTRY OF INTERIOR",
+      "category": "Government & fees"
+    },
+    {
+      "name": "B EXP LIWA COLLEGE AUH",
+      "category": "Education"
+    },
+    {
+      "name": "PHUT ABU DHABI UNIVERS",
+      "category": "Education"
+    },
+    {
+      "name": "ROYAL AND SUN ALLIANCE",
+      "category": "Insurance"
+    },
+    {
+      "name": "HOME INTERNET",
+      "category": "Utilities & bills"
+    }
+  ],
+  "skipped": [
+    "THRIFTY RENT A CAR",
+    "THRIFTY CAR RENTAL",
+    "SWEETS (shops)",
+    "LANDMARK RETAIL",
+    "MAMAESH",
+    "KAUSAR AL MADINA FRESH",
+    "PHC - AL MANKHOOL CLIN",
+    "VFS GLOBAL",
+    "EMIRATES RED CRESCENT",
+    "ZARA",
+    "POWER TYRES TRADING",
+    "SAFA AUTOMOTIVE",
+    "AL SAQER AUTO ACC",
+    "WASEL VEHICLES TESTING",
+    "ALFUTTAIM TOYOTA",
+    "MAX",
+    "RABBASH AL MAMAZAR CAF",
+    "SPICE ROOM TRADING",
+    "MOFA-SERVICES",
+    "CSRA US EMBASSY",
+    "SHEHZAD IFTIKHAR REST",
+    "ATER ALROOH LADIES SAL",
+    "FOUR SEASON CITY GAR"
+  ]
 }
