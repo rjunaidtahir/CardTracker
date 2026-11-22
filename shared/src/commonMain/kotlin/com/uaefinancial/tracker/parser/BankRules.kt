@@ -816,7 +816,8 @@ object BankRules {
         // 22 Nov owner decision: "will be debited on <date> from card ... for MERCHANT" (HDFC) and "will be debited ... UPI Autopay on <date>"
         // (PNB) are notices of a future debit, not money that moved. The real debit arrives as its own message. Yields to
         // completed-action wording (see SOFT_IGNORE_LABELS), so a message that also says "has been debited" is still read.
-        IgnoreRule("Upcoming debit notice", """\bwill\s+be\s+(?:auto[\s-]?)?debited\b"""),
+        // A UPI money REQUEST ("... requested money ... will be debited on approving") keeps its own label from the rules file.
+        IgnoreRule("Upcoming debit notice", """(?s)^(?!.*\b(?:requested\s+money|approv(?:e|ing)\s+the\s+request)\b).*\bwill\s+be\s+(?:auto[\s-]?)?debited\b"""),
     )
 
     /** Approximate rates, "1 unit = x AED", for every currency the app knows (see Currencies.kt). Edit freely in the app. */
