@@ -56,10 +56,18 @@ class MerchantSetDump {
         // What the fallback would add where the patterns found nothing (the only place it is used).
         val gap = withGold.filter { it.smart.isEmpty() }
         println("MSETSUM patternsFoundNothing=${gap.size}; of those the cleaned tagger (margin>${MessageIntel.MERCHANT_FILL_MARGIN}) answers ${gap.count { cleaned(it).isNotEmpty() && it.margin > MessageIntel.MERCHANT_FILL_MARGIN }} and is right on ${gap.count { cleaned(it).isNotEmpty() && it.margin > MessageIntel.MERCHANT_FILL_MARGIN && ok(it, cleaned(it)) }}")
-        println("MSETSUM wrongCleaned examples: " + withGold.filter { cleaned(it).isNotEmpty() && it.margin > 0 && !ok(it, cleaned(it)) }.take(14).joinToString(" || ") { "gold='${it.gold}' got='${cleaned(it)}' m=${"%.1f".format(it.margin)}" })
+        println("MSETSUM wrongCleaned examples: " + withGold.filter { cleaned(it).isNotEmpty() && it.margin > 0 && !ok(it, cleaned(it)) }.take(14).joinToString(" || ") { "gold='${it.gold}' got='${cleaned(it)}' m=${oneDecimal(it.margin)}" })
         val sa = withGold.filter { it.smart.isNotEmpty() }
         println("MSETSUM patterns answered=${sa.size} right=${sa.count { ok(it, it.smart) }} wrong=${sa.count { !ok(it, it.smart) }} unanswered=${withGold.size - sa.size}")
         val comb = withGold.filter { it.smart.isNotEmpty() || it.tag.isNotEmpty() }
-        println("MSETSUM wrongTagger examples: " + withGold.filter { it.tag.isNotEmpty() && it.margin > 0 && !ok(it, it.tag) }.take(12).joinToString(" || ") { "gold='${it.gold}' tag='${it.tag}' m=${"%.1f".format(it.margin)}" })
+        println("MSETSUM wrongTagger examples: " + withGold.filter { it.tag.isNotEmpty() && it.margin > 0 && !ok(it, it.tag) }.take(12).joinToString(" || ") { "gold='${it.gold}' tag='${it.tag}' m=${oneDecimal(it.margin)}" })
     }
+}
+
+/** One decimal place without String.format (not available in common Kotlin / iOS). */
+private fun oneDecimal(v: Double): String {
+    val t = kotlin.math.round(v * 10).toLong()
+    val neg = t < 0
+    val a = kotlin.math.abs(t)
+    return (if (neg) "-" else "") + (a / 10) + "." + (a % 10)
 }
