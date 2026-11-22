@@ -71,11 +71,12 @@ object RulesUpdater {
         val trackedBefore = SmsParser.trackedIds()
         RulesPack.apply(out.pack)
         prefs.packVersion = out.pack.version
-        // A sender the rules file now tracks: read what is waiting from it and re-import the inbox on the next Sync,
-        // so its older messages come in too (nothing duplicates: every message has a unique key).
-        if (SmsParser.trackedIds().any { it !in trackedBefore }) {
+        // A sender the rules file now tracks: its older messages come in on the next Sync (only that sender's, not the
+        // whole inbox; nothing duplicates: every message has a unique key).
+        val newlyTracked = SmsParser.trackedIds() - trackedBefore
+        if (newlyTracked.isNotEmpty()) {
             runCatching { app.repo.adoptTrackedCandidates() }
-            prefs.lastSyncAt = null
+            prefs.pendingSenderReads = prefs.pendingSenderReads + newlyTracked
         }
         // Messages that could not be read before may be readable now.
         runCatching { app.repo.reparseAll() }

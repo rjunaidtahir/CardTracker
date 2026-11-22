@@ -514,6 +514,10 @@ interface AppDao {
     @Query("UPDATE sms_candidates SET state = :state, body = '', reading = NULL WHERE senderKey = :senderKey AND state = 'OPEN'")
     suspend fun closeCandidatesFor(senderKey: String, state: String)
 
+    /** One-time cleanup: closes every waiting candidate (accepted, muted and dismissed rows are left as they are). */
+    @Query("UPDATE sms_candidates SET state = 'DISMISSED', body = '', reading = NULL WHERE state = 'OPEN'")
+    suspend fun closeAllOpenCandidates(): Int
+
     @Query("SELECT COUNT(*) FROM sms_candidates WHERE state = 'OPEN' AND senderKey = :senderKey")
     suspend fun openCandidateCountFor(senderKey: String): Int
 

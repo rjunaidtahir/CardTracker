@@ -26,7 +26,9 @@ class SmsSync(private val context: Context, private val repo: Repository, privat
         withContext(Dispatchers.IO) {
             val startedAt = System.currentTimeMillis()
             val since = prefs.lastSyncAt?.let { it - OVERLAP_MS } ?: 0L
-            val messages = InboxReader.read(context, since)
+            // A sender just added or newly tracked: its older messages come in too, without re-reading everyone's.
+            val pending = prefs.pendingSenderReads
+            val messages = InboxReader.read(context, since) + InboxReader.readSenders(context, pending)
             val total = messages.size
             progress.value = 0 to total
             val outcomes = ArrayList<IngestOutcome>(total)
@@ -46,6 +48,7 @@ class SmsSync(private val context: Context, private val repo: Repository, privat
                 runCatching { repo.finishBatch() }
             } finally { progress.value = null }
             prefs.lastSyncAt = startedAt // only reached if everything above succeeded
+            if (pending.isNotEmpty()) prefs.pendingSenderReads = prefs.pendingSenderReads - pending
             runCatching { Alerts.onNewTransactions(context, repo.drainFresh()) }
             runCatching { repo.autoFillCardDays() }
             SyncResult.of(outcomes)

@@ -45,6 +45,17 @@ object CandidateScreen {
     private fun namesCardOrAccount(text: String): Boolean =
         runCatching { SmartParser.cardLast4s(text).isNotEmpty() }.getOrDefault(false) || cardOrAccountRef.containsMatchIn(text)
 
+    /** Reason text of a message hidden because it is clearly not money (see [clearlyNotMoney]). */
+    const val HIDDEN_NOTICE = "Notice or promotion from a sender you added"
+
+    /**
+     * True only for a message that is clearly not a money event: it carries a promotion / bill / telecom / order word and
+     * no money verb at all. Used for a sender the user added by hand, so its promotions do not clutter Needs review.
+     * Anything with a money verb (debited, credited, spent, used for, paid, transfer, refund ...) is NOT clear: it stays.
+     */
+    fun clearlyNotMoney(normalizedText: String): Boolean =
+        nonBankWords.containsMatchIn(normalizedText) && !transactionVerb.containsMatchIn(normalizedText)
+
     fun screen(sender: String?, body: String, receivedAt: Long): Screened? {
         val text = SmsParser.normalizeBody(body)
         if (text.isBlank()) return null

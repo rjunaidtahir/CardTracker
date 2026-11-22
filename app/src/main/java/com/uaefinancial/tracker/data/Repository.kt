@@ -29,6 +29,12 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /** Shared by Sync and live listening: same parser, same de-duplication. */
+/**
+ * Owner decision (22 Nov): the app no longer keeps messages from unknown senders for an unsolicited list. A chat is a bank
+ * only when you pick it ("add a bank"). Tests switch this on to cover the dormant path.
+ */
+object UnknownSenderPolicy { @Volatile var keep = false }
+
 const val MAX_OPEN_PER_SENDER = 15
 const val MAX_OPEN_TOTAL = 200
 const val CAND_OPEN = "OPEN"
@@ -206,6 +212,8 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      * Messages that are already stored as ignored are checked once (the scan is remembered); new ones are checked as they arrive.
      */
     private fun hiddenKind(bank: String, body: String, receivedAt: Long, why: String?): String? {
+        // A promotion or notice hidden for a sender you added: always reported, so a wrongly hidden real transaction can be found.
+        if (why == com.uaefinancial.tracker.parser.CandidateScreen.HIDDEN_NOTICE) return "hidden:added-sender|reader=NONE"
         val r = runCatching { SmartParser.read(bank, SmsParser.normalizeBody(body), receivedAt) }.getOrNull()
         val what = when (r) { is ParseResult.Transaction -> r.txn.type.name; is ParseResult.Statement -> "STATEMENT"; else -> return null }
         return "hidden:${(why ?: "ignored").replace('|', '/').take(40)}|reader=$what"
@@ -471,6 +479,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      * Returns true when kept. Open candidates are never removed automatically.
      */
     suspend fun noteUnknown(sender: String, body: String, receivedAt: Long, sentAt: Long?, source: String): Boolean {
+        if (!UnknownSenderPolicy.keep) return false
         // A bank you added or unticked is not "unknown": unticked ones were your choice.
         if (SmsParser.anyBankFor(sender) != null) return false
         val screened = CandidateScreen.screen(sender, body, receivedAt) ?: return false
@@ -526,6 +535,13 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         finishBatch()
         return waiting.size
     }
+
+    /**
+     * One-time cleanup for phones that already hold unknown-sender messages: every open (waiting, not accepted) one is
+     * closed and its screened copy cleared. Accepted and muted senders, their bank entries, ledger rows and the inbox
+     * messages are not touched. Returns how many were closed.
+     */
+    suspend fun closeWaitingUnknownSenders(): Int = dao.closeAllOpenCandidates()
 
     /** A waiting message body from [sender], if one was kept (for the optional share). */
     suspend fun sampleFromCandidates(sender: String): String? =

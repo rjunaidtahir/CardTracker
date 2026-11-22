@@ -64,6 +64,19 @@ class Prefs(context: Context) {
         get() = sp.getString("hidden_scan_done", "") ?: ""
         set(v) { sp.edit { putString("hidden_scan_done", v) } }
 
+    /** Set once the waiting unknown-sender messages of an older build were closed (22 Nov decision: no unsolicited list). */
+    var unknownCleanupDone: Boolean
+        get() = sp.getBoolean("unknown_cleanup_done", false)
+        set(v) { sp.edit { putBoolean("unknown_cleanup_done", v) } }
+
+    /**
+     * Sender IDs whose OLDER inbox messages still have to be read (a sender was just added or newly tracked). The next
+     * Sync reads only those senders' messages from the whole inbox, not everyone's.
+     */
+    var pendingSenderReads: Set<String>
+        get() = sp.getStringSet("pending_sender_reads", emptySet()) ?: emptySet()
+        set(v) { sp.edit { putStringSet("pending_sender_reads", v) } }
+
     /** Whether you want new bank SMS recorded as they arrive. On unless you turn it off; it only takes effect once SMS permission is granted. */
     var liveListening: Boolean
         get() = sp.getBoolean(KEY_LIVE, true)

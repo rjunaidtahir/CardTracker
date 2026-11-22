@@ -199,6 +199,16 @@ object SmsParser {
     /** Every sender ID the signed rules file currently tracks (normalised). */
     fun trackedIds(): Set<String> = packSenders.flatMap { it.second }.map { normalizeSender(it) }.toSet()
 
+    /** Every sender ID (built in, from the signed rules file, or added by you) of the bank called [bankName]. */
+    fun senderIdsOfBank(bankName: String): Set<String> {
+        val n = bankName.trim()
+        val out = LinkedHashSet<String>()
+        compiled.filter { it.bank.name.equals(n, ignoreCase = true) }.forEach { out += it.bank.senderIds }
+        packSenders.filter { it.first.bank.name.equals(n, ignoreCase = true) }.forEach { out += it.second }
+        custom.values.filter { it.bank.name.equals(n, ignoreCase = true) }.forEach { out += it.bank.senderIds }
+        return out
+    }
+
     /** True when the signed rules file tracks [sender]. */
     fun isPackSender(sender: String?): Boolean =
         !sender.isNullOrBlank() && packSenders.any { (_, ids) -> ids.any { senderMatches(sender, it) } }
@@ -329,7 +339,9 @@ object SmsParser {
 
     fun parse(sender: String?, body: String, receivedAt: Long, zone: Int = zoneAt(receivedAt)): ParseResult {
         val cb = compiledBankFor(sender) ?: return ParseResult.NotBank
-        return parseWith(cb, body, receivedAt, zone)
+        // A sender you added by hand (not built in, not tracked by the signed rules file).
+        val addedByUser = !sender.isNullOrBlank() && !isBuiltInSender(sender) && !isPackSender(sender)
+        return parseWith(cb, body, receivedAt, zone, addedByUser)
     }
 
     /**
@@ -342,7 +354,7 @@ object SmsParser {
         return parseWith(cb, body, receivedAt, zone)
     }
 
-    private fun parseWith(cb: CompiledBank, body: String, receivedAt: Long, zone: Int): ParseResult {
+    private fun parseWith(cb: CompiledBank, body: String, receivedAt: Long, zone: Int, addedByUser: Boolean = false): ParseResult {
         val text = normalizeBody(body)
         if (otpIn(text)) {
             return ParseResult.Ignored(cb.bank.name, BankRules.otpPreCheck.label, store = false)
@@ -398,6 +410,9 @@ object SmsParser {
         // Still nothing: a statement / payment-due notice worded unlike any rule. The role reader labels each amount and date
         // by the words around it; it answers only when it is confident of both the statement amount and the due date.
         runCatching { com.uaefinancial.tracker.intel.RoleReader.readStatement(cb.bank.name, text, zone) }.getOrNull()?.let { return it }
+        // A sender you added by hand: a promotion or notice that is clearly not money is hidden (and reported as hidden:*
+        // so a wrongly hidden real transaction can be found and fixed). Anything with a money verb stays in Needs review.
+        if (addedByUser && CandidateScreen.clearlyNotMoney(text)) return ParseResult.Ignored(cb.bank.name, CandidateScreen.HIDDEN_NOTICE, store = true)
         if (errors.isNotEmpty()) return ParseResult.Failed(cb.bank.name, "A rule matched but its values were invalid: " + errors.joinToString("; "))
         return ParseResult.Failed(cb.bank.name, "Couldn't read this message automatically")
     }

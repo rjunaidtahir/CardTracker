@@ -57,6 +57,10 @@ class TrackerApp : Application() {
                 }
                 runCatching { repo.autoFillCardDays() }
             }
+            // 22 Nov decision: no unsolicited list of unknown senders. Close what an older build kept, once.
+            if (!prefs.unknownCleanupDone) {
+                runCatching { repo.closeWaitingUnknownSenders() }.onSuccess { prefs.unknownCleanupDone = true }
+            }
             // Build the on-device models once, off the main thread, then double-check what the rules read.
             runCatching { com.uaefinancial.tracker.intel.MessageIntel.warmUp() }
             runCatching { repo.updateSecondOpinions() }
