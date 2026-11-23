@@ -1,5 +1,5 @@
 {
-  "version": 21,
+  "version": 22,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -608,6 +608,14 @@
     {
       "label": "Failed: CBD card txn not processed",
       "pattern": "Transaction of\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+with (?:Credit|Debit) Card ending\\s+\\S{1,8}\\s+at\\s.{1,60}?\\scould not be processed\\s+(?:since|due to)\\s"
+    },
+    {
+      "label": "Failed: ADCB debit card txn",
+      "pattern": "\\btxn at\\b.{1,100}?\\bfrom Debit Card\\s+\\S{1,12}\\s+failed due to\\b"
+    },
+    {
+      "label": "Advert: savings prize draw",
+      "pattern": "boost your chances to win\\s.{1,40}?\\bTeslas?\\b"
     }
   ],
   "categories": [
