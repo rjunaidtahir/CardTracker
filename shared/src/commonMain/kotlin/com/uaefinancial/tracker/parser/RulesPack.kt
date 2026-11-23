@@ -56,7 +56,7 @@ object RulesPack {
     )
 
     /** A request to send certain still-unread messages again with more words kept: by the shape's hash, or for every unread message of a bank. */
-    data class SendMore(val hashes: Set<String> = emptySet(), val banks: Set<String> = emptySet())
+    data class SendMore(val hashes: Set<String> = emptySet(), val banks: Set<String> = emptySet(), val layoutBanks: Set<String> = emptySet())
 
     sealed class Outcome {
         data class Ok(val pack: Pack) : Outcome()
@@ -167,6 +167,7 @@ object RulesPack {
         }
         val smHashes = smList("hashes", 500, 40) ?: return Outcome.Rejected("bad sendMore hashes")
         val smBanks = smList("banks", 50, 60) ?: return Outcome.Rejected("bad sendMore banks")
+        val smLayout = smList("layoutBanks", 20, 60) ?: return Outcome.Rejected("bad sendMore layoutBanks")
 
         // ---- remote off switch: ids of BUILT-IN reading rules only (never ignore entries, never a typo that matches nothing)
         val builtInIds = BankRules.banks.flatMap { b -> b.rules.map { it.id } }.toSet()
@@ -200,7 +201,7 @@ object RulesPack {
             name
         }.toSet()
 
-        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet()), disable, softNew, disableIgnore))
+        return Outcome.Ok(Pack(version, banks, rules, ignore, Words(debitW, creditW, transferW), categories, SendMore(smHashes, smBanks.map { it.lowercase() }.toSet(), smLayout.map { it.lowercase() }.toSet()), disable, softNew, disableIgnore))
     }
 
     private const val MAX_CATEGORY_GROUPS = 40
@@ -256,7 +257,13 @@ object RulesPack {
         (v as? String)?.let { s -> enumValues<E>().firstOrNull { it.name == s } }
 
     /** Puts [pack] to work (or clears it, with null). */
+    /** Lower-case bank names whose still-unread messages are resent in layout form (digit lengths kept, amounts not collapsed). */
+    @kotlin.concurrent.Volatile
+    var layoutBanks: Set<String> = emptySet()
+        private set
+
     fun apply(pack: Pack?) {
+        layoutBanks = pack?.sendMore?.layoutBanks.orEmpty()
         GlobalBanks.setExtra(pack?.banks.orEmpty())
         SmsParser.setPackSenders(pack?.banks.orEmpty().filter { it.track }.associate { it.name to it.senderIds })
         SmsParser.setPackRules(pack?.rules.orEmpty().groupBy({ it.bank.trim().lowercase() }, { it.rule }))
