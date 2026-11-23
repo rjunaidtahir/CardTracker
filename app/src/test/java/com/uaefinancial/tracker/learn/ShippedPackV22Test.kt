@@ -90,7 +90,7 @@ class ShippedPackV22Test {
     @Test fun packCountsAfterV22() {
         val out = RulesPack.parse(file.readText(), currentVersion = 4)
         assertIs<RulesPack.Outcome.Ok>(out, (out as? RulesPack.Outcome.Rejected)?.reason)
-        assertEquals(22, out.pack.version)
+        assertTrue(out.pack.version >= 22)
         assertTrue(out.pack.rules.size >= 34)
         assertTrue(out.pack.ignore.size >= 45)
     }

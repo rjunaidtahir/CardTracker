@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -616,6 +616,10 @@
     {
       "label": "Advert: savings prize draw",
       "pattern": "boost your chances to win\\s.{1,40}?\\bTeslas?\\b"
+    },
+    {
+      "label": "Notice: telecom credit call due",
+      "pattern": "used your [^.]{0,20}\\bCredit Call\\.\\s*With your [^.]{0,20}\\brecharge,?\\s+the amount of\\s.{0,80}?\\bwill be deducted"
     }
   ],
   "categories": [
