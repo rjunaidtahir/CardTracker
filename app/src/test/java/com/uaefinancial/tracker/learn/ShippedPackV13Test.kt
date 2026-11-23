@@ -32,7 +32,7 @@ class ShippedPackV13Test {
         assertNull(Learning.publicBankName("8811", null))
         assertNull(Learning.publicBankName("SBIFAKE", null))
         // nothing new is tracked, no rule or ignore changed
-        assertEquals(setOf("Tabby", "ADCB"), out.pack.banks.filter { it.track }.map { it.name }.toSet())
+        assertEquals(setOf("Tabby", "ADCB", "Wallet"), out.pack.banks.filter { it.track }.map { it.name }.toSet())
         assertTrue(out.pack.rules.size >= 22)
         assertTrue(out.pack.ignore.size >= 28)
         assertTrue(out.pack.sendMore.banks.size in 1..50)

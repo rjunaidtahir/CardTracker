@@ -24,7 +24,7 @@ class ShippedPackTest {
         assertTrue(out.pack.rules.size >= 10) // grows with each published pack (v6: 18)
         assertTrue(out.pack.ignore.size >= 13) // v6: 18
         val tracked = out.pack.banks.filter { it.track }.associate { it.name to it.senderIds }
-        assertEquals(mapOf("Tabby" to listOf("Tabby"), "ADCB" to listOf("SIMPLYLIFE")), tracked)
+        assertEquals(mapOf("Tabby" to listOf("Tabby"), "ADCB" to listOf("SIMPLYLIFE"), "Wallet" to listOf("WALLET")), tracked)
         RulesPack.apply(out.pack)
         assertEquals("ADCB", SmsParser.bankFor("SIMPLYLIFE")?.name)
         assertEquals("Tabby", SmsParser.bankFor("AD-Tabby")?.name)
