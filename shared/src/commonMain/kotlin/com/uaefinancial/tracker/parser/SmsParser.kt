@@ -392,6 +392,26 @@ object SmsParser {
         // A message like one you fixed by hand and asked the app to learn ("apply to similar messages").
         LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { return it }
 
+        // A sender the app has no rules for (a chat added by hand, a sender name the app does not know, a notification): the wording
+        // itself can still be a known bank's. Try the built-in banks' verified rules on the text; the first rule that reads it
+        // (amount, card, merchant by the rule's own pattern) wins. Reports showed hundreds of Emirates Islamic card payments stuck
+        // as "Other" because their sender string is not one the app knows.
+        if (compiled.none { it.bank.name.equals(cb.bank.name, ignoreCase = true) }) {
+            for (other in compiled) {
+                for ((rule, regex) in other.rules) {
+                    if (rule.id in disabledRules) continue
+                    val m = regex.find(text) ?: continue
+                    val read = runCatching {
+                        when (rule.kind) {
+                            RuleKind.TRANSACTION -> ParseResult.Transaction(buildTxn(other.bank, rule, m, receivedAt, zone), rule.id)
+                            RuleKind.STATEMENT -> ParseResult.Statement(buildStatement(other.bank, rule, m), rule.id)
+                        }
+                    }.getOrNull()
+                    if (read != null) return read
+                }
+            }
+        }
+
         val done = BankRules.completedAction.containsMatchIn(text)
         cb.ignore.firstOrNull {
             if (it.first.label in disabledIgnore) return@firstOrNull false
