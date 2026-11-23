@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -618,6 +618,11 @@
       "pattern": "boost your chances to win\\s.{1,40}?\\bTeslas?\\b"
     }
   ],
+  "words": {
+    "debit": [
+      "pymt"
+    ]
+  },
   "categories": [
     {
       "category": "Groceries",
