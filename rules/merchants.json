@@ -1,5 +1,5 @@
 {
-  "lastTimestamp": "11/22/2026 9:26:25",
+  "lastTimestamp": "11/23/2026 9:59:51",
   "examples": [
     {
       "name": "SUNRISE CITY SPMKT OUD",
@@ -252,6 +252,106 @@
     {
       "name": "VIRGIN MOBILE U",
       "category": "Utilities & bills"
+    },
+    {
+      "name": "SHAML AL MADINAH SUPERDUBAI",
+      "category": "Groceries"
+    },
+    {
+      "name": "DURAT AL MADEENA SUPER SHARJAH",
+      "category": "Groceries"
+    },
+    {
+      "name": "DAY TO DAY GENERAL TRA",
+      "category": "Groceries"
+    },
+    {
+      "name": "NEW YORK FRIES (BR) DUBAI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "MARRY BROWN",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "PAPA JOHNS ABUDHABI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "KRISPY KREEME SKY CRTS DUBAI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "DUNKIN DONUTS DUBAI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "SHAKE SHACK ALS,AE",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "COLD STONE CREA,AE",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "KUWAIT FOOD CO AMERI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "SEPHORA EMIRATES DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "TOYS FOR LESS WTC",
+      "category": "Shopping"
+    },
+    {
+      "name": "BERSHKA,AE",
+      "category": "Shopping"
+    },
+    {
+      "name": "REDTAG ABU DHABI",
+      "category": "Shopping"
+    },
+    {
+      "name": "MIDDLE EAST STATIONERY DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "DUFRY SHARJAH FZC",
+      "category": "Shopping"
+    },
+    {
+      "name": "SUN AND SAND SPORTS LLDUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "HEALTH FIRST PHARM.BR9 ABU DHABI",
+      "category": "Health"
+    },
+    {
+      "name": "QATAR AIRWAYS",
+      "category": "Travel"
+    },
+    {
+      "name": "BRITISH AIRWAYS PLC",
+      "category": "Travel"
+    },
+    {
+      "name": "ABU DHABI POLIC,AE",
+      "category": "Government & fees"
+    },
+    {
+      "name": "SHARJAH FINANCE DEPA",
+      "category": "Government & fees"
+    },
+    {
+      "name": "SHARJAH ELECTRICITY WA",
+      "category": "Utilities & bills"
+    },
+    {
+      "name": "TOKIO MARINE AND NIC",
+      "category": "Insurance"
     }
   ],
   "skipped": [
@@ -289,6 +389,38 @@
     "PROFICIENCY HEALTHCA",
     "ALOFT",
     "ONE97 COMMUNICATIONS",
-    "PVR LIMITED"
+    "PVR LIMITED",
+    "SHEESHA FACTORY",
+    "AMAR AL MADINA",
+    "AL ADIL TRADING",
+    "AL AIN FOOD AND BEVERA",
+    "12 CARTS REST",
+    "AMEXIQ GENERAL TRADING",
+    "TRUST MIDDLE EAST",
+    "BLUE BOX VENDING",
+    "VISA PROVISIONING",
+    "SHABAB AL MADINA SPMKT",
+    "MUSBAH AL MADEENA SUPE",
+    "BLS INTERNATIONAL",
+    "BOLT",
+    "GUESS",
+    "H & M",
+    "MARKS&SPENCER",
+    "BATH&BODY",
+    "AMWAJ ROTANA",
+    "RIXOS",
+    "FAIRMONT",
+    "PULLMAN",
+    "AIR INDIA",
+    "KENYA AIRWAYS",
+    "GALADARI ICE CREAM",
+    "WH SMITH",
+    "JEWELLERY",
+    "BABYSHOP",
+    "GENTS SALONS",
+    "E& DIGITAL APP",
+    "FUNCITY OASIS",
+    "TITAN COMPANY",
+    "Q MOBILITY"
   ]
 }

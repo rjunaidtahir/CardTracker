@@ -1,5 +1,5 @@
 {
-  "version": 18,
+  "version": 19,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -554,7 +554,10 @@
         "FRESH HOUSE SUPER",
         "CRREFOUR",
         "CHOITHRAM",
-        "GROCE"
+        "GROCE",
+        "SHAML AL MADINAH",
+        "DURAT AL MADEENA",
+        "DAY TO DAY"
       ]
     },
     {
@@ -581,7 +584,15 @@
         "BROASTED",
         "RESTAU",
         "SWIGGY",
-        "TALABA"
+        "TALABA",
+        "NEW YORK FRIES",
+        "MARRY BROWN",
+        "PAPA JOHNS",
+        "KRISPY KREEME",
+        "DUNKIN",
+        "SHAKE SHACK",
+        "COLD STONE",
+        "KUWAIT FOOD CO"
       ]
     },
     {
@@ -607,7 +618,14 @@
         "HOME CENTRE",
         "ADIDAS",
         "AMERICAN EAGLE",
-        "DECATHLON"
+        "DECATHLON",
+        "SEPHORA",
+        "TOYS FOR LESS",
+        "BERSHKA",
+        "REDTAG",
+        "STATIONERY",
+        "DUFRY",
+        "SUN AND SAND SPORTS"
       ]
     },
     {
@@ -615,7 +633,9 @@
       "words": [
         "SOFITEL",
         "MAKEMYTRIP",
-        "ADDRESS BEACH"
+        "ADDRESS BEACH",
+        "QATAR AIRWAYS",
+        "BRITISH AIRWAYS"
       ]
     },
     {
@@ -624,7 +644,9 @@
         "EVISA",
         "MINISTRY OF INTERIOR",
         "FEDERAL TAX",
-        "MINISTRY OF"
+        "MINISTRY OF",
+        "ABU DHABI POLIC",
+        "SHARJAH FINANCE"
       ]
     },
     {
@@ -637,14 +659,16 @@
     {
       "category": "Insurance",
       "words": [
-        "ROYAL AND SUN"
+        "ROYAL AND SUN",
+        "TOKIO MARINE"
       ]
     },
     {
       "category": "Utilities & bills",
       "words": [
         "HOME INTERNET",
-        "VIRGIN MOBILE"
+        "VIRGIN MOBILE",
+        "SHARJAH ELECTRICITY"
       ]
     },
     {
@@ -658,7 +682,8 @@
       "category": "Health",
       "words": [
         "NMC ROYAL",
-        "AL FUTTAIM HEAL"
+        "AL FUTTAIM HEAL",
+        "PHARM"
       ]
     }
   ]
