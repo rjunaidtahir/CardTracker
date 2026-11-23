@@ -1,5 +1,5 @@
 {
-  "version": 19,
+  "version": 20,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -378,6 +378,38 @@
       "cardType": "ACCOUNT",
       "fixedMerchant": "UPI payment",
       "pattern": "A/c\\s+{CARD}\\s+has been debited with\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}\\s*thru UPI"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-card-payment-two-amounts-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "card payment\\.\\s*{CUR}\\s*{AMOUNT}\\s*\\(\\s*{ANYCUR}\\s*[\\d,.]+\\s*\\)\\s+at\\s+{MERCHANT}\\s+using your Wio\\b[^.]{0,30}?\\bcard\\s+{CARD}"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-payment-was-done-lounge-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Payment of\\s+{CUR}\\s*{AMOUNT}(?:\\s*\\(\\s*{ANYCUR}\\s*[\\d,.]+\\s*\\))?\\s+was done at\\s+(?=[^.]{0,60}?\\blounge\\b){MERCHANT}\\s+using your Wio\\b[^.]{0,30}?\\bcard\\s+{CARD}"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-payment-cancelled-credited-back-20261123",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "DEBIT",
+      "pattern": "Payment of\\s+{CUR}\\s*{AMOUNT}(?:\\s*\\(\\s*{ANYCUR}\\s*[\\d,.]+\\s*\\))?\\s+at\\s+{MERCHANT}\\s+was cancelled and the amount has been credited back to your Wio\\b[^.]{0,30}?\\bcard ending(?: with)?\\s+{CARD}"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-local-transfer-processed-20261123",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Your local transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from your account number\\s+{CARD}\\s+was processed"
     }
   ],
   "ignore": [
@@ -540,6 +572,18 @@
     {
       "label": "Advert: Liv fees changed",
       "pattern": "Our fees have changed!\\s*Send money to\\s"
+    },
+    {
+      "label": "Notice: Wio upcoming subscription",
+      "pattern": "Upcoming\\s.{1,40}?\\ssubscription payment\\.\\s*Your\\s.{1,40}?\\ssubscription of\\s"
+    },
+    {
+      "label": "Failed: CBD bill low balance",
+      "pattern": "you did not have enough balance to pay your\\s.{1,40}?\\sbill of\\s"
+    },
+    {
+      "label": "Failed: CBD card txn not processed",
+      "pattern": "Transaction of\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+with (?:Credit|Debit) Card ending\\s+\\S{1,8}\\s+at\\s.{1,60}?\\scould not be processed\\s+(?:since|due to)\\s"
     }
   ],
   "categories": [
