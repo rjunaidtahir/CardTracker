@@ -1,5 +1,5 @@
 {
-  "version": 20,
+  "version": 21,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -144,6 +144,14 @@
         "8812",
         "9225"
       ]
+    },
+    {
+      "name": "Wallet",
+      "country": "AE",
+      "senderIds": [
+        "WALLET"
+      ],
+      "track": true
     }
   ],
   "rules": [
@@ -410,6 +418,22 @@
       "type": "TRANSFER_OUT",
       "cardType": "ACCOUNT",
       "pattern": "Your local transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from your account number\\s+{CARD}\\s+was processed"
+    },
+    {
+      "bank": "Wallet",
+      "id": "wallet-card-payment-visa-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "^\\s*{MERCHANT}\\.\\s*{CUR}\\s*{AMOUNT}\\s+with\\s+Visa\\s+(?:Infinite|Signature|Platinum|Gold|Classic|Titanium)\\s+{CARD}\\s*$"
+    },
+    {
+      "bank": "Wallet",
+      "id": "wallet-card-payment-personal-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "^\\s*{MERCHANT}\\.\\s*{CUR}\\s*{AMOUNT}\\s+with\\s+Wio Personal\\s+{CARD}\\s*$"
     }
   ],
   "ignore": [
