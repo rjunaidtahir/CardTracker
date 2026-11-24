@@ -14,8 +14,10 @@ class LayoutProbeTest {
     @Test fun layoutKeepsDigitLengthsAndNeverDigits() {
         val r = Masker.mask(body, "HSBC", loose = true, fuller = true, layout = true)
         assertTrue(r.safe, r.reason ?: r.shape)
-        assertTrue(r.shape.contains("{NUM:1},{NUM:3}.{NUM:2}"), r.shape)
-        assertFalse(Regex("""\d""").containsMatchIn(r.shape.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), "")), r.shape)
+        // 2.8 layout: a whole amount is ONE token with its digit-group lengths (spec section 5), never split into {NUM} pieces.
+        assertTrue(r.shape.contains("{AMT:1,3.2}+"), r.shape)
+        assertTrue(r.shape.contains("AED {AMT:2} "), r.shape)
+        assertFalse(Regex("""\d""").containsMatchIn(r.shape.replace(Regex("""\{[A-Z]+(?::[^{}\s]+)?\}"""), "")), r.shape)
         assertFalse(r.shape.contains("{AMOUNT}"), r.shape)
     }
 

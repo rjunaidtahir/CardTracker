@@ -1,0 +1,5 @@
+{
+  "_doc": "READ group counts from the last accepted audit run, per input type (counts only). The audit fails if READ drops for an input with at least as many groups. Empty until the first 2.8 audit run is recorded.",
+  "export": null,
+  "sheet": null
+}

@@ -41,7 +41,7 @@ object Masker {
     /** Any token, including the 2.8 layout tokens ({AMT:1,3.2}, {DATE:dd-MON-yy}). */
     private val anyToken = Regex("""\{[A-Z]+(?::[^{}\s]+)?\}""")
     /** Layout mode: a number written like money (thousands separators or 2-3 decimals), with or without a currency. */
-    private val layoutAmount = Regex("""(?<![\d.,])\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?(?![\d,])|(?<![\d.,])\d+\.\d{2,3}(?![\d.])""")
+    private val layoutAmount = Regex("""(?<![\d.,])\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?(?![\d,])|(?<![\d.,])\d+\.\d{2,3}(?![\d.])|(?<=\b[A-Z]{3} )\d{1,9}(?![\d.,])""")
     private val tokenText = Regex("""(?:\{TEXT\}[\s,.:;!?()\-]*){2,}""")
 
     /** Words that carry the structure of a bank message. Everything else is {TEXT}. */

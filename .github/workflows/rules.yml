@@ -24,7 +24,10 @@ jobs:
           if [ -z "$KEY" ]; then echo "present=false" >> "$GITHUB_OUTPUT"; echo "PACK_SIGNING_KEY is not set: nothing signed."; else echo "present=true" >> "$GITHUB_OUTPUT"; fi
       - name: Validate JSON
         if: steps.key.outputs.present == 'true'
-        run: python3 -c "import json,sys; d=json.load(open('rules/pack.json')); assert isinstance(d['version'],int); print('version', d['version'], len(d['rules']), 'rules')"
+        run: |
+          python3 -c "import json,sys; d=json.load(open('rules/pack.json')); assert isinstance(d['version'],int); print('version', d['version'], len(d['rules']), 'rules')"
+          # 2.8: new-feature entries live under "ext" (2.6/2.7 phones ignore it); the whole file must still fit the old phones' limits.
+          python3 -c "import json,os; d=json.load(open('rules/pack.json')); e=d.get('ext'); assert e is None or isinstance(e,dict), 'ext must be an object'; n=os.path.getsize('rules/pack.json'); assert n <= 262144, 'file over the 2.7 limit'; assert len(d.get('ignore',[]))<=200 and len(d.get('disable',[]))<=20, 'legacy section over the 2.7 caps'; print('ext', 'present' if e else 'absent', n, 'bytes')"
       - name: Sign and publish
         if: steps.key.outputs.present == 'true'
         env:
