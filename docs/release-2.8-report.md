@@ -3,7 +3,7 @@
 Branch `release/2.8` from `main` (2.7, versionName 2.7, engine 7). Not merged, not published, no rules file published.
 versionName 2.8, `SmsParser.ENGINE_VERSION` 7 → 8.
 
-Status: **Stages 1 and 2 green; stage 3 in CI** (this file is updated after each stage).
+Status: **All three stages done; PR open for the owner's review. Not merged, nothing published.**
 
 ## Merged branches (section 1)
 
@@ -190,7 +190,7 @@ Android/JVM result is the same (all JVM tests unchanged, new `TaggerTokenizeTest
 | hsbcLivePlusNames | `ext.levers.hsbcLivePlusNames` | `LivePlusNamesTest` | ON | lever false (2.7 reading) |
 | stmtNamesFlag | `ext.levers.stmtNamesFlag` | `StmtNamesFlagDbTest`, `RulesPackExtTest.leversAreOffUnlessTheFileTurnsThemOn` | ON (only adds a Check-this mark) | lever false |
 
-## Data safety field list (section 20, draft; final after stage 3)
+## Data safety field list (section 20)
 
 Message-shape reports (only when sharing is ON; masked shape, bank, country, kind, app version, unchanged form fields). New keys
 inside `kind`: `sid` (shape hash), `pv` (rules version), `ev` (engine version), `st` (why unread, e.g. `NO_DIRECTION`), `fr`
@@ -202,6 +202,10 @@ inside `kind`: `sid` (shape hash), `pv` (rules version), `ev` (engine version), 
 `event:safe-mode|pv=27`, `event:ext-rejected|pv=27|why=..`, `event:key-change|bank=ADCB|n=3`, `merged:<TYPE>|mg=ACKMB+ACKMT|how=twin`
 (field letters only), `merged:ambiguous|n=2`, `event:stmt-read|bank=HSBC|lines=42|merchantFromAbove=30|placeholder=2`,
 `event:stmt-names-flagged|n=5`.
+
+All report keys and kinds above are ON by default when sharing is ON (kill switch `reportExtras`), except the ask-only fields
+(`amt`, `w`, `wc`, `wsms`) which are sent only for a bank, sender or shape the rules file names in `ext.ask`. Nothing is sent with
+sharing OFF. Never sent: phone number, contact or chat name, message text, real digits, card numbers.
 
 Feedback (new data collection, user-initiated): user-generated content (feedback text, optional), email address (optional, only in
 email mode; purpose: replying), category, "anonymous"/"email", app version + engine version. **Owner action:** update the in-app
@@ -225,6 +229,39 @@ Export input: 908 rows, 902 groups: READ 733, IGNORED 70, FAILED 99 (all FAILED 
 NO_BANK 3 (wordingBanks), UNKNOWN 1. No 2.7+ unread group without a lever. Ignore gate: 47 pack ignores against 722 groups that
 read as a transaction: none hidden. Baseline recorded in `tools/audit/baseline-counts.json` (export: 902 groups, 733 READ).
 
+## Audit after stage 3 (head b0f0e89, [run](https://github.com/rjunaidtahir/CardTracker/actions/runs/45437740749))
+
+| | stage 1 (2e4a5d7) | stage 3 (b0f0e89) |
+|---|---|---|
+| groups | 902 | 902 |
+| READ | 733 | 733 |
+| IGNORED | 70 | 70 |
+| FAILED | 99 | 99 |
+
+Same counts as before, as expected: every new reading capability is OFF until the rules file switches it on, so this release
+changes no reading on its own (rule 4). The gains come when the loop ships `ext` entries. Failed groups by lever:
+directionFromBalance 86, acctToken 3, wordingBanks 3, **no lever 7** (6 NO_AMOUNT, 1 UNKNOWN). All 99 are "uncertain" (the masked
+shape hides the deciding word or number). Ignore gate: 47 pack ignores against 722 groups read as a transaction, none hidden.
+Warning: the tracked bank "Wallet" has no ignore entry of its own (a rules-file change; `rules/pack.json` was not touched).
+
+**Open defect (section 20: "no lever"):** the 7 no-lever groups (`0fa7a377c24f025c`, `5312dd6e6433d4b0`, `6d60c8af82b9eeaf`,
+`7a8de428b2f38d23`, `8156c6fd3e9f6b8a`, `af66b4bccae8d150` NO_AMOUNT; `c5cb25ddb359e77a` UNKNOWN). Their masked shapes do not show
+which number is the amount, so no rule can be proven from them. The way to learn it is `ext.ask` for these shape hashes (2.8 sends
+the amount layout `amt=` for asked shapes); then a rule or ignore can be written. Not fixed by guessing (rule: never guess an amount).
+
+## Open design choices
+
+- A malformed `ext` is ignored as a whole and the legacy part still applies (`event:ext-rejected`), instead of rejecting the file.
+- `{ACCT}` key: last 4 digits, or for a masked account the shortest right-hand part holding 4 digits (at most 12 characters), so
+  two accounts of one bank never merge silently.
+- Levers ON by default: `reportExtras` (section 6 says so), `hsbcLivePlusNames` (spec 12 default true), `stmtNamesFlag` (only adds a
+  Check-this mark; never changes a figure). Every other new capability is OFF.
+- needsTwin rules are only used by apps that keep waiting messages (Android); the iPhone build skips such rules.
+- Cross-source merge needs exactly one candidate; two or more leave both rows and report `merged:ambiguous`.
+- A re-read stores unchanged rows again under new ids (2.7 behaviour, unchanged); tests compare rows without ids.
+- The test export stays local and only in debug and beta builds.
+- iPhone CI was not waited for between stages 2 and 3 at the owner's request (24 Nov), to save time.
+
 ## CI
 
 Stage 1 (head 2e4a5d7): [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45388955372) green,
@@ -236,3 +273,8 @@ Stage 1 (head 2e4a5d7): [Build APK](https://github.com/rjunaidtahir/CardTracker/
 Stage 2 (head ca6033d; acc5f03 needed a null-safety fix 210d529 and a test fix ca6033d): [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433601913) green,
 [Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433615812) green, [Replay audit](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433624559) green,
 [iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433610134): not waited for; the owner asked on 24 Nov to skip the iPhone check between stages to save time (result added below if it finishes).
+
+Stage 3 / final code (head b0f0e89; later commits on the branch only change this report): [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45437730433) green,
+[Replay audit](https://github.com/rjunaidtahir/CardTracker/actions/runs/45437740749) green,
+[Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45437734765) green,
+[iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45437730339): not waited for (owner's request).
