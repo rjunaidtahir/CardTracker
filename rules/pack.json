@@ -1,5 +1,5 @@
 {
-  "version": 25,
+  "version": 26,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -434,6 +434,15 @@
       "type": "PURCHASE",
       "cardType": "DEBIT",
       "pattern": "^\\s*{MERCHANT}\\.\\s*{CUR}\\s*{AMOUNT}\\s+with\\s+Wio Personal\\s+{CARD}\\s*$"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-term-deposit-matured-credited-20261124",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_IN",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "Term deposit matured",
+      "pattern": "Your term deposit\\s+[^.]{1,60}?\\s+is now mature\\.\\s*An amount of\\s+{CUR}\\s*{AMOUNT}\\s+has been credited to\\s+(?:your\\s+)?(?:Current|Savings)\\s+Account"
     }
   ],
   "ignore": [
