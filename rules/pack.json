@@ -1,5 +1,5 @@
 {
-  "version": 23,
+  "version": 24,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -620,6 +620,10 @@
     {
       "label": "Notice: telecom credit call due",
       "pattern": "used your [^.]{0,20}\\bCredit Call\\.\\s*With your [^.]{0,20}\\brecharge,?\\s+the amount of\\s.{0,80}?\\bwill be deducted"
+    },
+    {
+      "label": "Declined: Tabby card limit too low",
+      "pattern": "Not enough available balance\\.\\s*To shop at\\s.{1,60}?\\sfor\\s+[A-Z]{3}\\s*[\\d,.]+,\\s*make a payment to increase your Tabby Card limit"
     }
   ],
   "categories": [
