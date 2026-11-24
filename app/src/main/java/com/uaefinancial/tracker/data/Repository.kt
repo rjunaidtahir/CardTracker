@@ -928,7 +928,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                     type = if (t.type == TxnType.TRANSFER_OUT || other.type == TxnType.TRANSFER_OUT.name) TxnType.TRANSFER_OUT.name else other.type,
                 )
                 dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${other.id} (merged)")
-                if (packRule != null || other.ruleId.startsWith("pack:")) {
+                if (packRule != null || other.ruleId?.startsWith("pack:") == true) {
                     dao.clearCheckNoteIf(other.id, UNPAIRED_NOTE)
                     if (!reparsing) runCatching { reportMerge(smsId, "pair", other, t.merchant, t.cardLast4, availMinor) }
                 }
