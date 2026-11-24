@@ -533,6 +533,17 @@ object RulesPack {
     var notificationBanks: List<NotificationBank> = emptyList()
         private set
 
+    /**
+     * The bank a notification belongs to (2.8 spec 4.3), for an app the user already chose to read: the first entry whose
+     * package is the app's and whose title pattern matches (each when given) the notification title. Null when the lever is off or nothing matches,
+     * and the app's own name is used as before.
+     */
+    fun notificationBankFor(pkg: String, title: String): NotificationBank? = notificationBanks.firstOrNull { nb ->
+        (nb.pkg != null || nb.titlePattern != null) &&
+            (nb.pkg == null || nb.pkg == pkg) &&
+            (nb.titlePattern == null || runCatching { Regex(nb.titlePattern, RegexOption.IGNORE_CASE).containsMatchIn(title) }.getOrDefault(false))
+    }
+
     /** Version of the file in use (0 when none). */
     @kotlin.concurrent.Volatile
     var version: Int = 0

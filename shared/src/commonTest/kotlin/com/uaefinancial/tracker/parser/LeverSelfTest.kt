@@ -91,7 +91,10 @@ class LeverSelfTest {
         val ext = "\"notificationBanks\":[{\"titlePattern\":\"^e& money\",\"bank\":\"e& money\",\"isAggregator\":true}],\"banks\":[{\"name\":\"e& money\",\"country\":\"AE\",\"senderIds\":[\"EANDMONEY\"],\"track\":true}]"
         apply(file(ext = levers("notificationBanks") + ",$ext"))
         assertEquals("e& money", RulesPack.notificationBanks.single().bank)
+        assertEquals("e& money", RulesPack.notificationBankFor("com.some.wallet", "e& money: payment received")?.bank)
+        assertEquals(null, RulesPack.notificationBankFor("com.some.wallet", "Your order is on its way"), "look-alike title")
         apply(file(ext = ext))
+        assertEquals(null, RulesPack.notificationBankFor("com.some.wallet", "e& money: payment received"), "lever off")
         assertTrue(RulesPack.notificationBanks.isEmpty())
     }
 
