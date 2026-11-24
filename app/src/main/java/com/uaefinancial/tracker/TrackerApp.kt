@@ -41,6 +41,8 @@ class TrackerApp : Application() {
         }
         repo.onOtherMerchant = { merchant, type -> com.uaefinancial.tracker.learn.Learning.queueMerchant(this, prefs, merchant, type) }
         com.uaefinancial.tracker.learn.RulesUpdater.loadSaved(this, prefs)
+        // 2.8 spec 18.1: no local copy of shared shapes is kept any more (an older build kept the last five).
+        prefs.clearRecentShared()
         LiveListening.reconcile(this, prefs)
         if (prefs.remindersEnabled) DueReminders.setEnabled(this, true)
         appScope.launch { runCatching { com.uaefinancial.tracker.learn.RulesUpdater.checkIfDue(this@TrackerApp, prefs) } }
@@ -52,8 +54,10 @@ class TrackerApp : Application() {
             // benefit from it (and a message now recognised as a one-time code is deleted).
             if (prefs.engineVersion != SmsParser.ENGINE_VERSION) {
                 runCatching {
-                    repo.reparseAll()
+                    val r = repo.reparseWithReport()
                     prefs.engineVersion = SmsParser.ENGINE_VERSION
+                    // First start of a new build: what the new engine cleared from Needs review (2.8 `cleared`, sharing ON only).
+                    runCatching { com.uaefinancial.tracker.learn.Reports.afterReparse(this@TrackerApp, prefs, r) }
                 }
                 runCatching { repo.autoFillCardDays() }
             }
@@ -66,6 +70,8 @@ class TrackerApp : Application() {
             runCatching { repo.updateSecondOpinions() }
             // Only after the re-read above, so a message the new engine can now read is never reported as unread.
             if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { repo.queueUnreadForLearning() }
+            // 2.8: a once-a-day count of what the app saw (counts only, sharing ON only).
+            runCatching { com.uaefinancial.tracker.learn.Reports.healthIfDue(this@TrackerApp, prefs, repo) }
         }
     }
 }

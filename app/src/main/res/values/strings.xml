@@ -4,4 +4,22 @@
     <string name="widget_title_default">Spent this month</string>
     <string name="widget_amount_default">0.00</string>
     <string name="widget_due_default">No card payments due</string>
+    <!-- Share feedback (2.8). The owner may edit these wordings; the category texts are fixed in code because the form matches them exactly. -->
+    <string name="feedback_title">Share feedback</string>
+    <string name="feedback_row_subtitle">Tell us what is wrong or what you would like</string>
+    <string name="feedback_warning">Please do not share any personal or sensitive information in this form.</string>
+    <string name="feedback_category">Category (optional)</string>
+    <string name="feedback_category_none">No category</string>
+    <string name="feedback_message">Your feedback (optional)</string>
+    <string name="feedback_anonymous">Send anonymously</string>
+    <string name="feedback_with_email">Include my email so you can reply</string>
+    <string name="feedback_email">Email (optional)</string>
+    <string name="feedback_email_use">Your email is used only to reply to you.</string>
+    <string name="feedback_email_bad">That email doesn\'t look right. Check it, or leave the box empty to send anonymously.</string>
+    <string name="feedback_send">Send</string>
+    <string name="feedback_sent_with">Sent with your feedback: the app version and reading engine version only. Never your phone number, messages, cards, accounts, location or device id.</string>
+    <string name="feedback_risky">Please remove numbers or message text from your feedback</string>
+    <string name="feedback_failed">Couldn\'t send. Please try again.</string>
+    <string name="feedback_thanks">Thank you</string>
+    <string name="feedback_limit">You have sent feedback 3 times today. Please try again tomorrow.</string>
 </resources>

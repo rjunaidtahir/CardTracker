@@ -86,12 +86,17 @@ object Learning {
 
     /** True when a rules file asks for this still-unread message again with more words (its shape hash is listed, or its bank is). */
     fun wantsMore(prefs: Prefs, sender: String, bankName: String?, body: String, req: com.uaefinancial.tracker.parser.RulesPack.SendMore): Boolean {
-        if (req.hashes.isEmpty() && req.banks.isEmpty()) return false
+        val asks = com.uaefinancial.tracker.parser.RulesPack.ask
+        if (req.hashes.isEmpty() && req.banks.isEmpty() && asks.isEmpty()) return false
         val bank = publicBankName(sender, bankName)
         if (bank != null && bank.lowercase() in req.banks) return true
         val r = Masker.mask(body, bank, null, loose = bank != null || Masker.looksLikeBankMessage(body))
         val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
-        return hash("$label|${r.shape}") in req.hashes
+        val h = hash("$label|${r.shape}")
+        if (h in req.hashes) return true
+        // 2.8 ask (by bank, by a public sender ID such as a short code or "DFM", or by shape hash): fuller words or layout.
+        val asked = com.uaefinancial.tracker.core.ReportFields.askFor(asks, bank?.lowercase(), publicSender(sender), h, prefs.packVersion)
+        return "fullerWords" in asked || "layout" in asked
     }
 
     /**
@@ -122,7 +127,10 @@ object Learning {
     }
 
     /** Masks [body] and queues its shape. Returns true when something was queued. Does nothing unless sharing is on. */
-    fun queue(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, rawKind: String, merchant: String? = null): Boolean {
+    fun queue(
+        context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, rawKind: String, merchant: String? = null,
+        extra: List<Pair<String, String?>> = emptyList(),
+    ): Boolean {
         if (!enabled(prefs)) return false
         // "unread-again": a message a new rules file still could not read. It may be sent once more per new rules file (at most MAX_RESENDS times).
         val again = rawKind == "unread-again"
@@ -132,7 +140,13 @@ object Learning {
         val bank = publicBankName(sender, bankName)
         // A recognised bank's message, or any message that reads like a bank alert (a bank we have not listed), keeps every word except names (loose);
         // anything else (a private chat picked by hand) stays strict.
-        val layout = more && bank != null && bank.lowercase() in com.uaefinancial.tracker.parser.RulesPack.layoutBanks
+        val looseHash = run {
+            val l = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+            hash("$l|" + Masker.mask(body, bank, merchant, loose = bank != null || Masker.looksLikeBankMessage(body)).shape)
+        }
+        val asked = com.uaefinancial.tracker.core.ReportFields.askFor(com.uaefinancial.tracker.parser.RulesPack.ask, bank?.lowercase(), publicSender(sender), looseHash, prefs.packVersion)
+        // Layout form for unread-more: banks the rules file names in sendMore.layoutBanks or in an ask entry with "layout".
+        val layout = more && ((bank != null && bank.lowercase() in com.uaefinancial.tracker.parser.RulesPack.layoutBanks) || "layout" in asked)
         val r = Masker.mask(body, bank, merchant, loose = more || bank != null || Masker.looksLikeBankMessage(body), fuller = more, layout = layout)
         if (!r.safe) {
             // Never sent, but counted (bank + fixed reason only, no text), so the review knows how much it cannot see.
@@ -155,9 +169,109 @@ object Learning {
             prefs.resendState = st.filterNot { it.startsWith("$hash:") } + "$hash:${n + 1}:${prefs.packVersion}"
             sentKind = "unread-again/${n + 1}/" + reason(r.shape)
         }
+        sentKind = com.uaefinancial.tracker.core.ReportFields.append(sentKind, extrasFor(prefs, sender, bank, body, kind, hash, asked, extra))
         prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(hash, label, country, sentKind, r.shape).joinToString(US.toString()))
         schedule(context)
         return true
+    }
+
+    /**
+     * The 2.8 report keys for one message report (section 6). Default ON: sid, pv, ev; st and fr for unread; rule for smart-read and
+     * hidden; sc/len/nb when the sender is not a public ID; ab when the wording named the bank. Ask only: amt, w, wc (and stage,
+     * fieldsRead, senderClass when asked for messages that would not carry them). Kill switch: ext.levers.reportExtras = false.
+     */
+    private fun extrasFor(
+        prefs: Prefs, sender: String, publicBank: String?, body: String, kind: String, sid: String, asked: Set<String>,
+        extra: List<Pair<String, String?>>,
+    ): List<Pair<String, String?>> {
+        if (!com.uaefinancial.tracker.parser.RulesPack.levers.on(com.uaefinancial.tracker.parser.RulesPack.Lever.REPORT_EXTRAS)) return emptyList()
+        val out = mutableListOf<Pair<String, String?>>("sid" to sid, "pv" to prefs.packVersion.toString(), "ev" to SmsParser.ENGINE_VERSION.toString())
+        val parsed = runCatching { SmsParser.parse(sender, body, System.currentTimeMillis()) }.getOrNull()
+        val unread = kind == "unread" || kind.startsWith("unread")
+        if (unread || "stage" in asked || "fieldsRead" in asked) {
+            (parsed as? com.uaefinancial.tracker.parser.ParseResult.Failed)?.let { f -> out += "st" to (f.stage ?: "UNKNOWN"); out += "fr" to (f.fieldsRead ?: "") }
+        }
+        when {
+            kind == "smart-read" || kind.startsWith("incomplete:") -> out += "rule" to (parsed as? com.uaefinancial.tracker.parser.ParseResult.Transaction)?.ruleId
+            kind.startsWith("hidden:") -> out += "rule" to hash("ignore|" + kind.removePrefix("hidden:").substringBefore('|'))
+        }
+        val pub = publicSender(sender)
+        if (pub == null || "senderClass" in asked) {
+            val added = !SmsParser.isBuiltInSender(sender) && !SmsParser.isPackSender(sender)
+            val (sc, len, nb) = com.uaefinancial.tracker.core.ReportFields.senderClass(sender, pub, added)
+            out += "sc" to sc; out += "len" to len; out += "nb" to nb
+        }
+        val ab = (parsed as? com.uaefinancial.tracker.parser.ParseResult.Transaction)?.attributedBank
+            ?: (parsed as? com.uaefinancial.tracker.parser.ParseResult.Statement)?.attributedBank
+        if (ab != null) out += "ab" to ab
+        if ("wholeAmount" in asked) {
+            val lay = Masker.mask(body, publicBank, loose = true, fuller = true, layout = true)
+            if (lay.safe) out += "amt" to com.uaefinancial.tracker.core.ReportFields.amountLayout(lay.shape)
+        }
+        if ("walletInfo" in asked && publicBank != null && publicBank.lowercase() in SmsParser.aggregatorBanks) {
+            out += "w" to publicBank
+            out += "wc" to com.uaefinancial.tracker.core.ReportFields.walletCardShape(SmsParser.normalizeBody(body))
+        }
+        return out + extra
+    }
+
+    /**
+     * Queues a report that carries no message (counts, events): [kind] is the full kind text, [shape] a plain key=value summary.
+     * Deduplicated by [dedupe]. Needs sharing ON.
+     */
+    fun queueReport(context: Context, prefs: Prefs, kind: String, shape: String, dedupe: String, label: String = "Fils"): Boolean {
+        if (!enabled(prefs)) return false
+        if (!com.uaefinancial.tracker.parser.RulesPack.levers.on(com.uaefinancial.tracker.parser.RulesPack.Lever.REPORT_EXTRAS)) return false
+        val h = hash("report|$dedupe")
+        if (h in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$h$US") }) return false
+        val country = prefs.homeCountry ?: Region.detect(context) ?: ""
+        val k = com.uaefinancial.tracker.core.ReportFields.append(kind.substringBefore('|'), kind.split('|').drop(1).map { it.substringBefore('=') to it.substringAfter('=', "") })
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(h, label, country, k, shape.take(400)).joinToString(US.toString()))
+        schedule(context)
+        return true
+    }
+
+    /**
+     * One `cleared` report per distinct shape that was in Needs review and is now read or hidden (after a rules update or the
+     * first start of a new build), with how many messages of that shape cleared. Any unread report of the same shape still
+     * waiting in the queue is dropped, so a cleared message is never also sent as unread.
+     */
+    fun queueCleared(context: Context, prefs: Prefs, sender: String, bankName: String?, body: String, ruleId: String?, count: Int): Boolean {
+        if (!enabled(prefs)) return false
+        if (!com.uaefinancial.tracker.parser.RulesPack.levers.on(com.uaefinancial.tracker.parser.RulesPack.Lever.REPORT_EXTRAS)) return false
+        val bank = publicBankName(sender, bankName)
+        val r = Masker.mask(body, bank, null, loose = bank != null || Masker.looksLikeBankMessage(body))
+        if (!r.safe) return false
+        val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+        val sid = hash("$label|${r.shape}")
+        prefs.shapeQueue = prefs.shapeQueue.filterNot { it.startsWith("$sid$US") }
+        val h = hash("cleared|$sid|${prefs.packVersion}|${SmsParser.ENGINE_VERSION}")
+        if (h in prefs.sentShapeHashes || prefs.shapeQueue.any { it.startsWith("$h$US") }) return false
+        val kind = com.uaefinancial.tracker.core.ReportFields.append("cleared", listOf(
+            "sid" to sid, "pv" to prefs.packVersion.toString(), "ev" to SmsParser.ENGINE_VERSION.toString(),
+            "rule" to ruleId?.let { if (it.startsWith("auto-") || it.startsWith("pack:")) it else hash("rule|$it") }, "n" to count.toString(),
+        ))
+        val country = prefs.homeCountry ?: Region.detect(context) ?: ""
+        prefs.shapeQueue = prefs.shapeQueue + listOf(listOf(h, label, country, kind, r.shape).joinToString(US.toString()))
+        schedule(context)
+        return true
+    }
+
+    /** The stable shape id (`sid`) of a message: the same hash the reports carry, so a stuck report and its later `cleared` link. */
+    fun shapeId(sender: String, bankName: String?, body: String): String? {
+        val bank = publicBankName(sender, bankName)
+        val r = Masker.mask(body, bank, null, loose = bank != null || Masker.looksLikeBankMessage(body))
+        if (!r.safe) return null
+        val label = bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other"
+        return hash("$label|${r.shape}")
+    }
+
+    /** Report kinds sent before the rest when the daily cap is near (they prove that a fix worked). */
+    internal fun priorityOf(kind: String): Int = when {
+        kind.startsWith("cleared") -> 0
+        kind.startsWith("event:update-result") -> 0
+        kind.startsWith("event:safe-mode") || kind.startsWith("event:ext-rejected") -> 1
+        else -> 2
     }
 
     private fun countUnmasked(prefs: Prefs, label: String, reason: String) {
@@ -275,7 +389,7 @@ object Learning {
         queueUnmaskedCounts(context, prefs)
         var queue = prefs.shapeQueue
         var ok = true
-        for (item in queue.toList()) {
+        for (item in queue.sortedBy { priorityOf(it.split(US).getOrNull(3).orEmpty()) }) {
             if (sentCount >= DAILY_CAP) break
             val p = item.split(US)
             if (p.size < 5) { queue = queue - item; continue }
@@ -283,7 +397,6 @@ object Learning {
                 sentCount++
                 queue = queue - item
                 prefs.sentShapeHashes = prefs.sentShapeHashes + p[0]
-                prefs.recentShared = (prefs.recentShared + p[4]).takeLast(5)
             } else { ok = false; break }
         }
         prefs.shapeQueue = queue
@@ -328,7 +441,7 @@ object Learning {
         code in 200..399
     } catch (e: Exception) { false }
 
-    private fun hash(s: String): String =
+    internal fun hash(s: String): String =
         MessageDigest.getInstance("SHA-256").digest(s.toByteArray()).take(8).joinToString("") { "%02x".format(it) }
 }
 

@@ -173,7 +173,17 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         learnedLoaded = true
     }
 
-    private suspend fun ensureLearned() { if (!learnedLoaded) loadLearned() }
+    private suspend fun ensureLearned() { if (!learnedLoaded) loadLearned(); if (SmsParser.knownCard == null) refreshKnownCards() }
+
+    /**
+     * 2.8 section 2: when two banks read a wording from an unrecognised sender the same way, only a card you already have
+     * (bank + last four) settles which bank it is. The parser asks through [SmsParser.knownCard]; this keeps its list current.
+     */
+    suspend fun refreshKnownCards() {
+        val known = runCatching { dao.allCards() }.getOrDefault(emptyList())
+            .mapNotNull { c -> c.last4?.let { "${c.bank.trim().lowercase()}|$it" } }.toSet()
+        SmsParser.knownCard = { bank, last4 -> "${bank.trim().lowercase()}|$last4" in known }
+    }
 
     private fun learnedSource(s: SmsEntity, f: SmsFixEntity) = LearnedFormats.Source(
         key = s.dedupKey, bank = s.bank ?: s.sender, body = s.body,
@@ -313,6 +323,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      */
     suspend fun reparseAll(force: Boolean = false): Map<IngestOutcome, Int> = lock.withLock {
         ensureLearned()
+        refreshKnownCards()
         val all = dao.smsForReparse()
         val counts = mutableMapOf<IngestOutcome, Int>()
         reparsing = true
@@ -347,6 +358,57 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     }
 
     private val pendingOtp = mutableSetOf<Long>()
+
+    /** Read messages whose money reading a re-read wanted to change (soft or key change), counted by [guardChanges] (2.8 event:reading-changed). */
+    @Volatile var lastReadingChanged = 0
+        private set
+
+    /**
+     * What a re-read (after a rules update or the first start of a new engine) did to Needs review (2.8 spec section 6):
+     * [cleared] are the messages that were unread before and are now read or hidden, each with the rule or ignore that decided.
+     */
+    data class ReparseReport(
+        val cleared: List<Pair<SmsEntity, String?>>, val still: Int, val held: Int, val hidden: Int, val merged: Int, val readingChanged: Int,
+    )
+
+    /** [reparseAll] with a snapshot of Needs review taken before and compared after (counts only leave the phone, masked, if sharing is on). */
+    suspend fun reparseWithReport(): ReparseReport {
+        val before = unreadMessages().map { it.id }
+        val pairedBefore = dao.allTxns().count { it.pairedSmsId != null }
+        lastReadingChanged = 0
+        reparseAll()
+        val cleared = before.mapNotNull { dao.smsById(it) }
+            .filter { it.status == SmsStatus.TRANSACTION || it.status == SmsStatus.STATEMENT || it.status == SmsStatus.IGNORED }
+            .map { it to (it.ruleId ?: it.note?.let { n -> "ignore|$n" }) }
+        val pairedAfter = dao.allTxns().count { it.pairedSmsId != null }
+        return ReparseReport(
+            cleared = cleared,
+            still = unreadMessages().size,
+            held = dao.heldReadingsNow().size,
+            hidden = cleared.count { it.first.status == SmsStatus.IGNORED },
+            merged = (pairedAfter - pairedBefore).coerceAtLeast(0),
+            readingChanged = lastReadingChanged,
+        )
+    }
+
+    /** Counts for the daily health report (2.8 event:health): messages received in the last day, by outcome and by public bank. */
+    data class Health(val seen: Int, val confident: Int, val review: Int, val held: Int, val hidden: Int, val merged: Int, val byBank: Map<String, Int>)
+
+    suspend fun healthCounts(since: Long, publicBank: (String, String?) -> String?): Health {
+        val sms = dao.allSms().filter { it.receivedAt >= since }
+        val ids = sms.map { it.id }.toSet()
+        val txns = dao.allTxns().filter { it.smsId != null && it.smsId in ids }
+        val checked = txns.filter { !it.checkNote.isNullOrBlank() }.mapNotNull { it.smsId }.toSet()
+        return Health(
+            seen = sms.size,
+            confident = sms.count { (it.status == SmsStatus.TRANSACTION || it.status == SmsStatus.STATEMENT) && it.id !in checked },
+            review = sms.count { it.status == SmsStatus.FAILED },
+            held = dao.heldReadingsNow().count { it.smsId in ids },
+            hidden = sms.count { it.status == SmsStatus.IGNORED },
+            merged = txns.count { it.pairedSmsId != null },
+            byBank = sms.mapNotNull { publicBank(it.sender, it.bank) }.groupingBy { it }.eachCount(),
+        )
+    }
 
     private fun linesOf(t: List<TransactionEntity>, st: List<StatementEntity>) =
         t.map {
@@ -392,6 +454,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             firstSms?.let { sm ->
                 val ch = ReadingGuard.changedFields(before, after).joinToString(",").replace(" ", "-").take(60)
                 val kindOut = if (ReadingGuard.isSoftOnly(before, after)) "softchange:$ch" else "held:$ch"
+                lastReadingChanged++
                 runCatching { onShape?.invoke(sm.sender, sm.bank, sm.body, kindOut, null) }
             }
             // Same money and the old reading had no merchant: the new reading just fills it in.

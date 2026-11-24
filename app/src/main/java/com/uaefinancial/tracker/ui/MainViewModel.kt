@@ -1001,6 +1001,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Writes the masked message export (shapes + what the app decided) where the user chose. Nothing is uploaded. */
     fun exportMaskedMessages(uri: Uri) = viewModelScope.launch {
+        // Test builds only (2.8 spec 18.2): the Play build has no export.
+        if (!com.uaefinancial.tracker.BuildConfig.DEBUG) return@launch
         message.value = "Exporting masked messages. This can take a minute or two: keep the app open and don't share the file until you see \"Saved\"."
         try {
             val text = withContext(Dispatchers.IO) { repo.maskedExportText() }
@@ -1109,7 +1111,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     val shareConsent = MutableStateFlow(prefs.shareConsent)
-    val recentShared = MutableStateFlow(prefs.recentShared)
 
     fun setShareConsent(on: Boolean) {
         prefs.shareConsent = if (on) com.uaefinancial.tracker.learn.Learning.ON else com.uaefinancial.tracker.learn.Learning.OFF
@@ -1125,8 +1126,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             System.currentTimeMillis() - prefs.shareNudgeAt > 30L * 86_400_000L
     fun snoozeShareNudge() { prefs.shareNudgeAt = System.currentTimeMillis() }
     fun neverShareNudge() { prefs.shareNudgeNever = true }
-
-    fun refreshShared() { recentShared.value = prefs.recentShared }
 
     // ------------------------------------------------------------ chats that look like banks
     val candidates = MutableStateFlow<List<com.uaefinancial.tracker.sms.Candidates.Candidate>>(emptyList())

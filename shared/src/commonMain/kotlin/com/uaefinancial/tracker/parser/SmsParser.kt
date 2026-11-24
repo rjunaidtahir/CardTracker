@@ -447,8 +447,11 @@ object SmsParser {
 
         readByRules(cb, text, receivedAt, zone, errors)?.let { return it }
 
-        // A message like one you fixed by hand and asked the app to learn ("apply to similar messages").
-        LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { return it }
+        // A message like one you fixed by hand and asked the app to learn ("apply to similar messages"). 2.8: a wording the rules file
+        // exempts (`ext.learnedExempt`) is never hidden by a "not a transaction" mark made on a similar message; the mark itself stays.
+        LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { r ->
+            if (!(r is ParseResult.Ignored && learnedExemptRe.any { it.containsMatchIn(text) })) return r
+        }
 
         // 2.8 (lever wordingBanks): a sender with no bank of its own (a chat added by hand, a sender name the app does not know) whose
         // wording is a known bank's. Reports showed hundreds of Emirates Islamic card payments stuck as "Other" this way.
