@@ -1,5 +1,5 @@
 {
-  "version": 24,
+  "version": 25,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -641,7 +641,13 @@
         "GROCE",
         "SHAML AL MADINAH",
         "DURAT AL MADEENA",
-        "DAY TO DAY"
+        "DAY TO DAY",
+        "PINOY CHOICE",
+        "GRAND MULTIMART",
+        "NAHDHAT AL MADINA",
+        "SHIBANI",
+        "FRESH WAY BAQAL",
+        "ELGROCER"
       ]
     },
     {
@@ -676,14 +682,24 @@
         "DUNKIN",
         "SHAKE SHACK",
         "COLD STONE",
-        "KUWAIT FOOD CO"
+        "KUWAIT FOOD CO",
+        "CAESARS REST",
+        "BAIT ELKHETYAR",
+        "UDUPI CITY",
+        "YANDEX EATS",
+        "BASKIN ROBBINS",
+        "NANDOS",
+        "POPEYES"
       ]
     },
     {
       "category": "Fuel & transport",
       "words": [
         "SERVICE STATION",
-        "SER. STATION"
+        "SER. STATION",
+        "SHELL OMAN",
+        "ALKARAMA SERVICE",
+        "TOLL PLAZA"
       ]
     },
     {
@@ -709,7 +725,10 @@
         "REDTAG",
         "STATIONERY",
         "DUFRY",
-        "SUN AND SAND SPORTS"
+        "SUN AND SAND SPORTS",
+        "TRENDYOL",
+        "AMZN MKTP",
+        "MOTHERCARE"
       ]
     },
     {
@@ -719,7 +738,10 @@
         "MAKEMYTRIP",
         "ADDRESS BEACH",
         "QATAR AIRWAYS",
-        "BRITISH AIRWAYS"
+        "BRITISH AIRWAYS",
+        "KLOOK",
+        "UNIGLOBE",
+        "SAUDI ARABIA AIR"
       ]
     },
     {
@@ -730,7 +752,8 @@
         "FEDERAL TAX",
         "MINISTRY OF",
         "ABU DHABI POLIC",
-        "SHARJAH FINANCE"
+        "SHARJAH FINANCE",
+        "TRAFFIC FINES"
       ]
     },
     {
@@ -767,7 +790,9 @@
       "words": [
         "NMC ROYAL",
         "AL FUTTAIM HEAL",
-        "PHARM"
+        "PHARM",
+        "THUMBAY",
+        "ECZANE"
       ]
     }
   ]

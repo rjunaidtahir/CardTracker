@@ -1,5 +1,5 @@
 {
-  "lastTimestamp": "11/23/2026 9:59:51",
+  "lastTimestamp": "11/24/2026 10:25:29",
   "examples": [
     {
       "name": "SUNRISE CITY SPMKT OUD",
@@ -352,6 +352,106 @@
     {
       "name": "TOKIO MARINE AND NIC",
       "category": "Insurance"
+    },
+    {
+      "name": "PINOY CHOICE SPMKT LLC",
+      "category": "Groceries"
+    },
+    {
+      "name": "GRAND MULTIMART SUPER",
+      "category": "Groceries"
+    },
+    {
+      "name": "NAHDHAT AL MADINA SMKT",
+      "category": "Groceries"
+    },
+    {
+      "name": "AL SHIBANI MEAT AND VE",
+      "category": "Groceries"
+    },
+    {
+      "name": "FRESH WAY BAQAL",
+      "category": "Groceries"
+    },
+    {
+      "name": "ELGROCER",
+      "category": "Groceries"
+    },
+    {
+      "name": "CAESARS REST-BARSHA 1",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "BAIT ELKHETYAR REST ABU DHABI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "UDUPI CITY REST",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "YANDEX EATS AM LLC",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "BASKIN ROBBINS",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "NANDOS",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "POPEYES REST. LLC-BR 8 ABU DHABI",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "THUMBAY UNIV HOSP CMPL",
+      "category": "Health"
+    },
+    {
+      "name": "MELIKE SULTAN ECZANE",
+      "category": "Health"
+    },
+    {
+      "name": "SHELL OMAN - AL GHAFTAIN",
+      "category": "Fuel & transport"
+    },
+    {
+      "name": "ALKARAMA SERVICE STATI",
+      "category": "Fuel & transport"
+    },
+    {
+      "name": "TALEGAON TOLL PLAZA",
+      "category": "Fuel & transport"
+    },
+    {
+      "name": "MOI TRAFFIC FINES",
+      "category": "Government & fees"
+    },
+    {
+      "name": "KLOOK TRAVEL TECH LTD",
+      "category": "Travel"
+    },
+    {
+      "name": "UNIGLOBE AUH1",
+      "category": "Travel"
+    },
+    {
+      "name": ": SAUDI ARABIA AIR",
+      "category": "Travel"
+    },
+    {
+      "name": "TRENDYOL",
+      "category": "Shopping"
+    },
+    {
+      "name": "AMZN MKTP US",
+      "category": "Shopping"
+    },
+    {
+      "name": "MOTHERCARE -D508 AL SH",
+      "category": "Shopping"
     }
   ],
   "skipped": [
