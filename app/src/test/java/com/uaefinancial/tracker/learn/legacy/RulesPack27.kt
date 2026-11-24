@@ -72,7 +72,7 @@ object RulesPack27 {
     /** Parses and fully validates [json]. [currentVersion] is the newest version this phone already accepted. */
     fun parse(json: String, currentVersion: Int = 0): Outcome {
         if (json.length > MAX_BYTES) return Outcome.Rejected("file too large")
-        val root = try { MiniJson.parse(json) } catch (e: MiniJson.JsonError) { return Outcome.Rejected("not valid JSON: ${e.message}") }
+        val root = try { MiniJson27.parse(json) } catch (e: MiniJson27.JsonError) { return Outcome.Rejected("not valid JSON: ${e.message}") }
         val o = root as? Map<*, *> ?: return Outcome.Rejected("not an object")
         val version = (o["version"] as? Long)?.toInt() ?: return Outcome.Rejected("no version")
         if (version < currentVersion) return Outcome.Rejected("older than the rules already in use")
