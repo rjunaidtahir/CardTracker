@@ -132,7 +132,8 @@ object Learning {
         val bank = publicBankName(sender, bankName)
         // A recognised bank's message, or any message that reads like a bank alert (a bank we have not listed), keeps every word except names (loose);
         // anything else (a private chat picked by hand) stays strict.
-        val r = Masker.mask(body, bank, merchant, loose = more || bank != null || Masker.looksLikeBankMessage(body), fuller = more)
+        val layout = more && bank != null && bank.lowercase() in com.uaefinancial.tracker.parser.RulesPack.layoutBanks
+        val r = Masker.mask(body, bank, merchant, loose = more || bank != null || Masker.looksLikeBankMessage(body), fuller = more, layout = layout)
         if (!r.safe) {
             // Never sent, but counted (bank + fixed reason only, no text), so the review knows how much it cannot see.
             countUnmasked(prefs, bank ?: publicSender(sender)?.let { "Other ($it)" } ?: "Other", r.reason ?: "unsafe")

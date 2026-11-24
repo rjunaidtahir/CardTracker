@@ -153,7 +153,7 @@ object Masker {
      * place, an acronym) is kept. [fuller] (only when a rules file asks for more words for a message it could not understand): runs of
      * unknown capitalised words stay too; a name after a title / payee / to / from / by is still hidden. Never for a sender we do not recognise (a private chat): that stays strict.
      */
-    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false, fuller: Boolean = false): Result {
+    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false, fuller: Boolean = false, layout: Boolean = false): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
         val name = merchant?.trim()?.replace(Regex("""\s+"""), " ")
@@ -170,7 +170,9 @@ object Masker {
             if (lead.all { it in "xX*•·#" }) "{CARD:${enc(len)}}" else "$lead {CARD:${enc(len)}}"
         }
         // keepWords (the local export only): the currency code stays, it is a public word; the amount never does.
-        t = if (keepWords) t.replace(money) { m -> (Regex("""[A-Za-z]{2,4}""").find(m.value)?.value ?: "{CUR}") + " {AMOUNT}" } else t.replace(money, "{CUR} {AMOUNT}")
+        // layout (only when a rules file asks for it for a named bank): amounts are NOT collapsed to {AMOUNT}; every digit run becomes
+        // {NUM:<how many digits>}, so the layout of an unclear message ("AED {NUM:1},{NUM:3}.{NUM:2}+") shows which number is the money. Only lengths, never digits.
+        t = if (layout) t else if (keepWords) t.replace(money) { m -> (Regex("""[A-Za-z]{2,4}""").find(m.value)?.value ?: "{CUR}") + " {AMOUNT}" } else t.replace(money, "{CUR} {AMOUNT}")
         // Only how many digits, never which: "{NUM:10}" for an account or reference, "{NUM:2}" for a day.
         t = t.replace(longDigits) { m -> "{NUM:${enc(m.value.count { it.isDigit() })}}" }.replace(anyDigits) { m -> "{NUM:${enc(m.value.length)}}" }
         // Turn the letter-coded lengths back into digits now that no digit replacing is left.
@@ -235,6 +237,7 @@ object Masker {
         val words = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
         if (words.size < MIN_WORDS) return Result(t, false, "too short")
         if (!loose && textShare > MAX_TEXT_SHARE) return Result(t, false, "mostly unknown words")
+        if (layout) { if (!t.contains("{NUM:")) return Result(t, false, "no amount"); return Result(t, true) }
         if (words.none { it == "{AMOUNT}" }) return Result(t, false, "no amount")
         return Result(t, true)
     }
