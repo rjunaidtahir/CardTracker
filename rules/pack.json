@@ -1,5 +1,5 @@
 {
-  "version": 26,
+  "version": 27,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -443,6 +443,24 @@
       "cardType": "ACCOUNT",
       "fixedMerchant": "Term deposit matured",
       "pattern": "Your term deposit\\s+[^.]{1,60}?\\s+is now mature\\.\\s*An amount of\\s+{CUR}\\s*{AMOUNT}\\s+has been credited to\\s+(?:your\\s+)?(?:Current|Savings)\\s+Account"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-ipo-subscription-debit-20261124",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "IPO subscription",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+has been debited from your account number\\s+{CARD}\\s+for\\s+[^.]{1,60}?\\bIPO Subscription"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-ipo-refund-credited-20261124",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "IPO subscription refund",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+refund amount has been credited to your account number\\s+{CARD}\\s+for\\s+[^.]{1,60}?\\bIPO\\b"
     }
   ],
   "ignore": [
