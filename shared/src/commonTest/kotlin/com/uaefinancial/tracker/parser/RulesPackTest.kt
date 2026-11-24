@@ -206,8 +206,12 @@ class PackTrackedSendersTest {
             assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$bad],")), bad)
         }
         assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":\"fab-outward-remittance\",")))
-        val tooMany = (1..21).joinToString(",") { "\"fab-outward-remittance\"" }
+        // 2.8 raised the cap to 100; a 2.7 phone still stops at 20 (the legacy part must stay inside that).
+        val tooMany = (1..101).joinToString(",") { "\"fab-outward-remittance\"" }
         assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$tooMany],")))
+        val tooManyFor27 = (1..21).joinToString(",") { "\"fab-outward-remittance\"" }
+        assertIs<RulesPack.Outcome.Ok>(RulesPack.parse(packExtra("\"disable\":[$tooManyFor27],")))
+        assertIs<RulesPack.Outcome.Rejected>(RulesPack.parse(packExtra("\"disable\":[$tooManyFor27],"), legacyOnly = true))
     }
 
     @Test fun readingPolicyAcceptsKnownBanksOnly() {

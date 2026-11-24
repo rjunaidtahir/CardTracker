@@ -141,7 +141,7 @@ object Masker {
         if (!money.containsMatchIn(body)) return false
         val cardRef = Regex("""\b(?:card|a/c|acc(?:oun)?t|acct|iban)\b[^.\n]{0,40}(?:\d{4}|[xX*•]{2,})|[xX*•]{3,}\s?\d{3,4}\b""", RegexOption.IGNORE_CASE)
         if (!cardRef.containsMatchIn(body)) return false
-        val banking = setOf("debited", "credited", "balance", "available", "purchase", "transaction", "payment", "limit", "transfer", "withdrawal", "statement", "due", "refund", "reversed", "spent", "avl", "bal", "txn", "pos", "atm")
+        val banking = setOf("debited", "credited", "balance", "available", "purchase", "transaction", "payment", "limit", "transfer", "withdrawal", "statement", "due", "refund", "reversed", "spent", "avl", "bal", "txn", "pos", "atm", "pymt")
         val hits = Regex("""\p{L}+""").findAll(body.lowercase()).map { it.value }.filter { it in banking }.toSet()
         return hits.size >= 3
     }

@@ -409,6 +409,8 @@ object SmartParser {
         val all = mentions(text)
         if (all.isEmpty()) return null
         if (looksLikeAdvert(text)) return null // goes to Needs review; never recorded as spending
+        // 2.8: wording the rules file says is never money that moved ("will be", "could not", "reminder"): leave it for review.
+        if (extraNotMoney?.containsMatchIn(text) == true) return null
         // Several different transactions pasted into one message (a forwarded or combined text): reading only the first would lose the rest.
         if (manyEvents.findAll(text).count() >= 3) return null
         // Only balances / limits (e.g. a balance update): nothing to record.
@@ -617,14 +619,58 @@ object SmartParser {
         )
     }
 
-    // Extra wording from the signed rules file (single words a bank uses that the built-in lists do not know yet).
+    // Extra wording from the signed rules file: single words (legacy `words`) and, from 2.8 (`ext.words`, lever phrases), phrases.
     @kotlin.concurrent.Volatile private var extraDebit: Regex? = null
     @kotlin.concurrent.Volatile private var extraCredit: Regex? = null
     @kotlin.concurrent.Volatile private var extraTransfer: Regex? = null
+    /** 2.8 `ext.words.notMoney` (lever notMoney): phrases that make the generic reader refuse ("will be", "could not", "is due"). */
+    @kotlin.concurrent.Volatile private var extraNotMoney: Regex? = null
 
-    internal fun setExtraWords(debit: List<String>, credit: List<String>, transfer: List<String>) {
-        fun re(w: List<String>) = if (w.isEmpty()) null else Regex("""\b(?:${w.joinToString("|")})\b""", I)
-        extraDebit = re(debit); extraCredit = re(credit); extraTransfer = re(transfer)
+    /** A list of words or phrases as one case-insensitive pattern: every phrase escaped, spaces match any run of spaces, whole words only. */
+    internal fun phraseRegex(w: List<String>): Regex? {
+        if (w.isEmpty()) return null
+        fun esc(t: String) = t.trim().split(Regex("""\s+""")).joinToString("""\s+""") { part -> part.map { c -> if (c.isLetterOrDigit()) "$c" else "\\$c" }.joinToString("") }
+        return Regex("""(?<![\p{L}\d])(?:${w.distinct().sortedByDescending { it.length }.joinToString("|") { esc(it) }})(?![\p{L}\d])""", I)
+    }
+
+    internal fun setExtraWords(debit: List<String>, credit: List<String>, transfer: List<String>, notMoney: List<String> = emptyList()) {
+        extraDebit = phraseRegex(debit); extraCredit = phraseRegex(credit); extraTransfer = phraseRegex(transfer); extraNotMoney = phraseRegex(notMoney)
+    }
+
+    /** (has a credit word, has a debit word) in [text]: the built-in lists plus the rules file's words. For the pack-rule sanity check. */
+    internal fun directionWords(text: String): Pair<Boolean, Boolean> {
+        val c = creditWord.containsMatchIn(text) || extraCredit?.containsMatchIn(text) == true
+        val d = debitWord.containsMatchIn(text) || extraDebit?.containsMatchIn(text) == true
+        return c to d
+    }
+
+    /** What a message that could not be read still shows: the fields found (letters A C D K M T B) and the first missing one ([stage]). */
+    class Probe(val letters: String, val stage: String)
+
+    internal fun probe(text: String): Probe {
+        val all = mentions(text)
+        val txn = all.firstOrNull { it.role == Role.TXN }
+        val amount = txn != null
+        val currency = all.isNotEmpty()
+        val (c, d) = directionWords(text)
+        val direction = c || d || transferWord.containsMatchIn(text) || extraTransfer?.containsMatchIn(text) == true
+        val card = refs(text).isNotEmpty()
+        val merchant = atMerchant.containsMatchIn(text) || toMerchant.containsMatchIn(text) || fromMerchant.containsMatchIn(text)
+        val date = dates(text, SmsParser.UAE_ZONE).isNotEmpty()
+        val balance = all.any { it.role == Role.AVAILABLE }
+        val letters = buildString {
+            if (amount) append('A'); if (currency) append('C'); if (direction) append('D'); if (card) append('K')
+            if (merchant) append('M'); if (date) append('T'); if (balance) append('B')
+        }
+        val notMoney = extraNotMoney?.containsMatchIn(text) == true
+        val stage = when {
+            !amount -> Stage.NO_AMOUNT
+            !direction -> Stage.NO_DIRECTION
+            !card -> Stage.NO_CARD
+            notMoney -> Stage.UNKNOWN
+            else -> Stage.UNKNOWN
+        }
+        return Probe(letters, stage)
     }
 
     private val standingDone = Regex("""\bstanding\s+(?:instruction|order)s?\b""", I)
