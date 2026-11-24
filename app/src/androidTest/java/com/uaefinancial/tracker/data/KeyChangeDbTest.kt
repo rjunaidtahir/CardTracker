@@ -45,6 +45,8 @@ class KeyChangeDbTest {
 
     private fun ingest(body: String, t: Long) = runBlocking { repo.ingestSms("FAB", body, t, t, "SMS") }
     private fun txns() = runBlocking { db.dao().txnsListBetween(0L, Long.MAX_VALUE) }.sortedBy { it.id }
+    /** A re-read stores the unchanged rows again under new ids (as in ReReadGuardDbTest), so compare without the id. */
+    private fun rows() = txns().map { it.copy(id = 0) }
     private fun cards() = runBlocking { db.dao().allCards() }
     private fun held() = runBlocking { db.dao().heldReadingsNow() }
     private fun setBody(id: Long, body: String) = db.openHelper.writableDatabase.execSQL("UPDATE sms SET body = ? WHERE id = ?", arrayOf(body, id))
@@ -90,9 +92,9 @@ class KeyChangeDbTest {
     @Test fun a_bank_not_in_the_list_is_held_exactly_as_before() {
         Pack28.apply(listOf("keyChange"), more = "\"readingPolicy\":{\"applyKeyChangeFor\":[\"ADCB\"]}")
         story()
-        val before = txns()
+        val before = rows()
         reread()
-        assertEquals(before, txns())
+        assertEquals(before, rows())
         assertEquals(1, held().size)
         assertTrue(events.isEmpty())
     }
@@ -100,8 +102,8 @@ class KeyChangeDbTest {
     @Test fun lever_off_holds_as_in_2_7() {
         Pack28.apply(emptyList(), more = "\"readingPolicy\":{\"applyKeyChangeFor\":[\"FAB\"]}")
         story()
-        val before = txns()
+        val before = rows()
         reread()
-        assertEquals(before, txns()); assertEquals(1, held().size)
+        assertEquals(before, rows()); assertEquals(1, held().size)
     }
 }
