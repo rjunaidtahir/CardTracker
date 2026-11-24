@@ -159,16 +159,29 @@ internal class MerchantTagger {
         private const val O = 0
         private const val B = 1
         private const val I = 2
-        private val tokenRe = Regex("""[\p{L}\p{N}][\p{L}\p{N}&'.\-/*]*""")
         private val lexicon = setOf(
             "aed", "usd", "card", "account", "ending", "avl", "avail", "available", "balance", "bal", "limit", "debited", "credited",
             "purchase", "spent", "used", "transaction", "txn", "payment", "transfer", "refund", "thank", "thanks", "dear", "customer",
             "your", "has", "been", "was", "is", "on", "with", "using", "visa", "mastercard", "debit", "credit",
         )
 
-        fun tokenize(text: String): List<Tok> = tokenRe.findAll(text).map {
-            val t = it.value.trimEnd('.', '-', '/', '*')
-            Tok(t, it.range.first, it.range.first + t.length)
-        }.filter { it.text.isNotEmpty() }.toList()
+        private fun starts(c: Char) = c.isLetterOrDigit()
+        private fun continues(c: Char) = c.isLetterOrDigit() || c in "&'.-/*"
+
+        // A word starts with a letter or digit and runs on through letters, digits and & ' . - / *. Scanned by hand: the same
+        // character-class regex failed to initialise on iPhone (Kotlin/Native), which silently switched the merchant tagger off there.
+        fun tokenize(text: String): List<Tok> {
+            val out = ArrayList<Tok>()
+            var i = 0
+            while (i < text.length) {
+                if (!starts(text[i])) { i++; continue }
+                var j = i + 1
+                while (j < text.length && continues(text[j])) j++
+                val t = text.substring(i, j).trimEnd('.', '-', '/', '*')
+                if (t.isNotEmpty()) out.add(Tok(t, i, i + t.length))
+                i = j
+            }
+            return out
+        }
     }
 }

@@ -133,7 +133,18 @@ object Masker {
 
     /** How a date is written, without its digits: "05-DEC-26" -> "dd-MON-yy", "Dec 05, 2026" -> "MON_dd,_yyyy", "05/12/26" -> "dd/mm/yy". */
     internal fun dateLayout(raw: String): String {
-        val parts = Regex("""\d+|\p{L}+|[^\d\p{L}]+""").findAll(raw.trim()).map { it.value }.toList()
+        // Split by hand into runs of digits, letters and the rest: the same split by regex misreads on iPhone (Kotlin/Native).
+        val parts = ArrayList<String>()
+        val src = raw.trim()
+        var i = 0
+        while (i < src.length) {
+            val kind = { c: Char -> if (c.isDigit()) 0 else if (c.isLetter()) 1 else 2 }
+            val k = kind(src[i])
+            var j = i + 1
+            while (j < src.length && kind(src[j]) == k) j++
+            parts.add(src.substring(i, j))
+            i = j
+        }
         val numbers = parts.filter { it[0].isDigit() }
         var n = 0
         val yearFirst = numbers.firstOrNull()?.length == 4
