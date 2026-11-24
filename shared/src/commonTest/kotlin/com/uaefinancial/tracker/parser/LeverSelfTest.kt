@@ -130,4 +130,37 @@ class LeverSelfTest {
         assertFalse(RulesPack.levers.on(RulesPack.Lever.WORDING_BANKS))
         assertEquals(Decimal("700.00"), Decimal("700.00"))
     }
+
+    // Spec 15: a new tracked wallet ships its notice ignores first; the audit warns about a tracked bank that has none.
+    @Test fun aTrackedWalletWithItsIgnoresDoesNotFloodReviewAndOneWithoutIsWarned() {
+        val bank = "{\"name\":\"e& money\",\"country\":\"AE\",\"senderIds\":[\"EANDMONEY\"],\"track\":true}"
+        val money = rule("e& money", "eand-in", """Good news! {CUR} {AMOUNT} from {MERCHANT} in your account\.""", type = "TRANSFER_IN", cardType = "ACCOUNT", extra = ",\"accountNotNamed\":true")
+        val ig = ignore("Wallet reward", """\b(?:cashback|reward|points)\b""", ",\"bank\":\"e& money\"")
+        val notice = "You earned 25 reward points on your last payment. Check the app."
+        val withIgnore = apply(file(banks = "[$bank]", ext = levers("unless") + ",\"rules\":[$money],\"ignore\":[$ig]"))
+        assertTrue(RulesPack.trackedWithoutIgnore(withIgnore).isEmpty())
+        assertIs<ParseResult.Ignored>(SmsParser.parse("EANDMONEY", notice, P28.AT))
+        assertIs<ParseResult.Transaction>(SmsParser.parse("EANDMONEY", "Good news! AED 200.00 from SOME FRIEND in your account. Check your new balance.", P28.AT))
+        val without = apply(file(banks = "[$bank]", ext = "\"rules\":[$money]"))
+        assertEquals(listOf("e& money"), RulesPack.trackedWithoutIgnore(without))
+    }
+
+    // Spec 16.5: a needsTwin rule reads only in an app that holds it until its transfer arrives (the Android repository).
+    @Test fun leverNeedsTwinReadsOnlyWhereTheAppHoldsIt() {
+        val r = rule("CBD", "cbd-on-way", """Your transfer of {CUR} {AMOUNT} is now on its way""", type = "TRANSFER_OUT", cardType = "ACCOUNT",
+            extra = ",\"fixedMerchant\":\"Transfer\",\"needsTwin\":true")
+        val body = "Your transfer of AED 900.00 is now on its way to S***** A****."
+        val before = SmsParser.holdsTwins
+        try {
+            apply(file(ext = levers("needsTwin") + ",\"rules\":[$r]"))
+            SmsParser.holdsTwins = true
+            val t = read("CBD", body)
+            assertTrue(ruleRead(t, "cbd-on-way"), "$t"); assertTrue((t as ParseResult.Transaction).txn.needsTwin)
+            SmsParser.holdsTwins = false
+            assertFalse(ruleRead(read("CBD", body), "cbd-on-way"), "an app without the hold logic never uses the rule")
+            SmsParser.holdsTwins = true
+            apply(file(ext = "\"rules\":[$r]"))
+            assertFalse(ruleRead(read("CBD", body), "cbd-on-way"), "lever off")
+        } finally { SmsParser.holdsTwins = before }
+    }
 }

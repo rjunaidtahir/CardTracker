@@ -43,6 +43,11 @@ const val CAND_DISMISSED = "DISMISSED"
 const val CAND_MUTED = "MUTED"
 
 class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) {
+    init {
+        // This repository holds `needsTwin` messages in Needs review until their transfer message arrives (2.8 spec 16.5).
+        SmsParser.holdsTwins = true
+    }
+
     val dao = db.dao()
     private val lock = Mutex()
 
@@ -173,7 +178,11 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         learnedLoaded = true
     }
 
-    private suspend fun ensureLearned() { if (!learnedLoaded) loadLearned(); if (SmsParser.knownCard == null) refreshKnownCards() }
+    private suspend fun ensureLearned() {
+        if (!learnedLoaded) loadLearned()
+        if (SmsParser.knownCard == null) refreshKnownCards()
+        if (SmsParser.lastBalance == null) refreshBalances()
+    }
 
     /**
      * 2.8 section 2: when two banks read a wording from an unrecognised sender the same way, only a card you already have
@@ -183,6 +192,72 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         val known = runCatching { dao.allCards() }.getOrDefault(emptyList())
             .mapNotNull { c -> c.last4?.let { "${c.bank.trim().lowercase()}|$it" } }.toSet()
         SmsParser.knownCard = { bank, last4 -> "${bank.trim().lowercase()}|$last4" in known }
+    }
+
+    /** 2.8 events with no message (counts only), e.g. `event:key-change`; the app sends them only when sharing is on. */
+    var onEvent: ((kind: String, dedupe: String) -> Unit)? = null
+
+    /** Known balances by "bank|last4|currency" (time -> minor units), for 2.8 directionFromBalance (spec 14). */
+    private val balances = java.util.concurrent.ConcurrentHashMap<String, java.util.TreeMap<Long, Long>>()
+
+    private fun noteBalance(bank: String, last4: String?, currency: String, at: Long, minor: Long) {
+        if (last4 == null) return
+        val m = balances.getOrPut("${bank.trim().lowercase()}|$last4|$currency") { java.util.TreeMap() }
+        synchronized(m) { m[at] = minor }
+    }
+
+    /** Loads the balances the app holds and lets the reader ask for the last one before a message (strictly earlier). */
+    suspend fun refreshBalances() {
+        balances.clear()
+        runCatching { dao.txnsWithBalance() }.getOrDefault(emptyList()).forEach { t ->
+            t.availableLimitMinor?.let { noteBalance(t.bank, t.cardLast4, t.currency, t.timestamp, it) }
+        }
+        SmsParser.lastBalance = { bank, last4, currency, before ->
+            balances["${bank.trim().lowercase()}|$last4|$currency"]?.let { m -> synchronized(m) { m.lowerEntry(before) } }?.let { it.value to it.key }
+        }
+    }
+
+    private fun leverOn(name: String) = com.uaefinancial.tracker.parser.RulesPack.levers.on(name)
+
+    /** Words of a merchant name that tell two names apart (city and company words left out). */
+    private fun merchantTokens(m: String): Set<String> = m.lowercase().split(Regex("[^a-z0-9]+"))
+        .filter { it.length >= 2 && it !in merchantNoise }.toSet()
+    private val merchantNoise = setOf("dubai", "abu", "dhabi", "sharjah", "ajman", "ae", "uae", "are", "llc", "com", "www", "the", "co", "ltd", "fz", "fze", "and")
+
+    /** True when the merchant text is a real name (not a placeholder such as "Card purchase" or a transfer label). */
+    private fun realMerchant(m: String): Boolean =
+        m.isNotBlank() && m !in com.uaefinancial.tracker.core.ReadingGaps.placeholderMerchants && !m.startsWith("Transfer to ·") && merchantTokens(m).isNotEmpty()
+
+    /** Token overlap of two merchant names (share of the shorter one), 0..1. */
+    internal fun merchantSimilarity(a: String, b: String): Double {
+        val x = merchantTokens(a); val y = merchantTokens(b)
+        if (x.isEmpty() || y.isEmpty()) return 0.0
+        return x.intersect(y).size.toDouble() / minOf(x.size, y.size)
+    }
+
+    /** Field letters a reading carries, for `mg=` (A amount, C currency, K card/account, M merchant, B balance, T exact time). */
+    private fun fieldLetters(merchant: String, last4: String?, availMinor: Long?, exactTime: Boolean): String =
+        "AC" + (if (last4 != null) "K" else "") + (if (realMerchant(merchant)) "M" else "") + (if (availMinor != null) "B" else "") + (if (exactTime) "T" else "")
+
+    /** A "needsTwin" message waiting for [bank]'s transfer-out of this money joins the new row [txnId] (the nearest one only). */
+    private suspend fun bindWaitingTwin(txnId: Long, bank: String, amountMinor: Long, currency: String, at: Long) {
+        val day = 7 * 24 * 60 * 60 * 1000L
+        val best = dao.waitingTwins(NEEDS_TWIN_NOTE, bank, at - day, at + day).mapNotNull { m ->
+            val p = SmsParser.parse(m.sender, m.body, m.receivedAt) as? ParseResult.Transaction ?: return@mapNotNull null
+            val rule = SmsParser.packRuleById(p.ruleId)?.takeIf { it.needsTwin } ?: return@mapNotNull null
+            val dt = kotlin.math.abs(p.txn.timestamp - at)
+            if (Money.toMinor(p.txn.amount) != amountMinor || p.txn.currency != currency || dt > rule.twinWindowMinutes.coerceIn(1, 10_080) * 60 * 1000L) null
+            else Triple(m, p, dt)
+        }.minByOrNull { it.third } ?: return
+        dao.setPaired(txnId, best.first.id)
+        dao.setSmsResult(best.first.id, SmsStatus.TRANSACTION, bank, best.second.ruleId, "Same transfer as transaction #$txnId (merged)")
+    }
+
+    /** `merged:<TYPE>|mg=<fields of the row>+<fields of the new message>|how=pair|twin` (masked shape of the new message). */
+    private suspend fun reportMerge(smsId: Long, how: String, row: TransactionEntity, merchant: String, last4: String?, availMinor: Long?) {
+        val sms = dao.smsById(smsId) ?: return
+        val mg = fieldLetters(row.merchant, row.cardLast4, row.availableLimitMinor, true) + "+" + fieldLetters(merchant, last4, availMinor, sms.sentAt != null)
+        onShape?.invoke(sms.sender, sms.bank, sms.body, "merged:${row.type}|mg=$mg|how=$how", null)
     }
 
     private fun learnedSource(s: SmsEntity, f: SmsFixEntity) = LearnedFormats.Source(
@@ -265,7 +340,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 return IngestOutcome.DUPLICATE
             }
             // The same purchase as an SMS and as a bank-app notification is one transaction.
-            if (parsed is ParseResult.Transaction) {
+            if (parsed is ParseResult.Transaction && !leverOn(com.uaefinancial.tracker.parser.RulesPack.Lever.CROSS_SOURCE_MERGE)) {
                 val twins = dao.countCrossSourceTwins(
                     bank.name, Money.toMinor(parsed.txn.amount), parsed.txn.type.name,
                     receivedAt - window, receivedAt + window, if (source == SmsSource.NOTIF) 1 else 0,
@@ -324,10 +399,12 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
     suspend fun reparseAll(force: Boolean = false): Map<IngestOutcome, Int> = lock.withLock {
         ensureLearned()
         refreshKnownCards()
+        refreshBalances()
         val all = dao.smsForReparse()
         val counts = mutableMapOf<IngestOutcome, Int>()
         reparsing = true
         pendingOtp.clear()
+        keyChangesByBank.clear()
         try { db.withTransaction {
             val oldTxns = dao.allTxns().filter { it.smsId != null && !it.inferred }.groupBy { it.smsId!! }
             val oldStmts = dao.allStatements().filter { it.smsId > 0 }.groupBy { it.smsId }
@@ -354,6 +431,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             pendingOtp.clear()
             resolveStanding()
         } } finally { reparsing = false }
+        // Counts only (bank is a public bank name); the app sends it only when sharing is on.
+        for ((b, n) in keyChangesByBank) runCatching { onEvent?.invoke("event:key-change|bank=$b|n=$n", "key-change|$b|${SmsParser.ENGINE_VERSION}|$n") }
+        if (keyChangesByBank.isNotEmpty()) refreshKnownCards()
         counts
     }
 
@@ -446,6 +526,18 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             val nt = ids.flatMap { newTxns[it].orEmpty() }; val ns = ids.flatMap { newStmts[it].orEmpty() }
             val after = linesOf(nt, ns)
             if (!ReadingGuard.isMaterial(before, after)) continue
+            // 2.8 `applyKeyChangeFor` (spec 9): for a listed bank, a re-read that moves the same money to another card or
+            // account key is applied; the old card's history and your settings for it move to the new key.
+            val firstBank = ids.minOrNull()?.let { byId[it] }?.bank?.trim()?.lowercase()
+            if (firstBank != null && firstBank in com.uaefinancial.tracker.parser.ReadingPolicy.keyChangeBanks) {
+                val pairs = ReadingGuard.keyChanges(before, after)
+                if (pairs != null) {
+                    for ((o, n) in pairs.distinct()) if (o != n) moveCardKey(o, n)
+                    val shown = byId[ids.minOrNull()!!]?.bank?.trim() ?: firstBank
+                    keyChangesByBank[shown] = (keyChangesByBank[shown] ?: 0) + 1
+                    continue
+                }
+            }
             // Same money, only date/time or merchant text differs: keep what you have, silently, no review card.
             val firstSms = ids.minOrNull()?.let { byId[it] }
             val applyNewForBank = firstSms?.bank?.trim()?.lowercase()?.let { it in com.uaefinancial.tracker.parser.ReadingPolicy.softNewBanks } == true
@@ -479,6 +571,37 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 ),
             )
         }
+    }
+
+    /** Key changes applied during the current re-read, by bank (reported as `event:key-change` once it ends). */
+    private val keyChangesByBank = HashMap<String, Int>()
+
+    /**
+     * Moves card [from] to [to] for a key change: what you set on the old card (name, limit, days, look, counted or not,
+     * whose card) is kept on the new one where the new one has nothing of its own, then [mergeCards] moves the history and
+     * records the alias so later readings of the old key land on the new one.
+     */
+    private suspend fun moveCardKey(from: String, to: String) {
+        val cards = dao.allCards()
+        val old = cards.firstOrNull { it.cardKey == from }
+        val new = cards.firstOrNull { it.cardKey == to }
+        if (old == null) { dao.insertCardAlias(CardAliasEntity(from, to)); return }
+        if (new == null) {
+            dao.insertCard(old.copy(cardKey = to, last4 = to.substringAfterLast(" ·", "").takeIf { it.isNotBlank() && it != "????" } ?: old.last4))
+        } else {
+            dao.updateCard(
+                new.copy(
+                    nickname = new.nickname ?: old.nickname, creditLimitMinor = new.creditLimitMinor ?: old.creditLimitMinor,
+                    statementDay = new.statementDay ?: old.statementDay, dueDay = new.dueDay ?: old.dueDay,
+                    themeKey = new.themeKey ?: old.themeKey, owner = new.owner ?: old.owner,
+                    countInSpending = old.countInSpending, remindersEnabled = old.remindersEnabled, sortOrder = old.sortOrder,
+                    archived = old.archived && new.archived,
+                    statementAvailMinor = new.statementAvailMinor ?: old.statementAvailMinor,
+                    statementAvailEpochDay = new.statementAvailEpochDay ?: old.statementAvailEpochDay,
+                ),
+            )
+        }
+        mergeCards(from, to)
     }
 
     /**
@@ -771,31 +894,44 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
 
         // Two SMS for one transfer (e.g. FAB "Outward Remittance Debit" + "funds transfer processed"): merge.
         // Only a message that names the destination pairs with one that doesn't (never two transfers with each other).
-        val rule = BankRules.ruleById(r.ruleId)
+        // 2.8 (lever `pairs`, spec 7.1): a pack rule may declare a pair group too. Built-in (FAB) pairs work exactly as before.
+        val pairsOn = leverOn(com.uaefinancial.tracker.parser.RulesPack.Lever.PAIRS)
+        val packRule = if (pairsOn) SmsParser.packRuleById(r.ruleId) else null
+        val rule = BankRules.ruleById(r.ruleId) ?: packRule
         val group = rule?.pairGroup
         // A generic "amount debited" SMS (PURCHASE, e.g. an EMI) can be the same money as a transfer SMS.
         if (rule != null && group != null && key != null && placement == null && (t.type == TxnType.TRANSFER_OUT || t.type == TxnType.PURCHASE)) {
             val hasTo = rule.namesDestination
-            val groupRules = BankRules.banks.flatMap { it.rules }
+            val groupRules = (BankRules.banks.flatMap { it.rules } + (if (pairsOn) SmsParser.packRuleIdsInGroup(group).mapNotNull { SmsParser.packRuleById(it) } else emptyList()))
                 .filter { it.pairGroup == group && it.namesDestination != hasTo }
-                .map { it.id }
+                .map { it.id }.distinct()
             // The remittance SMS carries only a date (possibly the next value date), so allow up to a day apart.
-            val window = 24 * 60 * 60 * 1000L
+            // A pack pair uses its own window (pairWindowMinutes).
+            val window = if (packRule != null) packRule.pairWindowMinutes.coerceIn(1, 1440) * 60 * 1000L else 24 * 60 * 60 * 1000L
             val other = dao.findTransferPair(key, amountMinor, groupRules, r.ruleId, t.timestamp - window, t.timestamp + window, t.timestamp)
+                // Pack pairs (spec 7.2/7.4): same currency, and two real merchant names must agree.
+                ?.takeIf { o -> packRule == null || (o.currency == t.currency && (!realMerchant(o.merchant) || !realMerchant(t.merchant) || merchantSimilarity(o.merchant, t.merchant) >= 0.5)) }
             if (other != null) {
                 dao.mergePair(
                     id = other.id,
                     smsId = smsId,
                     // Prefer the text that names the destination ("Payment to ENBD credit card ·1234").
-                    merchant = if (t.toLast4 != null) t.merchant else other.merchant,
+                    // A pack pair also keeps a real merchant over a placeholder.
+                    merchant = if (packRule != null && !realMerchant(t.merchant) && realMerchant(other.merchant)) other.merchant
+                    else if (packRule != null && realMerchant(t.merchant) && !realMerchant(other.merchant)) t.merchant
+                    else if (t.toLast4 != null) t.merchant else other.merchant,
                     counterpartyKey = other.counterpartyKey ?: counterpartyKey,
                     availableLimitMinor = other.availableLimitMinor ?: availMinor,
                     // The "processed" SMS has the exact time; the remittance only a date.
-                    timestamp = if (hasTo) t.timestamp else other.timestamp,
+                    timestamp = if (packRule != null) minOf(t.timestamp, other.timestamp) else if (hasTo) t.timestamp else other.timestamp,
                     // Once a transfer SMS explains a debit, it's a transfer (not spending).
                     type = if (t.type == TxnType.TRANSFER_OUT || other.type == TxnType.TRANSFER_OUT.name) TxnType.TRANSFER_OUT.name else other.type,
                 )
                 dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${other.id} (merged)")
+                if (packRule != null || other.ruleId.startsWith("pack:")) {
+                    dao.clearCheckNoteIf(other.id, UNPAIRED_NOTE)
+                    if (!reparsing) runCatching { reportMerge(smsId, "pair", other, t.merchant, t.cardLast4, availMinor) }
+                }
                 return IngestOutcome.MERGED
             }
             // The real debit message for a transfer that was placed from its standing-instruction message: it replaces
@@ -815,6 +951,66 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
             }
         }
 
+        // 2.8 `needsTwin` (spec 16.5): this message counts only together with a transfer-out message for the same money.
+        val twinRule = SmsParser.packRuleById(r.ruleId)?.takeIf { it.needsTwin && leverOn(com.uaefinancial.tracker.parser.RulesPack.Lever.NEEDS_TWIN) }
+        if (twinRule != null && placement == null) {
+            val w = twinRule.twinWindowMinutes.coerceIn(1, 10_080) * 60 * 1000L
+            val twin = dao.findTwinTransfer(t.bank, amountMinor, t.currency, t.timestamp - w, t.timestamp + w, t.timestamp)
+            if (twin == null) {
+                dao.setSmsResult(smsId, SmsStatus.FAILED, t.bank, r.ruleId, NEEDS_TWIN_NOTE)
+                return IngestOutcome.FAILED
+            }
+            dao.setPaired(twin.id, smsId)
+            dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transfer as transaction #${twin.id} (merged)")
+            if (!reparsing) runCatching { reportMerge(smsId, "twin", twin, t.merchant, t.cardLast4, availMinor) }
+            return IngestOutcome.MERGED
+        }
+        // 2.8 (lever `crossSourceMerge`, spec 7.2/7.3): the same money as an SMS and as an app notification is one row,
+        // even when the notification comes from a wallet app (another "bank"). Exactly one candidate, or nothing is merged.
+        if (placement == null && r.ruleId != FIX_RULE && leverOn(com.uaefinancial.tracker.parser.RulesPack.Lever.CROSS_SOURCE_MERGE)) {
+            val me = dao.smsById(smsId)
+            if (me != null) {
+                val w = 10 * 60 * 1000L
+                val incomingNotif = me.source == SmsSource.NOTIF
+                val agg = SmsParser.aggregatorBanks + "wallet"
+                fun isAgg(b: String) = b.trim().lowercase() in agg
+                val cands = dao.crossSourceCandidates(amountMinor, t.currency, t.type.name, me.receivedAt - w, me.receivedAt + w, if (incomingNotif) 1 else 0, smsId)
+                    .filter { o ->
+                        (o.bank.equals(t.bank, ignoreCase = true) || isAgg(o.bank) || isAgg(t.bank)) &&
+                            (o.cardLast4 == null || t.cardLast4 == null || o.cardLast4 == t.cardLast4) &&
+                            (!realMerchant(o.merchant) || !realMerchant(t.merchant) || merchantSimilarity(o.merchant, t.merchant) >= 0.5) &&
+                            (o.counterpartyKey == null || counterpartyKey == null || o.counterpartyKey == counterpartyKey)
+                    }
+                if (cands.size == 1) {
+                    val o = cands[0]
+                    // Card or account from the side that names one (a bank over a wallet); merchant from a real name (the
+                    // wallet's when both have one); balance from the side that has it; the earliest time. Money never changes.
+                    val takeMine = t.cardLast4 != null && (o.cardLast4 == null || (isAgg(o.bank) && !isAgg(t.bank)))
+                    val mineAgg = isAgg(t.bank)
+                    val merchant = when {
+                        realMerchant(t.merchant) && !realMerchant(o.merchant) -> t.merchant
+                        realMerchant(t.merchant) && realMerchant(o.merchant) && mineAgg && !isAgg(o.bank) -> t.merchant
+                        else -> o.merchant
+                    }
+                    dao.mergeTwin(
+                        id = o.id, smsId = smsId, merchant = merchant, merchantKey = CategoryRules.merchantKey(merchant),
+                        bank = if (takeMine) t.bank else o.bank,
+                        cardKey = if (takeMine) key else o.cardKey, cardLast4 = if (takeMine) t.cardLast4 else o.cardLast4,
+                        availableLimitMinor = o.availableLimitMinor ?: availMinor, timestamp = minOf(o.timestamp, t.timestamp),
+                    )
+                    // The wallet's own card entry made just for this money is removed when it is left empty (never one you named).
+                    for (k in listOfNotNull(o.cardKey, key).distinct()) {
+                        val c = dao.allCards().firstOrNull { it.cardKey == k } ?: continue
+                        if (isAgg(c.bank) && c.nickname == null && dao.countTxnsForCard(k) == 0 && dao.countStatementsForCard(k) == 0) dao.deleteCard(k)
+                    }
+                    dao.setSmsResult(smsId, SmsStatus.TRANSACTION, t.bank, r.ruleId, "Same transaction as #${o.id} (merged)")
+                    if (!reparsing) runCatching { reportMerge(smsId, "twin", o, t.merchant, t.cardLast4, availMinor) }
+                    return IngestOutcome.MERGED
+                }
+                if (cands.size > 1 && !reparsing) runCatching { onShape?.invoke(me.sender, me.bank, me.body, "merged:ambiguous|n=${cands.size}", null) }
+            }
+        }
+
         val override = dao.overrideFor(dedupKey)
         // Check: the amount read must be written in the message (user fixes are checked by the user).
         val amountNote = if (r.ruleId == FIX_RULE) null else dao.smsBody(smsId)?.let { b ->
@@ -824,7 +1020,10 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         // Completeness: a part of the message that fell back to a default (no merchant, no card) is marked, never hidden.
         val gaps = if (r.ruleId == FIX_RULE) emptyList()
         else (if (guessedMerchant) listOf("merchant-guess") else emptyList()) + com.uaefinancial.tracker.core.ReadingGaps.of(t)
-        val checkNote = amountNote ?: if (gaps.isNotEmpty()) "gap:" + gaps.joinToString(",") else null
+        val gaps2 = gaps + (if (t.inferred == SmsParser.DIRECTION_FROM_BALANCE_INFERRED) listOf("direction-from-balance") else emptyList())
+        // A pack-pair message counted on its own (its other half not here yet) is marked Check this until the pair merges.
+        val unpaired = packRule?.checkUntilPaired == true && group != null && key != null && placement == null
+        val checkNote = amountNote ?: if (gaps2.isNotEmpty()) "gap:" + gaps2.joinToString(",") else if (unpaired) UNPAIRED_NOTE else null
         // Spends on a card you pay for someone else go to the Family category (unless you chose another).
         val family = card?.owner == CardOwner.FAMILY && t.type == TxnType.PURCHASE && override == null
         val entity =
@@ -841,7 +1040,10 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 checkNote = checkNote,
                 inferred = placement != null,
             )
-        dao.insertTxn(entity)
+        val newId = dao.insertTxn(entity)
+        availMinor?.let { noteBalance(t.bank, t.cardLast4, t.currency, t.timestamp, it) }
+        // 2.8 `needsTwin`: a "now on its way" message that was waiting for this transfer joins it now (nearest one only).
+        if (t.type == TxnType.TRANSFER_OUT && leverOn(com.uaefinancial.tracker.parser.RulesPack.Lever.NEEDS_TWIN)) bindWaitingTwin(newId, t.bank, amountMinor, t.currency, t.timestamp)
         if (entity.categoryId == CategoryRules.OTHER && !entity.categoryUserSet && !reparsing) onOtherMerchant?.invoke(entity.merchant, t.type)
         if (!reparsing && (placement == null || placement.notify)) synchronized(fresh) { fresh += entity }
         val note = if (aed == null) "No exchange rate for ${t.currency}: add one in More → Exchange rates" else null
@@ -1272,6 +1474,10 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         const val SI_PENDING_NOTE_PREFIX = "Money left one of your accounts"
         const val SI_PENDING_NOTE = "$SI_PENDING_NOTE_PREFIX, but the messages can't tell which one or when yet. It is placed automatically if a later message settles it; otherwise check your statement and use Fix."
         const val SI_RECURRING_NOTE = "Placed on the account that paid the same standing instruction before (at least two earlier ones agree). Use Fix if it is wrong."
+        /** Check-this mark of a pack-pair message counted on its own (cleared when its other half merges). */
+        const val UNPAIRED_NOTE = "gap:unpaired"
+        /** 2.8 `needsTwin` (spec 16.5): the message waits in Needs review until its transfer-out message is there. */
+        const val NEEDS_TWIN_NOTE = "Waiting for the transfer message this one belongs to: it counts only together with it, never on its own."
         const val SI_PLACED_NOTE = "Placed from the standing-instruction message: no debit message arrived. Account and time come from your balances."
     }
 

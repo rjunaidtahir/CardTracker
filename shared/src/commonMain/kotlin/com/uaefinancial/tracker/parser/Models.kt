@@ -47,6 +47,8 @@ data class Rule(
     /** 2.8 (`ext.rules`): the message only counts when it merges with a matching transfer-out message ([twinWindowMinutes]); otherwise it waits in Needs review. */
     val needsTwin: Boolean = false,
     val twinWindowMinutes: Int = 1440,
+    /** 2.8 (`ext.rules`, with [pairGroup]): counted on its own the row is marked Check this until its pair arrives (e.g. CBD blocked-card notice). */
+    val checkUntilPaired: Boolean = false,
     /** 2.8 (`ext.rules`): the rule itself states the direction ("IN" or "OUT"), so a message carrying both credit and debit words may be read. */
     val direction: String? = null,
     /** 2.8: a rule from `ext.rules` (compiled with the 2.8 tokens, checked by the post-read sanity check). */

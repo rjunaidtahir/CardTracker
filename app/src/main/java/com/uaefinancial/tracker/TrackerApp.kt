@@ -36,6 +36,8 @@ class TrackerApp : Application() {
         SmsParser.setExcludedBanks(prefs.excludedBanks)
         repo.onSendersChanged = { prefs.senderCache = it }
         repo.onShape = { sender, bank, body, kind, merchant -> com.uaefinancial.tracker.learn.Learning.queue(this, prefs, sender, bank, body, kind, merchant) }
+        // 2.8 events with no message (counts only, e.g. event:key-change); sent only when sharing is on.
+        repo.onEvent = { kind, dedupe -> runCatching { com.uaefinancial.tracker.learn.Learning.queueReport(this, prefs, kind, kind.substringAfter('|'), dedupe) } }
         repo.onCategory = { sender, bank, body, merchant, type, from, to, all ->
             com.uaefinancial.tracker.learn.Learning.queueCategory(this, prefs, sender, bank, body, merchant, type, from, to, all)
         }

@@ -12,6 +12,7 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 /*
@@ -387,6 +388,42 @@ interface AppDao {
     )
     suspend fun countCrossSourceTwins(bank: String, amountMinor: Long, type: String, from: Long, to: Long, incomingNotif: Int): Int
 
+    /** 2.8 (lever crossSourceMerge): rows from the OTHER source (SMS vs notification) that could be the same money; checked in code. */
+    @Query(
+        "SELECT t.* FROM transactions t JOIN sms s ON s.id = t.smsId " +
+            "WHERE t.amountMinor = :amountMinor AND t.currency = :currency AND t.type = :type AND t.pairedSmsId IS NULL AND t.inferred = 0 " +
+            "AND s.receivedAt BETWEEN :from AND :to AND t.smsId != :smsId " +
+            "AND ((:incomingNotif = 1 AND s.source != 'NOTIF') OR (:incomingNotif = 0 AND s.source = 'NOTIF'))",
+    )
+    suspend fun crossSourceCandidates(amountMinor: Long, currency: String, type: String, from: Long, to: Long, incomingNotif: Int, smsId: Long): List<TransactionEntity>
+
+    /** 2.8 merge of two messages into one row: the row keeps its money, takes the best of the other fields, and records both sources. */
+    @Query(
+        "UPDATE transactions SET pairedSmsId = :smsId, merchant = :merchant, merchantKey = :merchantKey, bank = :bank, cardKey = :cardKey, cardLast4 = :cardLast4, " +
+            "availableLimitMinor = :availableLimitMinor, timestamp = :timestamp WHERE id = :id",
+    )
+    suspend fun mergeTwin(id: Long, smsId: Long, merchant: String, merchantKey: String?, bank: String, cardKey: String?, cardLast4: String?, availableLimitMinor: Long?, timestamp: Long)
+
+    /** 2.8 needsTwin: the transfer-out a "now on its way" message belongs to (same bank, amount, currency; nearest unpaired). */
+    @Query(
+        "SELECT * FROM transactions WHERE bank = :bank AND type = 'TRANSFER_OUT' AND amountMinor = :amountMinor AND currency = :currency " +
+            "AND pairedSmsId IS NULL AND inferred = 0 AND timestamp BETWEEN :from AND :to ORDER BY ABS(timestamp - :ts) LIMIT 1",
+    )
+    suspend fun findTwinTransfer(bank: String, amountMinor: Long, currency: String, from: Long, to: Long, ts: Long): TransactionEntity?
+
+    @Query("SELECT * FROM sms WHERE status = 'FAILED' AND note = :note AND bank = :bank AND receivedAt BETWEEN :from AND :to ORDER BY receivedAt ASC")
+    suspend fun waitingTwins(note: String, bank: String, from: Long, to: Long): List<SmsEntity>
+
+    @Query("UPDATE transactions SET pairedSmsId = :smsId WHERE id = :id")
+    suspend fun setPaired(id: Long, smsId: Long)
+
+    @Query("UPDATE transactions SET checkNote = NULL WHERE id = :id AND checkNote = :note")
+    suspend fun clearCheckNoteIf(id: Long, note: String)
+
+    /** Latest known balances of accounts (for 2.8 directionFromBalance): rows with a balance, newest last. */
+    @Query("SELECT * FROM transactions WHERE availableLimitMinor IS NOT NULL AND cardLast4 IS NOT NULL ORDER BY timestamp ASC")
+    suspend fun txnsWithBalance(): List<TransactionEntity>
+
     @Query("SELECT * FROM sms WHERE status != 'DISMISSED' ORDER BY receivedAt ASC")
     suspend fun smsForReparse(): List<SmsEntity>
 
@@ -601,6 +638,10 @@ interface AppDao {
     /** IGNORE keeps any settings you've changed on an existing card. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCard(c: CardEntity)
+
+    /** 2.8 key change: the new card takes the settings you gave the old one (no delete, so nothing else is touched). */
+    @Update
+    suspend fun updateCard(c: CardEntity)
 
     @Query("SELECT * FROM cards WHERE archived = 0 ORDER BY sortOrder, cardType, bank, last4")
     fun cards(): Flow<List<CardEntity>>
@@ -846,6 +887,9 @@ interface AppDao {
 
     @Query("SELECT COUNT(*) FROM transactions WHERE cardKey = :key")
     suspend fun countTxnsForCard(key: String): Int
+
+    @Query("SELECT COUNT(*) FROM statements WHERE cardKey = :key")
+    suspend fun countStatementsForCard(key: String): Int
 
     @Query("DELETE FROM cards WHERE cardKey = :key")
     suspend fun deleteCard(key: String)

@@ -8,7 +8,7 @@ and 2.8 all read the same file at the same address, so every entry must be place
 | Entry uses... | Put it in | Why |
 |---|---|---|
 | only 2.7 tokens and fields (`{CUR}`, `{AMOUNT}`, `{CARD}`, `{MERCHANT}`, ... `fixedMerchant`, `pairGroup`, `describesDestination`) | the legacy sections: `rules`, `ignore`, `words`, `banks`, `sendMore`, `disable`, `disableIgnore`, `readingPolicy` | every phone reads them |
-| `{ACCT}`, `{CUR}` abbreviations (Rs. SR KD $), `accountNotNamed`, `pairWindowMinutes`, `directionFromBalance`, `needsTwin`, `twinWindowMinutes`, `direction` | `ext.rules` | a 2.6/2.7 phone would fail to compile the pattern and reject the WHOLE file |
+| `{ACCT}`, `{CUR}` abbreviations (Rs. SR KD $), `accountNotNamed`, `pairWindowMinutes`, `directionFromBalance`, `needsTwin`, `twinWindowMinutes`, `checkUntilPaired`, `direction` | `ext.rules` | a 2.6/2.7 phone would fail to compile the pattern and reject the WHOLE file |
 | an ignore with `bank`, `unless` or `minWords` | `ext.ignore` | same |
 | several-word phrases, `notMoney` words | `ext.words` | same |
 | `wordingBanks`, `notificationBanks`, `ask`, `learnedExempt`, `readingPolicy.applyKeyChangeFor`, `levers`, `safeMode` | `ext` | 2.8 only |

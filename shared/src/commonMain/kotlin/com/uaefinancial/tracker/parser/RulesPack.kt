@@ -32,7 +32,7 @@ package com.uaefinancial.tracker.parser
  *   "levers": {"wordingBanks": true, "phrases": true, ...},  // every 2.8 capability is OFF until its lever is true
  *   "safeMode": false,                 // true: ALL pack rules, ignores, words, wordingBanks (legacy and ext) are ignored
  *   "rules":  [ {..legacy rule fields.., "accountNotNamed": true, "pairGroup": "x", "describesDestination": true,
- *                "pairWindowMinutes": 180, "directionFromBalance": true, "needsTwin": true, "twinWindowMinutes": 1440,
+ *                "pairWindowMinutes": 180, "directionFromBalance": true, "needsTwin": true, "twinWindowMinutes": 1440, "checkUntilPaired": true,
  *                "direction": "IN"|"OUT"} ],          // tokens: also {ACCT}; {CUR} also takes Rs. SR KD $ … (lever curAbbrev)
  *   "ignore": [ {"label": "..", "pattern": "..", "bank": "dib", "unless": "regex", "minWords": 6} ],
  *   "words":  {"debit": [phrases], "credit": [..], "transfer": [..], "notMoney": [..]},   // lever phrases / notMoney
@@ -260,6 +260,7 @@ object RulesPack {
                     directionFromBalance = bool("directionFromBalance"),
                     needsTwin = bool("needsTwin"),
                     twinWindowMinutes = int("twinWindowMinutes", 1..10080, 1440),
+                    checkUntilPaired = bool("checkUntilPaired"),
                     direction = direction,
                     fromExt = true,
                 )
@@ -550,6 +551,22 @@ object RulesPack {
         private set
 
     /** Puts [pack] to work (or clears it, with null). */
+    /**
+     * 2.8 spec 15, audit warning: tracked rules-file banks with no ignore entry of their own (an `ext.ignore` scoped to the
+     * bank, or a legacy ignore whose label or pattern names the bank or one of its sender IDs). Such a bank's notices
+     * (rewards, expiry, marketing) would flood Needs review, so the loop must ship its ignores before `track: true`.
+     */
+    fun trackedWithoutIgnore(pack: Pack): List<String> {
+        val all = pack.banks + pack.ext?.banks.orEmpty()
+        val scoped = pack.ext?.ignore.orEmpty().mapNotNull { it.bank?.trim()?.lowercase() }.toSet()
+        val legacy = (pack.ignore + pack.ext?.ignore.orEmpty().filter { it.bank == null }).map { (it.label + " " + it.pattern).lowercase() }
+        return all.filter { it.track }.map { it.name }.distinct().filter { name ->
+            val b = all.filter { it.name == name }
+            val words = (listOf(name) + b.flatMap { it.senderIds }).map { it.trim().lowercase() }.filter { it.length >= 3 }
+            name.trim().lowercase() !in scoped && legacy.none { text -> words.any { it in text } }
+        }.sorted()
+    }
+
     fun apply(pack: Pack?) {
         val ext = pack?.ext
         val safe = ext?.safeMode == true
@@ -579,6 +596,10 @@ object RulesPack {
         }
         // 2.8 rules: {ACCT} only with its lever; {CUR} abbreviations only with theirs (otherwise the 2.7 {CUR}).
         val extRules = ext?.rules.orEmpty().filter { lv.on(Lever.ACCT_TOKEN) || !it.rule.pattern.contains("{ACCT}") }
+            // A rule that proves its direction from the balance, or that counts only with a twin, is left out while its lever
+            // is off (read as written it could guess a direction or count an unattached transfer).
+            .filter { !it.rule.directionFromBalance || lv.on(Lever.DIRECTION_FROM_BALANCE) }
+            .filter { !it.rule.needsTwin || lv.on(Lever.NEEDS_TWIN) }
         SmsParser.setPackRules(
             pack?.rules.orEmpty().groupBy({ it.bank.trim().lowercase() }, { it.rule }),
             extRules.groupBy({ it.bank.trim().lowercase() }, { it.rule }),

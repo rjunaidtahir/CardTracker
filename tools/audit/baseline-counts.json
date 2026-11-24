@@ -1,5 +1,5 @@
 {
-  "_doc": "READ group counts from the last accepted audit run, per input type (counts only). The audit fails if READ drops for an input with at least as many groups. Empty until the first 2.8 audit run is recorded.",
-  "export": null,
+  "_doc": "READ group counts from the last accepted audit run, per input type (counts only). The audit fails if READ drops for an input with at least as many groups. Recorded from the first 2.8 audit run (24 Nov 2026, pack v26, engine 8).",
+  "export": {"groups": 902, "read": 733},
   "sheet": null
 }

@@ -155,6 +155,56 @@ object SmsParser {
         packRules = (legacy.keys + extra.keys).associateWith { k -> legacy[k].orEmpty() + extra[k].orEmpty() }
     }
 
+    /** A rule from the signed rules file by its id ("pack:<id>"), so the app can pair messages a pack rule declares (2.8 spec 7.1). */
+    fun packRuleById(id: String?): Rule? =
+        id?.takeIf { it.startsWith("pack:") }?.let { rid -> packRules.values.asSequence().flatten().map { it.first }.firstOrNull { it.id == rid } }
+
+    /** Ids of every pack rule in a pair group. */
+    fun packRuleIdsInGroup(group: String): List<String> =
+        packRules.values.asSequence().flatten().map { it.first }.filter { it.pairGroup == group }.map { it.id }.toList()
+
+    /**
+     * 2.8 `directionFromBalance` (spec 14): the app's last known balance of an account before a time, as (balance in minor units,
+     * when it was known). Set by the app from its stored readings; null (no provider, no balance) means "cannot prove".
+     */
+    /**
+     * Set by an app that holds `needsTwin` readings until their twin message is there (Android 2.8 Repository). Until then
+     * such rules are skipped, so an app without that logic (the iPhone build) can never count one on its own.
+     */
+    @kotlin.concurrent.Volatile
+    var holdsTwins: Boolean = false
+
+    @kotlin.concurrent.Volatile
+    var lastBalance: ((bank: String, last4: String?, currency: String, before: Long) -> Pair<Long, Long>?)? = null
+
+    private const val DAY_MS = 86_400_000L
+
+    /**
+     * The direction of a message whose wording does not say it, proven from the balance: exactly one of "earlier - amount =
+     * now" and "earlier + amount = now" holds (to 0.01), the earlier balance is at most 30 days old and in the same currency.
+     * Null when it cannot be proven (no balance, both fit, neither fits: a missed message in between). Never a guess.
+     */
+    fun directionFromBalance(earlierMinor: Long, earlierAt: Long, amountMinor: Long, balanceMinor: Long, at: Long): Boolean? {
+        if (at - earlierAt > 30 * DAY_MS || earlierAt > at) return null
+        val out = kotlin.math.abs(earlierMinor - amountMinor - balanceMinor) <= 1
+        val inn = kotlin.math.abs(earlierMinor + amountMinor - balanceMinor) <= 1
+        return if (out == inn) null else out
+    }
+
+    private fun decideDirection(rule: Rule, t: ParsedTransaction): ParsedTransaction {
+        val bal = t.availableLimit ?: error("${DIRECTION_MARK}no balance")
+        val prev = lastBalance?.invoke(t.bank, t.cardLast4, t.currency, t.timestamp) ?: error("${DIRECTION_MARK}no earlier balance")
+        val out = directionFromBalance(prev.first, prev.second, t.amount.toMinor(), bal.toMinor(), t.timestamp) ?: error("${DIRECTION_MARK}not proven")
+        val outTypes = setOf(TxnType.PURCHASE, TxnType.TRANSFER_OUT, TxnType.PAYMENT)
+        val type = if (out) (if (rule.type in outTypes) rule.type else TxnType.TRANSFER_OUT) else (if (rule.type !in outTypes) rule.type else TxnType.TRANSFER_IN)
+        return t.copy(type = type, inferred = DIRECTION_FROM_BALANCE_INFERRED)
+    }
+
+    private const val DIRECTION_MARK = "direction:"
+
+    /** [Txn.inferred] value of a direction proven from the balance (the row is marked Check this). */
+    const val DIRECTION_FROM_BALANCE_INFERRED = "direction-from-balance"
+
     /** `ext.wordingBanks` (lever wordingBanks): a wording that names its bank, for senders with no bank of their own. */
     @kotlin.concurrent.Volatile
     private var wordingBanks: List<Pair<String, Regex>> = emptyList()
@@ -483,6 +533,7 @@ object SmsParser {
         val probe = runCatching { SmartParser.probe(text) }.getOrNull()
         val sanity = errors.any { it.contains(SANITY_MARK) }
         val stage = when {
+            errors.any { it.contains(DIRECTION_MARK) } -> Stage.NO_DIRECTION
             sanity -> Stage.SANITY
             else -> probe?.stage ?: Stage.UNKNOWN
         }
@@ -509,11 +560,20 @@ object SmsParser {
         // Rules from the signed rules file, for this bank only, after its built-in rules.
         packRules[cb.bank.name.trim().lowercase()]?.let { extra ->
             for ((rule, regex) in extra) {
+                // A rule that counts only with its twin message needs an app that holds it until then (Android 2.8).
+                if (rule.needsTwin && !holdsTwins) continue
                 val m = regex.find(text) ?: continue
                 try {
                     return when (rule.kind) {
                         RuleKind.TRANSACTION -> {
-                            val t = buildTxn(cb.bank, rule, m, receivedAt, zone)
+                            var t = buildTxn(cb.bank, rule, m, receivedAt, zone)
+                            // The wording names no direction: proven from the balance, or the message stays in Needs review.
+                            // A matched rule that cannot prove it stops here on purpose (no other reader may guess the direction).
+                            if (rule.fromExt && rule.directionFromBalance) {
+                                t = runCatching { decideDirection(rule, t) }.getOrElse { e ->
+                                    return ParseResult.Failed(cb.bank.name, "The direction could not be proven from the balance (${e.message?.removePrefix(DIRECTION_MARK)})", Stage.NO_DIRECTION, "ACK" + (if (t.availableLimit != null) "B" else ""))
+                                }
+                            }
                             if (rule.fromExt) sanityProblem(rule, m.value, t)?.let { error("$SANITY_MARK$it") }
                             ParseResult.Transaction(t, rule.id)
                         }
@@ -607,6 +667,8 @@ object SmsParser {
     private fun readStrict(cb: CompiledBank, text: String, receivedAt: Long, zone: Int, packToo: Boolean = true): WordingRead? {
         val pack = if (packToo) packRules[cb.bank.name.trim().lowercase()].orEmpty() else emptyList()
         for ((rule, regex) in cb.rules.filter { it.first.id !in disabledRules } + pack) {
+            // A rule whose direction or count depends on other messages is never used to name a bank by wording.
+            if (rule.directionFromBalance || rule.needsTwin) continue
             val m = regex.find(text) ?: continue
             val currencyRead = m.g("currency") != null
             val cardRead = m.g("card") != null || m.g("acct") != null

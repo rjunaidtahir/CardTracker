@@ -3,7 +3,7 @@
 Branch `release/2.8` from `main` (2.7, versionName 2.7, engine 7). Not merged, not published, no rules file published.
 versionName 2.8, `SmsParser.ENGINE_VERSION` 7 → 8.
 
-Status: **Stage 1 in progress** (this file is updated after each stage).
+Status: **Stage 1 green; stage 2 in CI** (this file is updated after each stage).
 
 ## Merged branches (section 1)
 
@@ -75,6 +75,58 @@ of a shape that clears is dropped, so it is never sent as both. `cleared` and `e
 `AuditReplayTest` + `tools/audit/` + `.github/workflows/audit.yml` (8.1), ignore regression gate in the same job (8.2), shipped-pack
 tests under both readers (8.3), one self-test per lever (`LeverSelfTest`, 8.4).
 
+## Stage 2: what changed (sections 7, 9, 14, 15, 16.4, 16.5; no schema change)
+
+### Merging two messages (section 7)
+- **Pack pairs** (lever `pairs`): `pairGroup` / `describesDestination` / `pairWindowMinutes` on `ext.rules` take part in the existing
+  pairing (`findTransferPair`/`mergePair`, which already take rule-id lists; pack ids are `pack:<id>`). Built-in FAB pairs are
+  unchanged (same rules, same 24 h window); a pack pair also needs the same currency and, when both name a real merchant, a token
+  overlap of at least 50%. New rule option `checkUntilPaired`: a message counted on its own is marked Check this until its pair
+  arrives (used for the CBD blocked-card notice, 16.4; a plain debit is never marked).
+- **SMS + app notification** (lever `crossSourceMerge`): the 2.7 drop (same bank only) is replaced by a merge when the lever is on.
+  Candidate: other source, same amount, currency and type, within 10 minutes, same bank OR one side an aggregator (`isAggregator`
+  notification banks, and the existing pack bank `Wallet`), same last four when both have one, merchant overlap >= 50% when both
+  are real, same destination when both have one. Exactly one candidate merges; more than one keeps all and reports
+  `merged:ambiguous`. The row keeps its money; card from the bank side, merchant from a real name (the wallet's when both have
+  one), balance from the side that has it, earliest time; both sources recorded (`pairedSmsId` + sms note). An empty auto-created
+  wallet card left by the merge is removed. Purchase vs refund never merge (type must match); different amounts never merge.
+- `merged:<TYPE>|mg=<fields of row>+<fields of new message>|how=pair|twin` is reported for every merge (sharing on only).
+- No Room column was needed (no migration).
+
+### Card key changes (section 9)
+`ext.readingPolicy.applyKeyChangeFor` (lever `keyChange`): when a re-read changes ONLY the card key / last four (time and merchant
+may differ) and every money field is equal (`ReadingGuard.keyChanges`), the new reading is applied; the new card takes the
+settings you gave the old one (name, limit, days, look, counted-or-not, owner, order), then `mergeCards` moves the history and
+writes the alias, so no duplicate card appears and later messages for the old digits land on the new card.
+`event:key-change|bank=..|n=..` is reported once per re-read. A bank not in the list is held exactly as before.
+
+### Direction from balance (section 14)
+Rule option `directionFromBalance` (lever of the same name): the app keeps the balances it has seen per bank/last four/currency;
+the direction is fixed only when exactly one of earlier - amount and earlier + amount equals the new balance (within 0.01), the
+earlier balance is at most 30 days old and in the same currency. Otherwise the message stays in Needs review with stage
+`NO_DIRECTION` (the pack rule matched, so the generic reader is not allowed to guess either). A proven direction is marked
+Check this. **Difference from the spec:** the generic reader already reads SIB "Within UAE Funds Transfer" as money out in 2.7
+(the word "transfer"), so SIB is not "unreadable" today; the option only applies to a pack rule that names it.
+
+### needsTwin (16.5)
+A `needsTwin` rule counts only when it joins a transfer-out of the same bank, amount and currency within `twinWindowMinutes`
+(the nearest unpaired one); otherwise it waits in Needs review (stage `NEEDS_TWIN` in the report). A transfer that arrives later
+picks up the waiting message. Re-reads end the same way. `SmsParser.holdsTwins` is set only by the Android repository, so the
+iPhone build (which has no hold logic) never uses such a rule.
+
+### Wallet money-in (section 15)
+`accountNotNamed: true` + `cardType: ACCOUNT` puts the money on the wallet's own account, or exactly one "<Bank> ·????" account
+(never one per message); accounts are not counted as spending by default. The audit now warns about a tracked bank with no
+ignore entry of its own (`RulesPack.trackedWithoutIgnore`).
+
+### Stage 2 tests
+Database tests on the emulator: `PackPairDbTest` (CBD notice in all three orders, pairs lever off, different merchants, FAB pair
+with every lever on, needsTwin: twin present / later / never / two equal transfers), `WalletMergeDbTest` (both orders, re-read,
+different merchants, purchase vs refund, an hour apart, different amounts, ambiguous, lever off, wallet money-in on one account),
+`KeyChangeDbTest` (money unchanged, history and settings kept, unlisted bank held, lever off held). Unit tests:
+`ReadingGuardTest.keyChangeOnlyWhenMoneyIsEqual`, `DirectionFromBalanceTest` (7 cases from section 14),
+`LeverSelfTest.leverNeedsTwinReadsOnlyWhereTheAppHoldsIt`, `LeverSelfTest.aTrackedWalletWithItsIgnoresDoesNotFloodReview...`.
+
 ## Lever table
 
 | lever | pack field | test | default | kill switch |
@@ -85,14 +137,16 @@ tests under both readers (8.3), one self-test per lever (`LeverSelfTest`, 8.4).
 | phrases | `ext.words.debit/credit/transfer` | `LeverSelfTest.leverPhrases` | OFF | lever false |
 | notMoney | `ext.words.notMoney` | `LeverSelfTest.leverNotMoney` | OFF | lever false |
 | unless | `ext.ignore[].bank/unless` | `LeverSelfTest.leverUnlessWithAScopedIgnore` | OFF | lever false / remove entry |
-| pairs | `ext.rules[].pairGroup/pairWindowMinutes` | `LeverSelfTest.leverPairsDeclaresAPairGroupOnAPackRule` (+ stage 2 DB tests) | OFF | lever false |
+| pairs | `ext.rules[].pairGroup/describesDestination/pairWindowMinutes/checkUntilPaired` | `LeverSelfTest.leverPairsDeclaresAPairGroupOnAPackRule`, `PackPairDbTest` | OFF | lever false |
 | notificationBanks | `ext.notificationBanks` | `LeverSelfTest.leverNotificationBanks` | OFF | lever false |
-| keyChange | `ext.readingPolicy.applyKeyChangeFor` | `LeverSelfTest.leverKeyChange` (+ stage 2 DB test) | OFF | lever false |
+| keyChange | `ext.readingPolicy.applyKeyChangeFor` | `LeverSelfTest.leverKeyChange`, `KeyChangeDbTest` | OFF | lever false / remove bank |
 | ask | `ext.ask` | `LeverSelfTest.leverAsk`, `ReportFieldsTest.askEntriesMatchByBankSenderOrHashAndExpire` | OFF | lever false / `until` |
 | learnedExempt | `ext.learnedExempt` | `LeverSelfTest.leverLearnedExempt` | OFF | lever false |
 | reportExtras | `ext.levers.reportExtras` | `ReportFieldsTest` | ON | lever false |
 | safeMode | `ext.safeMode` | `LeverSelfTest.safeModeIsThePackWideKillSwitch` | off | is the kill switch |
-| crossSourceMerge, directionFromBalance, needsTwin | stage 2 | stage 2 | OFF | lever false |
+| crossSourceMerge | `ext.levers.crossSourceMerge` | `WalletMergeDbTest` | OFF | lever false (2.7 drop of same-bank twins returns) |
+| directionFromBalance | `ext.rules[].directionFromBalance` | `DirectionFromBalanceTest` | OFF | lever false (such rules are dropped) |
+| needsTwin | `ext.rules[].needsTwin/twinWindowMinutes` | `LeverSelfTest.leverNeedsTwinReadsOnlyWhereTheAppHoldsIt`, `PackPairDbTest` | OFF | lever false (such rules are dropped) |
 | hsbcLivePlusNames | stage 3 | stage 3 | ON | lever false |
 
 ## Data safety field list (section 20, draft; final after stage 3)
@@ -104,7 +158,8 @@ inside `kind`: `sid` (shape hash), `pv` (rules version), `ev` (engine version), 
 (bank named by wording), ask-only `amt` (amount layout such as `3.2;1,3.2-`), `w`/`wc` (wallet name, card name shape such as
 `Visa_Signature:4`). New kinds (counts only): `cleared|sid=..|pv=..|rule=..|n=3`, `event:update-result|pv=27|cleared=4|still=2|held=0|hidden=1|merged=0`,
 `event:reading-changed|pv=27|n=1`, `event:health|day=2026-11-24|seen=12|confident=10|review=1|held=0|hidden=1|merged=0|byBank=ADCB:5,HSBC:3`,
-`event:safe-mode|pv=27`, `event:ext-rejected|pv=27|why=..`.
+`event:safe-mode|pv=27`, `event:ext-rejected|pv=27|why=..`, `event:key-change|bank=ADCB|n=3`, `merged:<TYPE>|mg=ACKMB+ACKMT|how=twin`
+(field letters only), `merged:ambiguous|n=2`.
 
 Feedback (new data collection, user-initiated): user-generated content (feedback text, optional), email address (optional, only in
 email mode; purpose: replying), category, "anonymous"/"email", app version + engine version. **Owner action:** update the in-app
@@ -115,7 +170,18 @@ privacy text and the Play Data safety form (rule A10).
 - Feedback POST to the real form from a phone (owner to send one test from a debug build).
 - `cleared` / `event:update-result` / `event:health` sending on a real phone with sharing on (logic unit-tested; the flow needs a phone and a rules update).
 - Notification banks on a real wallet app notification.
+- A real wallet notification and bank SMS arriving for one purchase (merge logic tested on the emulator with invented wordings).
+- A real key change after a rules update on a phone that already has the old card (tested on the emulator by changing the stored text).
+
+## Audit (first run, stage 1 head 2e4a5d7)
+
+Export input: 908 rows, 902 groups: READ 733, IGNORED 70, FAILED 99 (all FAILED groups are "uncertain": the masked shape holds
+`{TEXT}` or a masked decisive word). Failed stages: NO_DIRECTION 86 (lever directionFromBalance), NO_AMOUNT 6, NO_CARD 3 (acctToken),
+NO_BANK 3 (wordingBanks), UNKNOWN 1. No 2.7+ unread group without a lever. Ignore gate: 47 pack ignores against 722 groups that
+read as a transaction: none hidden. Baseline recorded in `tools/audit/baseline-counts.json` (export: 902 groups, 733 READ).
 
 ## CI
 
-Stage 1 links are added when green.
+Stage 1 (head 2e4a5d7): [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45388955372) green,
+[Replay audit](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389863041) green,
+[Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389872608), [iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389911181).

@@ -212,6 +212,10 @@ class AuditReplayTest {
             json.append("\"failedGroups\":[" + failed.entries.joinToString(",") { (g, o) -> "{\"id\":\"${g.id}\",\"stage\":\"${o.detail}\",\"lever\":${leverFor(levers, g.id, o.detail)?.let { "\"$it\"" } ?: "null"},\"uncertain\":${o.uncertain}}" } + "]}")
         }
         json.append("},\"problems\":${problems.size}}")
+        // Warning only (spec 15): a tracked bank with no ignore of its own floods Needs review with its notices.
+        RulesPack.trackedWithoutIgnore(pack).takeIf { it.isNotEmpty() }?.let { w ->
+            summary.append("\n**Warning:** tracked bank(s) with no ignore entry of their own: ${w.joinToString(", ") { it.replace('|', '/') }}\n")
+        }
         summary.append(if (problems.isEmpty()) "\n**Audit gate: passed.**\n" else "\n**Audit gate: FAILED**\n\n" + problems.joinToString("\n") { "- $it" } + "\n")
         File("build").mkdirs()
         File("build/audit-report.json").writeText(json.toString())

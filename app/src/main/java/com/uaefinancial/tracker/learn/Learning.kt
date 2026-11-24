@@ -190,6 +190,9 @@ object Learning {
         val unread = kind == "unread" || kind.startsWith("unread")
         if (unread || "stage" in asked || "fieldsRead" in asked) {
             (parsed as? com.uaefinancial.tracker.parser.ParseResult.Failed)?.let { f -> out += "st" to (f.stage ?: "UNKNOWN"); out += "fr" to (f.fieldsRead ?: "") }
+            // A message that counts only with its transfer message (needsTwin) and is still waiting for it.
+            (parsed as? com.uaefinancial.tracker.parser.ParseResult.Transaction)
+                ?.takeIf { SmsParser.packRuleById(it.ruleId)?.needsTwin == true }?.let { out += "st" to com.uaefinancial.tracker.parser.Stage.NEEDS_TWIN }
         }
         when {
             kind == "smart-read" || kind.startsWith("incomplete:") -> out += "rule" to (parsed as? com.uaefinancial.tracker.parser.ParseResult.Transaction)?.ruleId

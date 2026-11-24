@@ -51,6 +51,21 @@ object ReadingGuard {
     fun keepOldSilently(before: List<Line>, after: List<Line>): Boolean =
         isSoftOnly(before, after) && before.none { it.merchant.isBlank() }
 
+    /**
+     * 2.8 `applyKeyChangeFor` (spec 9): when the re-read changes ONLY the card or account (key and/or last four; date/time and
+     * merchant may differ too) and every money field (kind, type, direction, amount, currency, bank) is equal, the pairs
+     * (old card key -> new card key) that changed; null when anything else changed (then the change stays held as before).
+     */
+    fun keyChanges(before: List<Line>, after: List<Line>): List<Pair<String, String>>? {
+        if (before.isEmpty() || before.size != after.size) return null
+        fun money(l: Line) = listOf(l.kind, l.type, l.direction, l.amountMinor, l.currency, l.bank).joinToString("|")
+        val b = before.sortedWith(compareBy({ money(it) }, { it.timestamp }))
+        val a = after.sortedWith(compareBy({ money(it) }, { it.timestamp }))
+        if (b.map { money(it) } != a.map { money(it) }) return null
+        val pairs = b.zip(a).filter { (x, y) -> x.cardKey != y.cardKey || x.last4 != y.last4 }.map { (x, y) -> x.cardKey to y.cardKey }
+        return pairs.takeIf { it.isNotEmpty() && it.all { (o, n) -> o.isNotBlank() && n.isNotBlank() } }
+    }
+
     /** Names of the fields that differ (first reading of each side), for the review card. */
     fun changedFields(before: List<Line>, after: List<Line>): List<String> {
         val b = before.firstOrNull() ?: return emptyList()
