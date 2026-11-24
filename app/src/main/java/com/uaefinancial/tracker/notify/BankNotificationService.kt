@@ -53,9 +53,11 @@ class BankNotificationService : NotificationListenerService() {
             NotifApps.noteSeen(prefs, pkg, NotifApps.labelOf(applicationContext, pkg))
             return
         }
-        val label = chosen.substringAfter('\t', pkg)
         val extras = n.extras ?: return
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty().trim()
+        // 2.8 (lever notificationBanks): the rules file may name the bank of an app you chose (a wallet, e& money...), so its
+        // notifications are read with that bank's rules. Only apps you ticked are ever read; otherwise the app's name is used.
+        val label = com.uaefinancial.tracker.parser.RulesPack.notificationBankFor(pkg, title)?.bank ?: chosen.substringAfter('\t', pkg)
         val text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))
             ?.toString().orEmpty().trim()
         if (text.isEmpty()) return

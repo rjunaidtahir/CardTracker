@@ -270,26 +270,21 @@ fun MoreScreen(
         // ---- helping the app learn
         item {
             val share by vm.shareConsent.collectAsStateWithLifecycle()
-            val shared by vm.recentShared.collectAsStateWithLifecycle()
-            androidx.compose.runtime.LaunchedEffect(Unit) { vm.refreshShared() }
             MenuGroup("Help Fils learn") {
                 SettingSwitchRow(
                     "Share message shapes",
                     "When a bank message can't be read, or you fix one, the app shares only its shape: no amounts, names, numbers or card digits. Never OTPs, never tied to you.",
                     share == com.uaefinancial.tracker.learn.Learning.ON,
                 ) { vm.setShareConsent(it) }
-                if (shared.isNotEmpty()) {
-                    Text("Last shared", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp))
-                    shared.reversed().forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp)) }
-                } else {
-                    Text("Nothing has been shared yet.", style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 6.dp))
+                // Test-only tool: debug and beta builds only, never in the Play build (2.8 spec 18.2).
+                if (com.uaefinancial.tracker.BuildConfig.DEBUG) {
+                    Text("Export masked messages for testing", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
+                    Text(
+                        "Saves a text file on this phone, only when you tap. Each line is a message shape (no amounts, names, merchants, card digits or dates) next to what the app decided it was. Read it, then share it only if you want to. Nothing is uploaded.",
+                        style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
+                    )
+                    androidx.compose.material3.OutlinedButton(onClick = onExportMasked, modifier = Modifier.padding(top = 6.dp)) { Text("Export masked messages") }
                 }
-                Text("Export masked messages for testing", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp))
-                Text(
-                    "Saves a text file on this phone, only when you tap. Each line is a message shape (no amounts, names, merchants, card digits or dates) next to what the app decided it was. Read it, then share it only if you want to. Nothing is uploaded.",
-                    style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 4.dp),
-                )
-                androidx.compose.material3.OutlinedButton(onClick = onExportMasked, modifier = Modifier.padding(top = 6.dp)) { Text("Export masked messages") }
                 Text(
                     "The app also downloads a signed list of banks and reading rules (data only) about once a day, so it can read new bank formats without an update.",
                     style = MaterialTheme.typography.bodySmall, color = Ink.muted, modifier = Modifier.padding(top = 8.dp),
@@ -324,6 +319,10 @@ fun MoreScreen(
         item {
             MenuGroup("Help") {
                 MenuRow(Icons.AutoMirrored.Filled.HelpOutline, "Help & questions", "How the app works, and what to do when something looks wrong") { onOpen(Route.Help) }
+                // Hidden whenever the form constants are not real, so a build never shows a dead button.
+                if (com.uaefinancial.tracker.feedback.FeedbackConfig.enabled) {
+                    MenuRow(Icons.Filled.RateReview, androidx.compose.ui.res.stringResource(com.uaefinancial.tracker.R.string.feedback_title), androidx.compose.ui.res.stringResource(com.uaefinancial.tracker.R.string.feedback_row_subtitle)) { onOpen(Route.Feedback) }
+                }
                 MenuRow(Icons.Filled.Search, "Run the setup again", "Permissions, finding your banks, first import") { vm.restartOnboarding() }
             }
         }

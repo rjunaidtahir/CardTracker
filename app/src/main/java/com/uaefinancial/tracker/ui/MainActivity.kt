@@ -342,6 +342,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                             Route.Review -> "Needs review"
                             Route.Senders -> "Bank senders"
                             Route.Help -> "Help & questions"
+                            Route.Feedback -> "Share feedback"
                         },
                         fontWeight = FontWeight.Bold,
                     )
@@ -486,6 +487,7 @@ fun AppRoot(vm: MainViewModel, biometricAvailable: Boolean) {
                 })
                 Route.Senders -> SendersScreen(vm, onScan = { withSms { vm.scanSenders() } })
                 Route.Help -> HelpScreen()
+                Route.Feedback -> FeedbackScreen()
             }
         }
     }

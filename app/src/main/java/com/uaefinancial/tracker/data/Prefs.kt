@@ -69,6 +69,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("unknown_cleanup_done", false)
         set(v) { sp.edit { putBoolean("unknown_cleanup_done", v) } }
 
+    /** Set once the 2.7 statement rows with a place line for a shop name were marked "Check this" (2.8 spec 12). */
+    var stmtNamesFlagDone: Boolean
+        get() = sp.getBoolean("stmt_names_flag_done", false)
+        set(v) { sp.edit { putBoolean("stmt_names_flag_done", v) } }
+
     /**
      * Sender IDs whose OLDER inbox messages still have to be read (a sender was just added or newly tracked). The next
      * Sync reads only those senders' messages from the whole inbox, not everyone's.
@@ -229,17 +234,28 @@ class Prefs(context: Context) {
     /** Hashes of shapes already sent (so the same shape is never sent twice), newest last, capped. */
     var sentShapeHashes: List<String>
         get() = (sp.getString("sent_shapes", "") ?: "").split(',').filter { it.isNotEmpty() }
-        set(v) { sp.edit { putString("sent_shapes", v.takeLast(2000).joinToString(",")) } }
+        set(v) { sp.edit { putString("sent_shapes", v.takeLast(5000).joinToString(",")) } }
 
     /** Shapes sent again because a new rules file did not clear them: "hash:attempts:packVersionOfLastSend", capped. */
     var resendState: List<String>
         get() = (sp.getString("resend_state", "") ?: "").split(',').filter { it.isNotEmpty() }
         set(v) { sp.edit { putString("resend_state", v.takeLast(500).joinToString(",")) } }
 
-    /** The last few shapes sent, so More → Settings can show exactly what leaves the phone. */
-    var recentShared: List<String>
-        get() = (sp.getString("recent_shared", "") ?: "").split('\u001E').filter { it.isNotEmpty() }
-        set(v) { sp.edit { putString("recent_shared", v.takeLast(5).joinToString("\u001E")) } }
+    /** 2.8: no local copy of shared shapes is kept any more (spec 18.1). Clears what older builds stored. */
+    fun clearRecentShared() { sp.edit { remove("recent_shared") } }
+
+    /** 2.8 report bookkeeping: the pack version whose update-result was sent; the day of the last health report; events sent per pack. */
+    var updateResultSentFor: Int
+        get() = sp.getInt("update_result_pv", 0)
+        set(v) { sp.edit { putInt("update_result_pv", v) } }
+    var healthDay: Long
+        get() = sp.getLong("health_day", 0L)
+        set(v) { sp.edit { putLong("health_day", v) } }
+
+    /** "epochDay:count" of feedback sends today (at most 3 a day, 2.8 spec 18.3). */
+    var feedbackSent: String
+        get() = sp.getString("feedback_sent", "") ?: ""
+        set(v) { sp.edit { putString("feedback_sent", v) } }
 
     /** "epochDay:count" of shapes sent today (daily cap). */
     var sentToday: String

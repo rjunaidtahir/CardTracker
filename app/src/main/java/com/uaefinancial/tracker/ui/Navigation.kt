@@ -32,6 +32,8 @@ sealed interface Route {
     data object Senders : Route
     /** Help & questions. */
     data object Help : Route
+    /** Share feedback (2.8): a separate form, every field optional. */
+    data object Feedback : Route
 }
 
 class Navigator {

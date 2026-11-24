@@ -1,0 +1,12 @@
+{
+  "_doc": "Maintained by the accuracy loop. groups: audit group id (first 16 hex of SHA-256 of 'bank|shape') -> the lever or rules-file section that fixes it. stages: the default lever for a failure stage when a group has no entry of its own. A FAILED group from a 2.7+ build with neither fails the audit job.",
+  "groups": {},
+  "stages": {
+    "NO_BANK": "wordingBanks",
+    "AMBIGUOUS_BANKS": "wordingBanks",
+    "NO_CARD": "acctToken",
+    "NO_DIRECTION": "directionFromBalance",
+    "NEEDS_TWIN": "needsTwin",
+    "HIDDEN_BY_IGNORE": "unless"
+  }
+}

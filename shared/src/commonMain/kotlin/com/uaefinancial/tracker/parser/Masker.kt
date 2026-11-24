@@ -37,7 +37,11 @@ object Masker {
     }
     private val longDigits = Regex("""\d[\d\s-]{4,}\d""")
     private val anyDigits = Regex("""\d+""")
-    private val wordOrToken = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+(?:['’]\p{L}+)?""")
+    private val wordOrToken = Regex("""\{[A-Z]+(?::[^{}\s]+)?\}|\p{L}+(?:['’]\p{L}+)?""")
+    /** Any token, including the 2.8 layout tokens ({AMT:1,3.2}, {DATE:dd-MON-yy}). */
+    private val anyToken = Regex("""\{[A-Z]+(?::[^{}\s]+)?\}""")
+    /** Layout mode: a number written like money (thousands separators or 2-3 decimals), with or without a currency. */
+    private val layoutAmount = Regex("""(?<![\d.,])\d{1,3}(?:,\d{3})+(?:\.\d{1,3})?(?![\d,])|(?<![\d.,])\d+\.\d{2,3}(?![\d.])|(?<=\b[A-Z]{3} )\d{1,9}(?![\d.,])""")
     private val tokenText = Regex("""(?:\{TEXT\}[\s,.:;!?()\-]*){2,}""")
 
     /** Words that carry the structure of a bank message. Everything else is {TEXT}. */
@@ -124,6 +128,44 @@ object Masker {
         "regards", "sincerely", "attn", "attention", "holder", "عزيزي", "عزيزتي", "السيد", "السيدة", "الأخ",
     )
 
+    /** "2,500.00" as "#,###.##" -> "bc,d.c"-style letters (lengths encoded so the digit pass cannot touch them; decoded at the end). */
+    private fun amtLayout(hashes: String): String = Regex("#+").replace(hashes) { enc(it.value.length) }
+
+    /** How a date is written, without its digits: "05-DEC-26" -> "dd-MON-yy", "Dec 05, 2026" -> "MON_dd,_yyyy", "05/12/26" -> "dd/mm/yy". */
+    internal fun dateLayout(raw: String): String {
+        // Split by hand into runs of digits, letters and the rest: the same split by regex misreads on iPhone (Kotlin/Native).
+        val parts = ArrayList<String>()
+        val src = raw.trim()
+        var i = 0
+        while (i < src.length) {
+            val kind = { c: Char -> if (c.isDigit()) 0 else if (c.isLetter()) 1 else 2 }
+            val k = kind(src[i])
+            var j = i + 1
+            while (j < src.length && kind(src[j]) == k) j++
+            parts.add(src.substring(i, j))
+            i = j
+        }
+        val numbers = parts.filter { it[0].isDigit() }
+        var n = 0
+        val yearFirst = numbers.firstOrNull()?.length == 4
+        val hasMonthWord = parts.any { it[0].isLetter() }
+        return parts.joinToString("") { p ->
+            when {
+                p[0].isDigit() -> {
+                    val role = when {
+                        yearFirst -> listOf('y', 'm', 'd').getOrElse(n) { 'n' }
+                        hasMonthWord -> if (n == 0 && numbers.size > 1) 'd' else if (p.length == 4 || n > 0) 'y' else 'd'
+                        else -> listOf('d', 'm', 'y').getOrElse(n) { 'n' }
+                    }
+                    n++
+                    role.toString().repeat(p.length)
+                }
+                p[0].isLetter() -> if (p.length <= 3 || p.endsWith(".")) "MON" else "MONTH"
+                else -> p.replace(' ', '_')
+            }
+        }
+    }
+
     // Lengths are carried as letters (a=0 … j=9) while the digit replacing runs, so it cannot touch them.
     private fun enc(n: Int) = n.toString().map { 'a' + (it - '0') }.joinToString("")
     private fun dec(s: String) = s.map { '0' + (it - 'a') }.joinToString("")
@@ -141,7 +183,7 @@ object Masker {
         if (!money.containsMatchIn(body)) return false
         val cardRef = Regex("""\b(?:card|a/c|acc(?:oun)?t|acct|iban)\b[^.\n]{0,40}(?:\d{4}|[xX*•]{2,})|[xX*•]{3,}\s?\d{3,4}\b""", RegexOption.IGNORE_CASE)
         if (!cardRef.containsMatchIn(body)) return false
-        val banking = setOf("debited", "credited", "balance", "available", "purchase", "transaction", "payment", "limit", "transfer", "withdrawal", "statement", "due", "refund", "reversed", "spent", "avl", "bal", "txn", "pos", "atm")
+        val banking = setOf("debited", "credited", "balance", "available", "purchase", "transaction", "payment", "limit", "transfer", "withdrawal", "statement", "due", "refund", "reversed", "spent", "avl", "bal", "txn", "pos", "atm", "pymt")
         val hits = Regex("""\p{L}+""").findAll(body.lowercase()).map { it.value }.filter { it in banking }.toSet()
         return hits.size >= 3
     }
@@ -153,7 +195,7 @@ object Masker {
      * place, an acronym) is kept. [fuller] (only when a rules file asks for more words for a message it could not understand): runs of
      * unknown capitalised words stay too; a name after a title / payee / to / from / by is still hidden. Never for a sender we do not recognise (a private chat): that stays strict.
      */
-    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false, fuller: Boolean = false): Result {
+    fun mask(body: String, bankName: String? = null, merchant: String? = null, keepWords: Boolean = false, loose: Boolean = false, fuller: Boolean = false, layout: Boolean = false): Result {
         var t = SmsParser.normalizeBody(body)
         if (t.isBlank()) return Result("", false, "empty")
         val name = merchant?.trim()?.replace(Regex("""\s+"""), " ")
@@ -161,7 +203,9 @@ object Masker {
             t = t.replace(Regex(Regex.escape(name).replace("\\ ", "\\s+"), RegexOption.IGNORE_CASE), "{MERCHANT}")
         }
         t = t.replace(email, "{EMAIL}").replace(url, "{URL}")
-        t = t.replace(dateNamed, "{DATE}").replace(dateNumeric, "{DATE}").replace(time, "{TIME}")
+        // layout: a date keeps how it is written ({DATE:dd-MON-yy}), never its digits, so a rule's {DUE} / {STMTDATE} can be proven.
+        t = if (layout) t.replace(dateNamed) { "{DATE:${dateLayout(it.value)}}" }.replace(dateNumeric) { "{DATE:${dateLayout(it.value)}}" }.replace(time, "{TIME}")
+        else t.replace(dateNamed, "{DATE}").replace(dateNumeric, "{DATE}").replace(time, "{TIME}")
         t = t.replace(cardRef) { m ->
             // Keep the words in front of the number ("card ending"); a bare "xx"/"**"/"#" prefix is dropped.
             val lead = m.groups["lead"]?.value?.trim().orEmpty()
@@ -170,18 +214,24 @@ object Masker {
             if (lead.all { it in "xX*•·#" }) "{CARD:${enc(len)}}" else "$lead {CARD:${enc(len)}}"
         }
         // keepWords (the local export only): the currency code stays, it is a public word; the amount never does.
-        t = if (keepWords) t.replace(money) { m -> (Regex("""[A-Za-z]{2,4}""").find(m.value)?.value ?: "{CUR}") + " {AMOUNT}" } else t.replace(money, "{CUR} {AMOUNT}")
+        // layout (only when a rules file asks for it for a named bank): amounts are NOT collapsed to {AMOUNT}; every digit run becomes
+        // {NUM:<how many digits>}, so the layout of an unclear message ("AED {NUM:1},{NUM:3}.{NUM:2}+") shows which number is the money. Only lengths, never digits.
+        // 2.8 layout: every money-looking number is ONE token with its digit-group lengths and separators ({AMT:1,3.2}); the
+        // currency word and a trailing +/- stay, so "AED 100.00 2,500.00-" shows which figure is the money and which the balance.
+        if (layout) t = t.replace(layoutAmount) { m -> "{AMT:" + m.value.map { c -> if (c.isDigit()) '#' else c }.joinToString("").let { amtLayout(it) } + "}" }
+        t = if (layout) t else if (keepWords) t.replace(money) { m -> (Regex("""[A-Za-z]{2,4}""").find(m.value)?.value ?: "{CUR}") + " {AMOUNT}" } else t.replace(money, "{CUR} {AMOUNT}")
         // Only how many digits, never which: "{NUM:10}" for an account or reference, "{NUM:2}" for a day.
         t = t.replace(longDigits) { m -> "{NUM:${enc(m.value.count { it.isDigit() })}}" }.replace(anyDigits) { m -> "{NUM:${enc(m.value.length)}}" }
         // Turn the letter-coded lengths back into digits now that no digit replacing is left.
         t = t.replace(Regex("""\{(CARD|NUM):([a-j]+)\}""")) { m -> "{${m.groupValues[1]}:${dec(m.groupValues[2])}}" }
+        t = t.replace(Regex("""\{AMT:([a-j,.']+)\}""")) { m -> "{AMT:" + m.groupValues[1].replace(Regex("[a-j]+")) { g -> dec(g.value) } + "}" }
 
         val keep = bankName.orEmpty().split(Regex("""[^\p{L}\d]+""")).map { it.lowercase() }.filter { it.length >= 2 }.toSet()
         if (keepWords) {
             // Ordinary words are public and decide what a message is, so they all stay. Only values are gone (amounts, card and
             // account numbers, other digits, dates, times, links, emails, the merchant name).
             t = t.replace(Regex("""\s+"""), " ").trim()
-            if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), ""))) return Result(t, false, "digits left")
+            if (Regex("""\d""").containsMatchIn(t.replace(anyToken, ""))) return Result(t, false, "digits left")
             if (t.contains('@')) return Result(t, false, "address left")
             return Result(t, true)
         }
@@ -222,7 +272,7 @@ object Masker {
             t = t.replace(mark.toString(), "")
         }
         // Count unknown words before neighbours are merged, so a message full of them is recognised as such.
-        val rawWords = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
+        val rawWords = Regex("""\{[A-Z]+(?::[^{}\s]+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
         val textShare = (rawWords.count { it == "{TEXT}" } + if (loose) 0 else ordinaryKept).toDouble() / maxOf(1, rawWords.size)
         t = t.replace(tokenText, "{TEXT} ")
         t = t.replace(Regex("""\s+"""), " ").trim()
@@ -230,11 +280,12 @@ object Masker {
         val maxLen = if (fuller) 1000 else if (loose) 700 else MAX_LEN
         if (t.length > maxLen) return Result(t.take(maxLen), false, "too long")
         // Final guard: nothing personal may remain.
-        if (Regex("""\d""").containsMatchIn(t.replace(Regex("""\{[A-Z]+(?::\d+)?\}"""), ""))) return Result(t, false, "digits left")
+        if (Regex("""\d""").containsMatchIn(t.replace(anyToken, ""))) return Result(t, false, "digits left")
         if (t.contains('@')) return Result(t, false, "address left")
-        val words = Regex("""\{[A-Z]+(?::\d+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
+        val words = Regex("""\{[A-Z]+(?::[^{}\s]+)?\}|\p{L}+""").findAll(t).map { it.value }.toList()
         if (words.size < MIN_WORDS) return Result(t, false, "too short")
         if (!loose && textShare > MAX_TEXT_SHARE) return Result(t, false, "mostly unknown words")
+        if (layout) { if (!t.contains("{NUM:") && !t.contains("{AMT:")) return Result(t, false, "no amount"); return Result(t, true) }
         if (words.none { it == "{AMOUNT}" }) return Result(t, false, "no amount")
         return Result(t, true)
     }

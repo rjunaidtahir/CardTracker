@@ -796,7 +796,7 @@ object BankRules {
             "Card setting / service notice",
             """تفعيل المستفيد|\bsetting for your Credit Card\b|\bdigital card\b|\bService Request\b|\bbeneficiary has been added\b|""" +
                 """\bbeneficiary\b.{0,80}\bactivat|\bpush notification|\baccount has been opened\b|\bunder process\b|""" +
-                """\bprovisional\b.{0,40}\blimit\b|\bLast Stmt\b|\binvoice\b|\blounge\b|\bsupplementary\b.{0,80}\blimit\b""",
+                """\bprovisional\b.{0,40}\blimit\b|\bLast Stmt\b|\binvoice\b|\blounge\b(?!.{0,160}\b(?:Avl|Available)\b)|\bsupplementary\b.{0,80}\blimit\b""",
         ),
         IgnoreRule("Instalment conversion / loan", """\bconverted\s+(?:in)?to\b.{0,60}\binstal+ments?\b|\bLoan on Card\b|\bmortgage\b.{0,120}\bdisburs"""),
         IgnoreRule("IPO subscription", """\bIPO\b"""),

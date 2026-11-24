@@ -85,4 +85,18 @@ class ReadingGuardTest {
         assertFalse(ReadingGuard.isSoftSummary("x (changes: reading removed)"))
         assertFalse(ReadingGuard.isSoftSummary("x (changes: number of readings)"))
     }
+
+    // 2.8 spec 9: a key change is applied only when every money field is equal.
+    @Test fun keyChangeOnlyWhenMoneyIsEqual() {
+        val moved = debit.copy(cardKey = "FAB ·9999", last4 = "9999")
+        assertEquals(listOf("FAB ·1234" to "FAB ·9999"), ReadingGuard.keyChanges(listOf(debit), listOf(moved)))
+        assertEquals("merchant and time may differ too", listOf("FAB ·1234" to "FAB ·9999"),
+            ReadingGuard.keyChanges(listOf(debit), listOf(moved.copy(merchant = "Lulu", timestamp = debit.timestamp + 60_000))))
+        for (bad in listOf(moved.copy(amountMinor = 1), moved.copy(currency = "USD"), moved.copy(type = "REFUND"), moved.copy(bank = "ADCB"))) {
+            assertEquals(null, ReadingGuard.keyChanges(listOf(debit), listOf(bad)))
+        }
+        assertEquals("no key change", null, ReadingGuard.keyChanges(listOf(debit), listOf(debit.copy(merchant = "Lulu"))))
+        assertEquals("a reading lost", null, ReadingGuard.keyChanges(listOf(debit), emptyList()))
+        assertEquals("a key going blank", null, ReadingGuard.keyChanges(listOf(debit), listOf(debit.copy(cardKey = "", last4 = ""))))
+    }
 }

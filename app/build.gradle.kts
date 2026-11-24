@@ -23,7 +23,7 @@ android {
         // CI passes the run number (always increasing) via ANDROID_VERSION_CODE; local builds fall
         // back to a fixed placeholder, which is fine since those aren't distributed.
         versionCode = (System.getenv("ANDROID_VERSION_CODE")?.toIntOrNull() ?: 21)
-        versionName = "2.7"
+        versionName = "2.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -69,6 +69,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // BuildConfig.DEBUG gates test-only tools (masked export) to debug and beta builds (2.8 spec 18.2).
+        buildConfig = true
     }
     // Room's exported schemas, so database upgrade tests can start from the real older layout.
     sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")

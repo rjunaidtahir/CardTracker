@@ -131,6 +131,27 @@ if found:
         shot("notif-search")
         check(any("settings" in t.lower() for t, *_ in nodes() if "search" not in t.lower()), "searching finds an installed app")
 
+# ---- 2.8: Help -> Share feedback opens, with the warning at the top; "Last shared" is gone from Help Fils learn
+adb("shell", "am", "force-stop", PKG)
+adb("shell", "am", "start", "-n", ACT)
+time.sleep(4)
+tap("More", exact=True)
+check(not scroll_to("Last shared", tries=10), "the Last shared block is gone")
+adb("shell", "am", "force-stop", PKG)
+adb("shell", "am", "start", "-n", ACT)
+time.sleep(4)
+tap("More", exact=True)
+if scroll_to("Share feedback", tries=14):
+    tap("Share feedback", exact=True)
+    time.sleep(1.5)
+    shot("feedback")
+    check(bool(find("Please do not share any personal or sensitive information")), "the feedback screen shows its warning")
+    check(bool(find("Send anonymously")), "the feedback screen offers anonymous sending")
+    adb("shell", "input", "keyevent", "4")
+    time.sleep(1)
+else:
+    check(False, "More -> Help shows Share feedback")
+
 # ---- no crash anywhere
 log = adb("logcat", "-d", "-b", "crash")
 check("FATAL EXCEPTION" not in log and PKG not in log.split("FATAL")[-1] if "FATAL" in log else True, "no crash in the log")

@@ -16,7 +16,7 @@ object SmsParser {
      * The apps re-read every stored message once when it changes, so fixes reach messages already in Needs review
      * (and a message a newer rule recognises as an OTP is deleted).
      */
-    const val ENGINE_VERSION: Int = 7
+    const val ENGINE_VERSION: Int = 8
 
     /** UAE time: UTC+4 all year. Zones are passed as minutes ahead of UTC. */
     const val UAE_ZONE: Int = UAE_OFFSET_MINUTES
@@ -92,10 +92,40 @@ object SmsParser {
         "{STMTDATE}" to "(?<stmtdate>$NUMDATE|$WORDDATE)",
     )
 
-    fun compile(pattern: String): Regex {
+    /**
+     * 2.8 tokens, only for rules from the `ext` section of the rules file (never built-in or legacy pack rules, so nothing
+     * already read can change): {CUR} also takes the abbreviations and symbols the currency layer knows (Rs., SR, KD, $, ₹ …,
+     * optional trailing dot; lever curAbbrev), and {ACCT} is an account number as banks print it (see [accountKey]).
+     */
+    private val extCur: String by lazy { "(?<currency>[A-Z]{3}|Dhs?|$currencyWordAlternation|$currencySymbolAlternation)\\.?" }
+    private const val ACCT = """(?<acct>[0-9Xx*](?:[0-9Xx*]|[- ](?=[0-9Xx*])){1,29})(?![0-9A-Za-z*])"""
+
+    /** [ext]: compile with the 2.8 tokens ({ACCT}; {CUR} abbreviations when [curAbbrev]). */
+    fun compile(pattern: String, ext: Boolean = false, curAbbrev: Boolean = true): Regex {
         var p = pattern
+        if (ext) {
+            if (curAbbrev) p = p.replace("{CUR}", extCur)
+            p = p.replace("{ACCT}", ACCT)
+        }
         tokens.forEach { (k, v) -> p = p.replace(k, v) }
         return Regex(p, RegexOption.IGNORE_CASE)
+    }
+
+    /**
+     * The card/account key for an account number as printed ("123-456789XXXX-01", "XXXX1234", "1234"): separators removed,
+     * `*` becomes X; at least 2 digits are required (else null). The key is the last 4 characters when they are all digits;
+     * when the last 4 hold a mask (X), the key grows to the left until it holds 4 digits (at most 12 characters), so two
+     * accounts that both end "XXXX-01" (e.g. "...456789XXXX-01" and "...987654XXXX-01") never merge silently.
+     */
+    fun accountKey(raw: String): String? {
+        val n = raw.uppercase().replace('*', 'X').filter { it.isDigit() || it == 'X' }
+        if (n.count { it.isDigit() } < 2) return null
+        val last4 = n.takeLast(4)
+        if (last4.length == 4 && last4.all { it.isDigit() }) return last4
+        var digits = 0
+        var i = n.length
+        while (i > 0 && digits < 4 && n.length - i < 12) { i--; if (n[i].isDigit()) digits++ }
+        return n.substring(i).trimStart('X').ifEmpty { null }
     }
 
     private class CompiledBank(val bank: Bank, val rules: List<Pair<Rule, Regex>>, val ignore: List<Pair<IgnoreRule, Regex>>)
@@ -118,10 +148,101 @@ object SmsParser {
     @kotlin.concurrent.Volatile
     private var packRules: Map<String, List<Pair<Rule, Regex>>> = emptyMap()
 
-    /** Replaces the rules from the signed rules file (see RulesPack). A rule that fails to compile is dropped. */
-    internal fun setPackRules(byBank: Map<String, List<Rule>>) {
-        packRules = byBank.mapValues { (_, rs) -> rs.mapNotNull { r -> runCatching { r to compile(r.pattern) }.getOrNull() } }
+    /** Replaces the rules from the signed rules file (see RulesPack). A rule that fails to compile is dropped. [ext] rules follow the legacy ones. */
+    internal fun setPackRules(byBank: Map<String, List<Rule>>, ext: Map<String, List<Rule>> = emptyMap(), curAbbrev: Boolean = false) {
+        val legacy = byBank.mapValues { (_, rs) -> rs.mapNotNull { r -> runCatching { r to compile(r.pattern) }.getOrNull() } }
+        val extra = ext.mapValues { (_, rs) -> rs.mapNotNull { r -> runCatching { r to compile(r.pattern, ext = true, curAbbrev = curAbbrev) }.getOrNull() } }
+        packRules = (legacy.keys + extra.keys).associateWith { k -> legacy[k].orEmpty() + extra[k].orEmpty() }
     }
+
+    /** A rule from the signed rules file by its id ("pack:<id>"), so the app can pair messages a pack rule declares (2.8 spec 7.1). */
+    fun packRuleById(id: String?): Rule? =
+        id?.takeIf { it.startsWith("pack:") }?.let { rid -> packRules.values.asSequence().flatten().map { it.first }.firstOrNull { it.id == rid } }
+
+    /** Ids of every pack rule in a pair group. */
+    fun packRuleIdsInGroup(group: String): List<String> =
+        packRules.values.asSequence().flatten().map { it.first }.filter { it.pairGroup == group }.map { it.id }.toList()
+
+    /**
+     * 2.8 `directionFromBalance` (spec 14): the app's last known balance of an account before a time, as (balance in minor units,
+     * when it was known). Set by the app from its stored readings; null (no provider, no balance) means "cannot prove".
+     */
+    /**
+     * Set by an app that holds `needsTwin` readings until their twin message is there (Android 2.8 Repository). Until then
+     * such rules are skipped, so an app without that logic (the iPhone build) can never count one on its own.
+     */
+    @kotlin.concurrent.Volatile
+    var holdsTwins: Boolean = false
+
+    @kotlin.concurrent.Volatile
+    var lastBalance: ((bank: String, last4: String?, currency: String, before: Long) -> Pair<Long, Long>?)? = null
+
+    private const val DAY_MS = 86_400_000L
+
+    /**
+     * The direction of a message whose wording does not say it, proven from the balance: exactly one of "earlier - amount =
+     * now" and "earlier + amount = now" holds (to 0.01), the earlier balance is at most 30 days old and in the same currency.
+     * Null when it cannot be proven (no balance, both fit, neither fits: a missed message in between). Never a guess.
+     */
+    fun directionFromBalance(earlierMinor: Long, earlierAt: Long, amountMinor: Long, balanceMinor: Long, at: Long): Boolean? {
+        if (at - earlierAt > 30 * DAY_MS || earlierAt > at) return null
+        val out = kotlin.math.abs(earlierMinor - amountMinor - balanceMinor) <= 1
+        val inn = kotlin.math.abs(earlierMinor + amountMinor - balanceMinor) <= 1
+        return if (out == inn) null else out
+    }
+
+    private fun decideDirection(rule: Rule, t: ParsedTransaction): ParsedTransaction {
+        val bal = t.availableLimit ?: error("${DIRECTION_MARK}no balance")
+        val prev = lastBalance?.invoke(t.bank, t.cardLast4, t.currency, t.timestamp) ?: error("${DIRECTION_MARK}no earlier balance")
+        val out = directionFromBalance(prev.first, prev.second, t.amount.toMinor(), bal.toMinor(), t.timestamp) ?: error("${DIRECTION_MARK}not proven")
+        val outTypes = setOf(TxnType.PURCHASE, TxnType.TRANSFER_OUT, TxnType.PAYMENT)
+        val type = if (out) (if (rule.type in outTypes) rule.type else TxnType.TRANSFER_OUT) else (if (rule.type !in outTypes) rule.type else TxnType.TRANSFER_IN)
+        return t.copy(type = type, inferred = DIRECTION_FROM_BALANCE_INFERRED)
+    }
+
+    private const val DIRECTION_MARK = "direction:"
+
+    /** [Txn.inferred] value of a direction proven from the balance (the row is marked Check this). */
+    const val DIRECTION_FROM_BALANCE_INFERRED = "direction-from-balance"
+
+    /** `ext.wordingBanks` (lever wordingBanks): a wording that names its bank, for senders with no bank of their own. */
+    @kotlin.concurrent.Volatile
+    private var wordingBanks: List<Pair<String, Regex>> = emptyList()
+
+    internal fun setWordingBanks(list: List<RulesPack.WordingBank>) {
+        wordingBanks = list.mapNotNull { w -> runCatching { w.bank to Regex(w.pattern, RegexOption.IGNORE_CASE) }.getOrNull() }
+    }
+
+    /** Lever wordingBanks: reading a sender with no bank of its own by a known bank's wording (section 2 of the 2.8 spec). Off = 2.7. */
+    @kotlin.concurrent.Volatile
+    private var wordingLever: Boolean = false
+
+    internal fun setWordingLever(on: Boolean) { wordingLever = on }
+
+    /** `ext.learnedExempt` (lever learnedExempt): wordings a user's "not a transaction" mark must not hide ([learnedExempt]). */
+    @kotlin.concurrent.Volatile
+    private var learnedExemptRe: List<Regex> = emptyList()
+
+    internal fun setLearnedExempt(list: List<String>) {
+        learnedExemptRe = list.mapNotNull { runCatching { Regex(it, RegexOption.IGNORE_CASE) }.getOrNull() }
+    }
+
+    /** True when the rules file says [body] must not be hidden by a "not a transaction" mark the user made on a similar message. */
+    fun learnedExempt(body: String): Boolean { val t = normalizeBody(body); return learnedExemptRe.any { it.containsMatchIn(t) } }
+
+    /** Lower-case names of banks the rules file calls aggregators (wallets): their notification may be the same money as a bank's SMS. */
+    @kotlin.concurrent.Volatile
+    var aggregatorBanks: Set<String> = emptySet()
+        private set
+
+    internal fun setAggregatorBanks(names: Set<String>) { aggregatorBanks = names }
+
+    /**
+     * Set by the app: true when [bank] has a card/account ending [last4] already stored. Lets the wording attribution choose
+     * between banks that read a message the same way (never used to change a reading).
+     */
+    @kotlin.concurrent.Volatile
+    var knownCard: ((bank: String, last4: String) -> Boolean)? = null
 
     /** Ignore rules from the signed rules file ("this kind of message is not a transaction"). Checked after the bank's own ignore rules. */
     @kotlin.concurrent.Volatile
@@ -129,6 +250,19 @@ object SmsParser {
 
     internal fun setPackIgnore(rules: List<IgnoreRule>) {
         packIgnore = rules.mapNotNull { r -> runCatching { r to Regex(r.pattern, RegexOption.IGNORE_CASE) }.getOrNull() }
+        packUnless = rules.mapNotNull { r -> r.unless?.let { u -> runCatching { r to Regex(u, RegexOption.IGNORE_CASE) }.getOrNull() } }.toMap()
+    }
+
+    @kotlin.concurrent.Volatile
+    private var packUnless: Map<IgnoreRule, Regex> = emptyMap()
+
+    /** The first pack ignore that hides [text] for [bank]: a scoped one only for its own bank; one with "unless" yields when that matches. */
+    private fun packIgnoreFor(bank: String, text: String): IgnoreRule? {
+        val b = bank.trim().lowercase()
+        return packIgnore.firstOrNull { (r, re) ->
+            (r.bank == null || r.bank == b) && re.containsMatchIn(text) &&
+                !(r.unless != null && packUnless[r]?.containsMatchIn(text) == true)
+        }?.first
     }
 
     /** Ids of built-in reading rules switched off by the signed rules file. */
@@ -361,36 +495,19 @@ object SmsParser {
         }
         val errors = mutableListOf<String>()
 
-        for ((rule, regex) in cb.rules) {
-            if (rule.id in disabledRules) continue
-            val m = regex.find(text) ?: continue
-            try {
-                return when (rule.kind) {
-                    RuleKind.TRANSACTION -> ParseResult.Transaction(buildTxn(cb.bank, rule, m, receivedAt, zone), rule.id)
-                    RuleKind.STATEMENT -> ParseResult.Statement(buildStatement(cb.bank, rule, m), rule.id)
-                }
-            } catch (e: Exception) {
-                errors += "${rule.id}: ${e.message}"
-            }
+        readByRules(cb, text, receivedAt, zone, errors)?.let { return it }
+
+        // A message like one you fixed by hand and asked the app to learn ("apply to similar messages"). 2.8: a wording the rules file
+        // exempts (`ext.learnedExempt`) is never hidden by a "not a transaction" mark made on a similar message; the mark itself stays.
+        LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { r ->
+            if (!(r is ParseResult.Ignored && learnedExemptRe.any { it.containsMatchIn(text) })) return r
         }
 
-        // Rules from the signed rules file, for this bank only, after its built-in rules.
-        packRules[cb.bank.name.trim().lowercase()]?.let { extra ->
-            for ((rule, regex) in extra) {
-                val m = regex.find(text) ?: continue
-                try {
-                    return when (rule.kind) {
-                        RuleKind.TRANSACTION -> ParseResult.Transaction(buildTxn(cb.bank, rule, m, receivedAt, zone), rule.id)
-                        RuleKind.STATEMENT -> ParseResult.Statement(buildStatement(cb.bank, rule, m), rule.id)
-                    }
-                } catch (e: Exception) {
-                    errors += "${rule.id}: ${e.message}"
-                }
-            }
+        // 2.8 (lever wordingBanks): a sender with no bank of its own (a chat added by hand, a sender name the app does not know) whose
+        // wording is a known bank's. Reports showed hundreds of Emirates Islamic card payments stuck as "Other" this way.
+        if (wordingLever && !hasOwnBank(cb.bank.name) && Masker.looksLikeBankMessage(text)) {
+            attributeByWording(text, receivedAt, zone)?.let { return it }
         }
-
-        // A message like one you fixed by hand and asked the app to learn ("apply to similar messages").
-        LearnedFormats.read(cb.bank.name, text, receivedAt)?.let { return it }
 
         val done = BankRules.completedAction.containsMatchIn(text)
         cb.ignore.firstOrNull {
@@ -403,7 +520,7 @@ object SmsParser {
         }?.let {
             return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store)
         }
-        packIgnore.firstOrNull { it.second.containsMatchIn(text) }?.let { return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store) }
+        packIgnoreFor(cb.bank.name, text)?.let { return ParseResult.Ignored(cb.bank.name, it.label, it.store, fromPack = true) }
         if (!looksFinancial.containsMatchIn(text)) return ParseResult.Ignored(cb.bank.name, "Informational (no amount)")
         // No bank rule: let the smart reader try, by the message's wording.
         runCatching { SmartParser.read(cb.bank.name, text, receivedAt, zone) }.getOrNull()?.let { return it }
@@ -413,8 +530,165 @@ object SmsParser {
         // A sender you added by hand: a promotion or notice that is clearly not money is hidden (and reported as hidden:*
         // so a wrongly hidden real transaction can be found and fixed). Anything with a money verb stays in Needs review.
         if (addedByUser && CandidateScreen.clearlyNotMoney(text)) return ParseResult.Ignored(cb.bank.name, CandidateScreen.HIDDEN_NOTICE, store = true)
-        if (errors.isNotEmpty()) return ParseResult.Failed(cb.bank.name, "A rule matched but its values were invalid: " + errors.joinToString("; "))
-        return ParseResult.Failed(cb.bank.name, "Couldn't read this message automatically")
+        val probe = runCatching { SmartParser.probe(text) }.getOrNull()
+        val sanity = errors.any { it.contains(SANITY_MARK) }
+        val stage = when {
+            errors.any { it.contains(DIRECTION_MARK) } -> Stage.NO_DIRECTION
+            sanity -> Stage.SANITY
+            else -> probe?.stage ?: Stage.UNKNOWN
+        }
+        if (errors.isNotEmpty()) return ParseResult.Failed(cb.bank.name, "A rule matched but its values were invalid: " + errors.joinToString("; ").take(300), stage, probe?.letters)
+        return ParseResult.Failed(cb.bank.name, "Couldn't read this message automatically", stage, probe?.letters)
+    }
+
+    private const val SANITY_MARK = "sanity:"
+
+    /** The bank's built-in rules, then its rules from the signed rules file (legacy, then ext). */
+    private fun readByRules(cb: CompiledBank, text: String, receivedAt: Long, zone: Int, errors: MutableList<String>): ParseResult? {
+        for ((rule, regex) in cb.rules) {
+            if (rule.id in disabledRules) continue
+            val m = regex.find(text) ?: continue
+            try {
+                return when (rule.kind) {
+                    RuleKind.TRANSACTION -> ParseResult.Transaction(buildTxn(cb.bank, rule, m, receivedAt, zone), rule.id)
+                    RuleKind.STATEMENT -> ParseResult.Statement(buildStatement(cb.bank, rule, m), rule.id)
+                }
+            } catch (e: Exception) {
+                errors += "${rule.id}: ${e.message}"
+            }
+        }
+        // Rules from the signed rules file, for this bank only, after its built-in rules.
+        packRules[cb.bank.name.trim().lowercase()]?.let { extra ->
+            for ((rule, regex) in extra) {
+                // A rule that counts only with its twin message needs an app that holds it until then (Android 2.8).
+                if (rule.needsTwin && !holdsTwins) continue
+                val m = regex.find(text) ?: continue
+                try {
+                    return when (rule.kind) {
+                        RuleKind.TRANSACTION -> {
+                            var t = buildTxn(cb.bank, rule, m, receivedAt, zone)
+                            // The wording names no direction: proven from the balance, or the message stays in Needs review.
+                            // A matched rule that cannot prove it stops here on purpose (no other reader may guess the direction).
+                            if (rule.fromExt && rule.directionFromBalance) {
+                                t = runCatching { decideDirection(rule, t) }.getOrElse { e ->
+                                    return ParseResult.Failed(cb.bank.name, "The direction could not be proven from the balance (${e.message?.removePrefix(DIRECTION_MARK)})", Stage.NO_DIRECTION, "ACK" + (if (t.availableLimit != null) "B" else ""))
+                                }
+                            }
+                            if (rule.fromExt) sanityProblem(rule, m.value, t)?.let { error("$SANITY_MARK$it") }
+                            ParseResult.Transaction(t, rule.id)
+                        }
+                        RuleKind.STATEMENT -> ParseResult.Statement(buildStatement(cb.bank, rule, m), rule.id)
+                    }
+                } catch (e: Exception) {
+                    errors += "${rule.id}: ${e.message}"
+                }
+            }
+        }
+        return null
+    }
+
+    /** True when [name] is a bank the app knows (built in, in the directory, or from the rules file). */
+    private fun hasOwnBank(name: String): Boolean {
+        val n = name.trim().lowercase()
+        return compiled.any { it.bank.name.lowercase() == n } || packRules.containsKey(n) ||
+            GlobalBanks.all().any { it.name.trim().lowercase() == n }
+    }
+
+    /**
+     * Global post-read sanity check for rules from the `ext` section (and wording attribution): amount above zero and below
+     * 100,000,000,000, a known currency, and a direction that agrees with the matched words. A failure leaves the message in
+     * Needs review (stage SANITY) instead of reading it. Null when the reading passes.
+     */
+    internal fun sanityProblem(rule: Rule, matched: String, t: ParsedTransaction): String? {
+        if (t.amount.signum() <= 0 || t.amount.abs() >= com.uaefinancial.tracker.core.Decimal("100000000000")) return "amount"
+        if (!Currencies.isCode(t.currency)) return "currency"
+        if (rule.direction != null) return null
+        val (credit, debit) = SmartParser.directionWords(matched)
+        if (credit && debit) return "credit and debit words"
+        val out = t.type == TxnType.PURCHASE || t.type == TxnType.TRANSFER_OUT
+        val inn = t.type == TxnType.REFUND || t.type == TxnType.TRANSFER_IN
+        if (out && credit && !debit) return "direction"
+        if (inn && debit && !credit) return "direction"
+        return null
+    }
+
+    private class WordingRead(val bank: String, val result: ParseResult, val key: String)
+
+    /**
+     * Section 2 of the 2.8 spec. (a) The first `ext.wordingBanks` entry that matches names the bank: its built-in rules, its pack
+     * rules, then its ignores. (b) Otherwise every built-in bank's rules and every bank's pack rules are tried: accepted only
+     * when exactly one bank reads it (or all agree on amount, currency, direction and card and exactly one of them already has
+     * that card in the app); two banks reading it differently leave it in Needs review (stage AMBIGUOUS_BANKS).
+     * A reading is accepted only with amount, currency, direction and a card or account read.
+     */
+    private fun attributeByWording(text: String, receivedAt: Long, zone: Int): ParseResult? {
+        for ((bankName, re) in wordingBanks) {
+            if (!re.containsMatchIn(text)) continue
+            val cb = compiled.firstOrNull { it.bank.name.equals(bankName, ignoreCase = true) }
+                ?: CompiledBank(Bank(bankName, emptyList(), emptyList()), emptyList(), globalIgnore)
+            val read = readStrict(cb, text, receivedAt, zone)
+            if (read != null) return attributed(read.result, bankName, AttributedBy.WORDING_BANKS)
+            // Its ignores (the bank's own, the global ones and the pack ones, scoped or not).
+            cb.ignore.firstOrNull { it.first.label !in disabledIgnore && it.second.containsMatchIn(text) &&
+                !(BankRules.completedAction.containsMatchIn(text) && it.first.label in BankRules.SOFT_IGNORE_LABELS) }
+                ?.let { return ParseResult.Ignored(cb.bank.name, it.first.label, it.first.store) }
+            packIgnoreFor(cb.bank.name, text)?.let { return ParseResult.Ignored(cb.bank.name, it.label, it.store, fromPack = true) }
+            return null
+        }
+        val reads = mutableListOf<Pair<WordingRead, String>>()
+        for (cb in compiled) readStrict(cb, text, receivedAt, zone, packToo = false)?.let { reads += it to AttributedBy.BUILTIN_WORDING }
+        for ((bankKey, rules) in packRules) {
+            if (rules.isEmpty()) continue
+            val name = (compiled.firstOrNull { it.bank.name.lowercase() == bankKey }?.bank?.name
+                ?: GlobalBanks.all().firstOrNull { it.name.trim().lowercase() == bankKey }?.name ?: bankKey)
+            if (reads.any { it.first.bank.equals(name, ignoreCase = true) }) continue
+            val cb = CompiledBank(Bank(name, emptyList(), emptyList()), emptyList(), globalIgnore)
+            readStrict(cb, text, receivedAt, zone)?.let { reads += it to AttributedBy.PACK_WORDING }
+        }
+        if (reads.isEmpty()) return null
+        val banks = reads.map { it.first.bank.lowercase() }.distinct()
+        if (banks.size == 1) return attributed(reads[0].first.result, reads[0].first.bank, reads[0].second)
+        val agree = reads.map { it.first.key }.distinct().size == 1
+        if (agree) {
+            val last4 = (reads[0].first.result as? ParseResult.Transaction)?.txn?.cardLast4 ?: (reads[0].first.result as? ParseResult.Statement)?.statement?.cardLast4
+            val owners = if (last4 == null) emptyList() else reads.filter { knownCard?.invoke(it.first.bank, last4) == true }.distinctBy { it.first.bank.lowercase() }
+            if (owners.size == 1) return attributed(owners[0].first.result, owners[0].first.bank, owners[0].second)
+        }
+        return ParseResult.Failed(reads[0].first.bank, "Read by more than one bank's wording; the app does not guess which: " + banks.joinToString(", "), Stage.AMBIGUOUS_BANKS, "ACDK")
+    }
+
+    private fun attributed(r: ParseResult, bank: String, by: String): ParseResult = when (r) {
+        is ParseResult.Transaction -> r.copy(attributedBank = bank, attributedBy = by)
+        is ParseResult.Statement -> r.copy(attributedBank = bank, attributedBy = by)
+        else -> r
+    }
+
+    /** A rule reading of [text] as [cb]'s bank that meets the bar (amount, currency, direction, card or account), or null. */
+    private fun readStrict(cb: CompiledBank, text: String, receivedAt: Long, zone: Int, packToo: Boolean = true): WordingRead? {
+        val pack = if (packToo) packRules[cb.bank.name.trim().lowercase()].orEmpty() else emptyList()
+        for ((rule, regex) in cb.rules.filter { it.first.id !in disabledRules } + pack) {
+            // A rule whose direction or count depends on other messages is never used to name a bank by wording.
+            if (rule.directionFromBalance || rule.needsTwin) continue
+            val m = regex.find(text) ?: continue
+            val currencyRead = m.g("currency") != null
+            val cardRead = m.g("card") != null || m.g("acct") != null
+            if (!currencyRead || !cardRead) continue
+            val r = runCatching {
+                when (rule.kind) {
+                    RuleKind.TRANSACTION -> {
+                        val t = buildTxn(cb.bank, rule, m, receivedAt, zone)
+                        if (sanityProblem(rule, m.value, t) != null) null
+                        else WordingRead(cb.bank.name, ParseResult.Transaction(t, rule.id), "T|${t.amount.toPlainString()}|${t.currency}|${t.type}|${t.cardLast4}")
+                    }
+                    RuleKind.STATEMENT -> {
+                        val st = buildStatement(cb.bank, rule, m)
+                        WordingRead(cb.bank.name, ParseResult.Statement(st, rule.id), "S|${st.statementBalance.toPlainString()}|${st.currency}|${st.dueDate}|${st.cardLast4}")
+                    }
+                }
+            }.getOrNull() ?: continue
+            return r
+        }
+        return null
     }
 
     /** A captured field of a verified rule, with where it is in the normalized text: training labels for the role reader. */
@@ -463,9 +737,10 @@ object SmsParser {
                 else dt.first.toLocalDate().atTime(12, 0).toEpochMillis(zone)
             }
         } else receivedAt
+        val card = m.g("card") ?: m.g("acct")?.let { accountKey(it) ?: error("account number without enough digits") }
         return ParsedTransaction(
             bank = bank.name,
-            cardLast4 = m.g("card"),
+            cardLast4 = card,
             cardType = cardTypeOf(rule, m),
             merchant = merchant,
             amount = amount,
@@ -475,7 +750,10 @@ object SmsParser {
             dateFromSms = dateText != null,
             availableLimit = m.g("avail")?.let { parseAmount(it, currency) },
             toLast4 = toLast4,
-            accountNotNamed = m.g("card") == null && rule.accountNotNamed,
+            accountNotNamed = card == null && rule.accountNotNamed,
+            needsTwin = rule.needsTwin,
+            twinWindowMinutes = rule.twinWindowMinutes,
+            directionFromBalance = rule.directionFromBalance,
         )
     }
 
@@ -492,7 +770,7 @@ object SmsParser {
         val dueText = m.g("due") ?: error("no due date")
         return ParsedStatement(
             bank = bank.name,
-            cardLast4 = m.g("card"),
+            cardLast4 = m.g("card") ?: m.g("acct")?.let { accountKey(it) },
             cardType = cardTypeOf(rule, m),
             statementBalance = parseAmount(m.g("total") ?: error("no total")),
             minimumDue = m.g("min")?.let { parseAmount(it) },

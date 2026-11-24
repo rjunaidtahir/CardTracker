@@ -36,11 +36,15 @@ class TrackerApp : Application() {
         SmsParser.setExcludedBanks(prefs.excludedBanks)
         repo.onSendersChanged = { prefs.senderCache = it }
         repo.onShape = { sender, bank, body, kind, merchant -> com.uaefinancial.tracker.learn.Learning.queue(this, prefs, sender, bank, body, kind, merchant) }
+        // 2.8 events with no message (counts only, e.g. event:key-change); sent only when sharing is on.
+        repo.onEvent = { kind, dedupe -> runCatching { com.uaefinancial.tracker.learn.Learning.queueReport(this, prefs, kind, kind.substringAfter('|'), dedupe) } }
         repo.onCategory = { sender, bank, body, merchant, type, from, to, all ->
             com.uaefinancial.tracker.learn.Learning.queueCategory(this, prefs, sender, bank, body, merchant, type, from, to, all)
         }
         repo.onOtherMerchant = { merchant, type -> com.uaefinancial.tracker.learn.Learning.queueMerchant(this, prefs, merchant, type) }
         com.uaefinancial.tracker.learn.RulesUpdater.loadSaved(this, prefs)
+        // 2.8 spec 18.1: no local copy of shared shapes is kept any more (an older build kept the last five).
+        prefs.clearRecentShared()
         LiveListening.reconcile(this, prefs)
         if (prefs.remindersEnabled) DueReminders.setEnabled(this, true)
         appScope.launch { runCatching { com.uaefinancial.tracker.learn.RulesUpdater.checkIfDue(this@TrackerApp, prefs) } }
@@ -52,8 +56,10 @@ class TrackerApp : Application() {
             // benefit from it (and a message now recognised as a one-time code is deleted).
             if (prefs.engineVersion != SmsParser.ENGINE_VERSION) {
                 runCatching {
-                    repo.reparseAll()
+                    val r = repo.reparseWithReport()
                     prefs.engineVersion = SmsParser.ENGINE_VERSION
+                    // First start of a new build: what the new engine cleared from Needs review (2.8 `cleared`, sharing ON only).
+                    runCatching { com.uaefinancial.tracker.learn.Reports.afterReparse(this@TrackerApp, prefs, r) }
                 }
                 runCatching { repo.autoFillCardDays() }
             }
@@ -61,11 +67,17 @@ class TrackerApp : Application() {
             if (!prefs.unknownCleanupDone) {
                 runCatching { repo.closeWaitingUnknownSenders() }.onSuccess { prefs.unknownCleanupDone = true }
             }
+            // 2.8 spec 12: mark (never rename) statement rows whose saved shop name is a place line, once. Waits while the lever is off.
+            if (!prefs.stmtNamesFlagDone) {
+                runCatching { repo.flagGarbledStatementNames() }.onSuccess { if (it >= 0) prefs.stmtNamesFlagDone = true }
+            }
             // Build the on-device models once, off the main thread, then double-check what the rules read.
             runCatching { com.uaefinancial.tracker.intel.MessageIntel.warmUp() }
             runCatching { repo.updateSecondOpinions() }
             // Only after the re-read above, so a message the new engine can now read is never reported as unread.
             if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching { repo.queueUnreadForLearning() }
+            // 2.8: a once-a-day count of what the app saw (counts only, sharing ON only).
+            runCatching { com.uaefinancial.tracker.learn.Reports.healthIfDue(this@TrackerApp, prefs, repo) }
         }
     }
 }

@@ -32,6 +32,9 @@ object ReadingGaps {
                 "merchant" -> "no merchant name was found in the message"
                 "merchant-guess" -> "the merchant name was filled in by the app's small on-device reader, not by a bank rule"
                 "card" -> "no card or account number was found in the message"
+                "direction-from-balance" -> "the message does not say whether money went in or out; the app worked it out from your balance before and after"
+                "stmt-name" -> "the shop name saved from a statement PDF looks like a city and currency, not a shop"
+                "unpaired" -> "this notice usually comes with a second message for the same money, which has not arrived yet"
                 else -> it
             }
         }

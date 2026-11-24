@@ -71,6 +71,8 @@ object RulesUpdater {
         val trackedBefore = SmsParser.trackedIds()
         RulesPack.apply(out.pack)
         prefs.packVersion = out.pack.version
+        // 2.8: tell the accuracy check when the file switched safe mode on or its ext section was refused (counts only).
+        runCatching { Reports.packEvents(app, prefs, out.pack) }
         // A sender the rules file now tracks: its older messages come in on the next Sync (only that sender's, not the
         // whole inbox; nothing duplicates: every message has a unique key).
         val newlyTracked = SmsParser.trackedIds() - trackedBefore
@@ -78,8 +80,9 @@ object RulesUpdater {
             runCatching { app.repo.adoptTrackedCandidates() }
             prefs.pendingSenderReads = prefs.pendingSenderReads + newlyTracked
         }
-        // Messages that could not be read before may be readable now.
-        runCatching { app.repo.reparseAll() }
+        // Messages that could not be read before may be readable now. The snapshot of Needs review taken before and compared
+        // after feeds the 2.8 `cleared` and `event:update-result` reports (sharing ON only).
+        runCatching { app.repo.reparseWithReport() }.getOrNull()?.let { r -> runCatching { Reports.afterReparse(app, prefs, r) } }
         // Whatever the new rules still could not read goes to the accuracy check again (the loop continues until Needs review is clear).
         if (com.uaefinancial.tracker.learn.Learning.enabled(prefs)) runCatching {
             // A message the rules file asked for with more words goes out in fuller form; the rest of what is still unread goes out as before.

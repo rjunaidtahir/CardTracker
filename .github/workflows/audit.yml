@@ -1,0 +1,55 @@
+name: Replay audit
+
+# 2.8 spec 8.1 / 8.2: replays every distinct masked shape through the real engine with the shipped rules file, and checks
+# that no pack ignore hides a message that reads as money. Input is decrypted at run time (QA_DATA_KEY); output is counts
+# and group hashes only.
+on:
+  workflow_dispatch:
+  push:
+    branches: ['release/**']
+    paths: ['tools/audit/**', 'rules/pack.json', '.github/workflows/audit.yml', 'app/src/test/java/com/uaefinancial/tracker/qa/AuditReplayTest.kt']
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@v5
+      - name: Decrypt the inputs
+        env:
+          QA_DATA_KEY: ${{ secrets.QA_DATA_KEY }}
+        run: |
+          test -n "$QA_DATA_KEY" || { echo "QA_DATA_KEY secret is not set"; exit 1; }
+          openssl enc -d -aes-256-cbc -pbkdf2 -pass env:QA_DATA_KEY -in tools/qa/data/real_masked.enc | gunzip > "$RUNNER_TEMP/export.txt"
+          IN="$RUNNER_TEMP/export.txt"
+          if [ -f tools/audit/data/sheet.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -pass env:QA_DATA_KEY -in tools/audit/data/sheet.enc | gunzip > "$RUNNER_TEMP/sheet.csv"
+            IN="$IN:$RUNNER_TEMP/sheet.csv"
+          fi
+          echo "AUDIT_INPUT=$IN" >> "$GITHUB_ENV"
+          echo "export lines: $(wc -l < "$RUNNER_TEMP/export.txt")"
+      - name: Audit and ignore gate
+        run: |
+          chmod +x gradlew
+          set +e
+          ./gradlew :app:testDebugUnitTest --tests '*AuditReplayTest*' --no-daemon -i > audit.log 2>&1
+          code=$?
+          set -e
+          cat app/build/audit-summary.md app/build/ignore-gate.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+          cat app/build/audit-summary.md app/build/ignore-gate.md 2>/dev/null || true
+          if [ $code -ne 0 ]; then grep -E "AuditReplayTest|FAILED|Exception" audit.log | grep -v "AUDIT " | head -20; fi
+          rm -f "$RUNNER_TEMP/export.txt" "$RUNNER_TEMP/sheet.csv"
+          exit $code
+      - name: Keep the counts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-report
+          path: app/build/audit-report.json
+          if-no-files-found: ignore
