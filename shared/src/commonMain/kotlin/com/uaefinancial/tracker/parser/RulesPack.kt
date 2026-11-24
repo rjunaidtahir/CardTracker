@@ -93,7 +93,7 @@ object RulesPack {
         val all = setOf(WORDING_BANKS, PAIRS, KEY_CHANGE, UNLESS, ACCT_TOKEN, CUR_ABBREV, PHRASES, NOT_MONEY, CROSS_SOURCE_MERGE,
             NOTIFICATION_BANKS, DIRECTION_FROM_BALANCE, NEEDS_TWIN, LEARNED_EXEMPT, ASK, STMT_NAMES_FLAG, HSBC_LIVE_PLUS_NAMES, REPORT_EXTRAS)
         /** Levers that are ON unless the file sets them false. */
-        val defaultOn = setOf(HSBC_LIVE_PLUS_NAMES, REPORT_EXTRAS)
+        val defaultOn = setOf(HSBC_LIVE_PLUS_NAMES, STMT_NAMES_FLAG, REPORT_EXTRAS)
     }
 
     /** Report fields an `ask` entry can switch on (section 6). */

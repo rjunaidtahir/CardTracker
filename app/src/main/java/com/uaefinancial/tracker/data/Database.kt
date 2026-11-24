@@ -420,6 +420,14 @@ interface AppDao {
     @Query("UPDATE transactions SET checkNote = NULL WHERE id = :id AND checkNote = :note")
     suspend fun clearCheckNoteIf(id: Long, note: String)
 
+    /** Rows added from a statement PDF that you have not categorised and that carry no Check-this mark yet (2.8 spec 12). */
+    @Query("SELECT * FROM transactions WHERE source = 'MANUAL' AND note = :note AND categoryUserSet = 0 AND checkNote IS NULL")
+    suspend fun statementRowsWithoutMark(note: String): List<TransactionEntity>
+
+    /** Sets a Check-this mark only where none is set; returns 1 when it was set. */
+    @Query("UPDATE transactions SET checkNote = :note WHERE id = :id AND checkNote IS NULL")
+    suspend fun setCheckNoteIfEmpty(id: Long, note: String): Int
+
     /** Latest known balances of accounts (for 2.8 directionFromBalance): rows with a balance, newest last. */
     @Query("SELECT * FROM transactions WHERE availableLimitMinor IS NOT NULL AND cardLast4 IS NOT NULL ORDER BY timestamp ASC")
     suspend fun txnsWithBalance(): List<TransactionEntity>

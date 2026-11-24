@@ -3,7 +3,7 @@
 Branch `release/2.8` from `main` (2.7, versionName 2.7, engine 7). Not merged, not published, no rules file published.
 versionName 2.8, `SmsParser.ENGINE_VERSION` 7 → 8.
 
-Status: **Stage 1 green; stage 2 in CI** (this file is updated after each stage).
+Status: **Stages 1 and 2 green; stage 3 in CI** (this file is updated after each stage).
 
 ## Merged branches (section 1)
 
@@ -127,6 +127,46 @@ different merchants, purchase vs refund, an hour apart, different amounts, ambig
 `ReadingGuardTest.keyChangeOnlyWhenMoneyIsEqual`, `DirectionFromBalanceTest` (7 cases from section 14),
 `LeverSelfTest.leverNeedsTwinReadsOnlyWhereTheAppHoldsIt`, `LeverSelfTest.aTrackedWalletWithItsIgnoresDoesNotFloodReview...`.
 
+## Stage 3: what changed (sections 12, 13)
+
+### HSBC Live+ shop names (section 12)
+Verified: `StatementReader`/`PdfText` have the 2.7 scaled-size fix and the short-line Installment Plan heading (1280811). On the
+Live+ layout the dated row printed only a place ("<CITY> <CC> <CUR>/<CUR> <rate>") and the shop name sits on the line above.
+`StatementReader.livePlusLayout` needs "HSBC" on the statement AND at least 3 of the Live+ header words (transaction date, posting
+date, transaction details, debit, credit) in one header band; else nothing changes. Then a dated row whose text is only a place
+takes the line directly above it (no amounts on it, same page) as the shop name, and the block collection stops before such a line
+so it is not glued to the previous row. A row with nothing usable above keeps its text and is counted as a placeholder.
+Lever `hsbcLivePlusNames` (default ON, false = 2.7 reading). Tests (`LivePlusNamesTest`, synthetic fixture only): name from the line
+above, a wrapped description above is never taken, a row with nothing above, scaled and unscaled sizes, kill switch = 2.7 reading,
+another bank's statement with the same header words reads identically with the lever on and off, an HSBC statement without the
+Live+ header is unchanged. All existing statement layout tests stay green.
+
+Names already stored wrongly: **the PDF text is not kept** (only the rows added from it), so names cannot be read again. On first
+start of 2.8 (`Prefs.stmtNamesFlagDone`), `Repository.flagGarbledStatementNames` marks "Check this" (`gap:stmt-name`) only on rows
+added from a statement PDF (`source = MANUAL`, note "From statement PDF") whose name still is a place line (city, country code,
+currency pair, digits), that you did not categorise and that have no mark yet. Amount, date, card, type and name are never
+touched. Report `event:stmt-names-flagged|n=..` (counts only, only when n > 0). Lever `stmtNamesFlag` (default ON because it only
+adds a mark; false = nothing marked, and the run waits until the lever is on). Tests: `StmtNamesFlagDbTest` (edited row, normal
+name, typed row and already-marked row untouched; nothing else changes; second run marks nothing; kill switch),
+`LivePlusNamesTest.onlyAPlaceLineLooksLikeAGarbledShopName`.
+
+`event:stmt-read|bank=..|lines=N|merchantFromAbove=N|placeholder=N` is queued when a statement PDF is read (counts only; bank is
+a built-in bank name or `other`; sharing ON only, through the usual report queue and its dedupe).
+
+### Test export columns (section 13, debug and beta builds only)
+`merged_into` (id of the transaction a merged message counts in, from `pairedSmsId` or the "(merged)" note), `merge_kind`
+(`pair` = two messages of one bank, `twin` = same money from two sources or a needsTwin notice, `none`), `amount_check` and
+`merchant_check` (`agree`/`disagree`/`n-a` between the app's reading and the generic reader: same minor units; merchant equal after
+lower-casing and keeping only letters and digits). After the lines, one `# day` line per day with transfer messages, the transfer
+transactions they count as, and how many were merged (transactions never exceed messages). Local file only. Test:
+`MaskedExportTest.merge_and_check_columns_and_per_day_counts`.
+
+### iPhone fixes found by the stage 1 run
+Kotlin/Native misread `[^\d\p{L}]` in `Masker.dateLayout` (dates came out as `dd-DEC-26`) and failed to initialise the merchant
+tagger's word regex (`[\p{L}\p{N}][...]*`), which made `IntelTest`, `InvestTaggerReport`, `MerchantSetDump` and
+`MerchantFallbackTest` fail on iPhone since 2.7 (main has been red on these since 255fff0). Both now scan characters by hand; the
+Android/JVM result is the same (all JVM tests unchanged, new `TaggerTokenizeTest`).
+
 ## Lever table
 
 | lever | pack field | test | default | kill switch |
@@ -147,7 +187,8 @@ different merchants, purchase vs refund, an hour apart, different amounts, ambig
 | crossSourceMerge | `ext.levers.crossSourceMerge` | `WalletMergeDbTest` | OFF | lever false (2.7 drop of same-bank twins returns) |
 | directionFromBalance | `ext.rules[].directionFromBalance` | `DirectionFromBalanceTest` | OFF | lever false (such rules are dropped) |
 | needsTwin | `ext.rules[].needsTwin/twinWindowMinutes` | `LeverSelfTest.leverNeedsTwinReadsOnlyWhereTheAppHoldsIt`, `PackPairDbTest` | OFF | lever false (such rules are dropped) |
-| hsbcLivePlusNames | stage 3 | stage 3 | ON | lever false |
+| hsbcLivePlusNames | `ext.levers.hsbcLivePlusNames` | `LivePlusNamesTest` | ON | lever false (2.7 reading) |
+| stmtNamesFlag | `ext.levers.stmtNamesFlag` | `StmtNamesFlagDbTest`, `RulesPackExtTest.leversAreOffUnlessTheFileTurnsThemOn` | ON (only adds a Check-this mark) | lever false |
 
 ## Data safety field list (section 20, draft; final after stage 3)
 
@@ -159,7 +200,8 @@ inside `kind`: `sid` (shape hash), `pv` (rules version), `ev` (engine version), 
 `Visa_Signature:4`). New kinds (counts only): `cleared|sid=..|pv=..|rule=..|n=3`, `event:update-result|pv=27|cleared=4|still=2|held=0|hidden=1|merged=0`,
 `event:reading-changed|pv=27|n=1`, `event:health|day=2026-11-24|seen=12|confident=10|review=1|held=0|hidden=1|merged=0|byBank=ADCB:5,HSBC:3`,
 `event:safe-mode|pv=27`, `event:ext-rejected|pv=27|why=..`, `event:key-change|bank=ADCB|n=3`, `merged:<TYPE>|mg=ACKMB+ACKMT|how=twin`
-(field letters only), `merged:ambiguous|n=2`.
+(field letters only), `merged:ambiguous|n=2`, `event:stmt-read|bank=HSBC|lines=42|merchantFromAbove=30|placeholder=2`,
+`event:stmt-names-flagged|n=5`.
 
 Feedback (new data collection, user-initiated): user-generated content (feedback text, optional), email address (optional, only in
 email mode; purpose: replying), category, "anonymous"/"email", app version + engine version. **Owner action:** update the in-app
@@ -172,6 +214,9 @@ privacy text and the Play Data safety form (rule A10).
 - Notification banks on a real wallet app notification.
 - A real wallet notification and bank SMS arriving for one purchase (merge logic tested on the emulator with invented wordings).
 - A real key change after a rules update on a phone that already has the old card (tested on the emulator by changing the stored text).
+- A real HSBC Live+ PDF (only a synthetic fixture is in the repo; `event:stmt-read` will show the counts on real statements).
+- The first-start Check-this marking on a phone that has 2.7 statement rows (tested on the emulator with invented rows).
+- Notification permission paths (granting and revoking notification access for wallet notifications).
 
 ## Audit (first run, stage 1 head 2e4a5d7)
 
@@ -184,4 +229,10 @@ read as a transaction: none hidden. Baseline recorded in `tools/audit/baseline-c
 
 Stage 1 (head 2e4a5d7): [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45388955372) green,
 [Replay audit](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389863041) green,
-[Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389872608), [iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389911181).
+[Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389872608) green, [iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45389911181) red
+(2 date-layout tests and 6 older iPhone-only intel tests, see "iPhone fixes"). After the fix f1cb57e: [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45420384208),
+[Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45420390965), [iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45420384292) all green.
+
+Stage 2 (head ca6033d; acc5f03 needed a null-safety fix 210d529 and a test fix ca6033d): [Build APK](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433601913) green,
+[Emulator](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433615812) green, [Replay audit](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433624559) green,
+[iPhone](https://github.com/rjunaidtahir/CardTracker/actions/runs/45433610134): not waited for; the owner asked on 24 Nov to skip the iPhone check between stages to save time (result added below if it finishes).

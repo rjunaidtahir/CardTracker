@@ -87,6 +87,8 @@ class RulesPackExtTest {
         val p = apply(file(ext = "\"rules\":[]"))
         assertFalse(RulesPack.levers.on(RulesPack.Lever.WORDING_BANKS))
         assertTrue(RulesPack.levers.on(RulesPack.Lever.HSBC_LIVE_PLUS_NAMES))
+        // Only marks rows "Check this" (spec 12), so it is on unless the file turns it off.
+        assertTrue(RulesPack.levers.on(RulesPack.Lever.STMT_NAMES_FLAG))
         assertNotNull(p.ext)
     }
 

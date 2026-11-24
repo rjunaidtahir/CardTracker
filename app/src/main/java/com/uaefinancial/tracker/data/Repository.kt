@@ -729,6 +729,23 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
      */
     suspend fun closeWaitingUnknownSenders(): Int = dao.closeAllOpenCandidates()
 
+    /**
+     * 2.8 spec 12, first start: rows added from an HSBC Live+ statement by 2.7 may carry the place line ("MUSCAT OM OMR/AED .104790419")
+     * as their shop name. The PDF text is not kept, so the right name cannot be read again: such rows are only marked "Check this"
+     * so you can fix them. Rows you edited (category set by you, a name you changed, a mark already there) are left alone, and an
+     * amount, date, card or type is never touched. Returns how many were marked, or -1 when the stmtNamesFlag lever is off.
+     */
+    suspend fun flagGarbledStatementNames(): Int {
+        if (!leverOn(com.uaefinancial.tracker.parser.RulesPack.Lever.STMT_NAMES_FLAG)) return -1
+        var n = 0
+        for (t in dao.statementRowsWithoutMark(STATEMENT_NOTE)) {
+            if (!com.uaefinancial.tracker.core.StatementReader.looksLikePlaceNotShop(t.merchant)) continue
+            n += dao.setCheckNoteIfEmpty(t.id, STMT_NAME_NOTE)
+        }
+        if (n > 0) runCatching { onEvent?.invoke("event:stmt-names-flagged|n=$n", "stmt-names-flagged|$n") }
+        return n
+    }
+
     /** A waiting message body from [sender], if one was kept (for the optional share). */
     suspend fun sampleFromCandidates(sender: String): String? =
         dao.openCandidatesFor(SmsParser.senderKey(sender)).firstOrNull()?.body
@@ -1294,6 +1311,9 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         val cardTypes = dao.allCards().associate { it.cardKey to it.cardType }
         val rows = ArrayList<com.uaefinancial.tracker.learn.MaskedExport.Row>()
         var unsafe = 0; var otp = 0
+        val allTxns = dao.allTxns()
+        val txnByPairedSms = allTxns.filter { it.pairedSmsId != null }.associateBy { it.pairedSmsId!! }
+        val txnById = allTxns.associateBy { it.id }
         for (sms in dao.allSms()) {
             if (sms.status == SmsStatus.IGNORED && sms.ruleId?.contains("otp", ignoreCase = true) == true) { otp++; continue }
             val bank = com.uaefinancial.tracker.learn.Learning.publicBankName(sms.sender, sms.bank)
@@ -1327,12 +1347,32 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                 is com.uaefinancial.tracker.parser.ParseResult.Ignored -> "none:" + r.reason.replace(Regex("[\\s\\t]+"), " ").take(40)
                 else -> "none:" + r::class.simpleName
             }
-            val now = answer(runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull())
-            val generic = answer(runCatching { SmsParser.parseAsBank("Unknown Test Bank", sms.body, sms.receivedAt) }.getOrNull())
+            val nowResult = runCatching { SmsParser.parse(sms.sender, sms.body, sms.receivedAt) }.getOrNull()
+            val genericResult = runCatching { SmsParser.parseAsBank("Unknown Test Bank", sms.body, sms.receivedAt) }.getOrNull()
+            val now = answer(nowResult)
+            val generic = answer(genericResult)
+            // 2.8 spec 13: where a merged message went, and whether the app's reading and the generic reader agree.
+            val mergedTxn = if (txn == null && sms.status == SmsStatus.TRANSACTION) {
+                txnByPairedSms[sms.id] ?: Regex("""#(\d+) \(merged\)""").find(sms.note.orEmpty())?.groupValues?.get(1)?.toLongOrNull()?.let { txnById[it] }
+            } else null
+            val mergeKind = if (mergedTxn == null) com.uaefinancial.tracker.learn.MaskedExport.MERGE_NONE
+                else com.uaefinancial.tracker.learn.MaskedExport.mergeKindOf(sms.note, SmsParser.packRuleById(sms.ruleId)?.needsTwin == true)
+                    .let { if (it == com.uaefinancial.tracker.learn.MaskedExport.MERGE_NONE) com.uaefinancial.tracker.learn.MaskedExport.MERGE_PAIR else it }
+            val appRead = (nowResult as? com.uaefinancial.tracker.parser.ParseResult.Transaction)?.txn
+            val genRead = (genericResult as? com.uaefinancial.tracker.parser.ParseResult.Transaction)?.txn
+            val appAmount = txn?.amountMinor ?: appRead?.let { Money.toMinor(it.amount) }
+            val appMerchant = txn?.merchant ?: appRead?.merchant
+            val counted = txn ?: mergedTxn
+            val isTransfer = counted != null && (counted.type == TxnType.TRANSFER_OUT.name || counted.type == TxnType.TRANSFER_IN.name)
             rows += com.uaefinancial.tracker.learn.MaskedExport.Row(
                 m.shape, label, kind, com.uaefinancial.tracker.learn.MaskedExport.directionOf(kind), instrument,
                 com.uaefinancial.tracker.learn.MaskedExport.sourceOf(sms.ruleId, fixed), now, generic,
                 sms.status, (sms.note ?: "").replace(Regex("\\d"), "#").take(90),
+                mergedInto = mergedTxn?.id, mergeKind = mergeKind,
+                amountCheck = com.uaefinancial.tracker.learn.MaskedExport.amountCheck(appAmount, genRead?.let { Money.toMinor(it.amount) }),
+                merchantCheck = com.uaefinancial.tracker.learn.MaskedExport.merchantCheck(appMerchant, genRead?.merchant),
+                day = java.time.Instant.ofEpochMilli(sms.receivedAt).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString(),
+                transferTxnId = if (isTransfer) counted?.id else null,
             )
         }
         return com.uaefinancial.tracker.learn.MaskedExport.render(rows, unsafe, otp)
@@ -1476,6 +1516,10 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
         const val SI_RECURRING_NOTE = "Placed on the account that paid the same standing instruction before (at least two earlier ones agree). Use Fix if it is wrong."
         /** Check-this mark of a pack-pair message counted on its own (cleared when its other half merges). */
         const val UNPAIRED_NOTE = "gap:unpaired"
+        /** The note every row added from a statement PDF carries (see addStatementLines). */
+        const val STATEMENT_NOTE = "From statement PDF"
+        /** 2.8 spec 12: Check-this mark of a statement row whose saved shop name is really the place line. */
+        const val STMT_NAME_NOTE = "gap:stmt-name"
         /** 2.8 `needsTwin` (spec 16.5): the message waits in Needs review until its transfer-out message is there. */
         const val NEEDS_TWIN_NOTE = "Waiting for the transfer message this one belongs to: it counts only together with it, never on its own."
         const val SI_PLACED_NOTE = "Placed from the standing-instruction message: no debit message arrived. Account and time come from your balances."
@@ -1658,7 +1702,7 @@ class Repository(private val db: AppDatabase, private val prefs: Prefs? = null) 
                     categoryId = if (card.owner == CardOwner.FAMILY && type == TxnType.PURCHASE) CategoryRules.FAMILY
                         else resolveCategory(null, key, l.description, type, l.amountMinor),
                     categoryUserSet = card.owner == CardOwner.FAMILY && type == TxnType.PURCHASE,
-                    note = "From statement PDF",
+                    note = STATEMENT_NOTE,
                 ),
             )
             added++

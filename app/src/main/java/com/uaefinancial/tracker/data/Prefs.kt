@@ -69,6 +69,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("unknown_cleanup_done", false)
         set(v) { sp.edit { putBoolean("unknown_cleanup_done", v) } }
 
+    /** Set once the 2.7 statement rows with a place line for a shop name were marked "Check this" (2.8 spec 12). */
+    var stmtNamesFlagDone: Boolean
+        get() = sp.getBoolean("stmt_names_flag_done", false)
+        set(v) { sp.edit { putBoolean("stmt_names_flag_done", v) } }
+
     /**
      * Sender IDs whose OLDER inbox messages still have to be read (a sender was just added or newly tracked). The next
      * Sync reads only those senders' messages from the whole inbox, not everyone's.

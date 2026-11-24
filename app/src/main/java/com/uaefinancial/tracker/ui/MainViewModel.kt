@@ -524,6 +524,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val analysis = withContext(Dispatchers.Default) { com.uaefinancial.tracker.core.StatementReader.analyze(printed, LocalDate.now(zone).year) }
                 val lines = analysis.lines
                 val summary = analysis.summary
+                reportStatementRead(analysis)
                 // Recognise the card from the last 4 digits printed on the statement.
                 val key = cur.cardKey ?: summary.cardLast4?.let { l4 -> dao.allCards().filter { it.last4 == l4 }.singleOrNull()?.cardKey }
                 statementCheck.value = statementCheck.value?.copy(
@@ -538,6 +539,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             } catch (e: Exception) {
                 statementCheck.value = statementCheck.value?.copy(loading = false, error = "Couldn't read the PDF: ${e.message ?: e.javaClass.simpleName}")
             }
+        }
+    }
+
+    /**
+     * 2.8 spec 12: `event:stmt-read|bank=..|lines=N|merchantFromAbove=N|placeholder=N`, counts only (sharing ON only, through the
+     * usual report queue). The bank is a built-in bank name or "other"; nothing from the statement's text is sent.
+     */
+    private fun reportStatementRead(a: com.uaefinancial.tracker.core.StatementAnalysis) {
+        val ns = a.nameStats
+        if (ns.lines == 0) return
+        val bank = a.summary.bank?.let { b -> com.uaefinancial.tracker.parser.BankRules.banks.firstOrNull { it.name.equals(b, ignoreCase = true) }?.name } ?: "other"
+        val period = a.summary.statementDate?.toString() ?: "none"
+        runCatching {
+            repo.onEvent?.invoke(
+                "event:stmt-read|bank=$bank|lines=${ns.lines}|merchantFromAbove=${ns.merchantFromAbove}|placeholder=${ns.placeholder}",
+                "stmt-read|$bank|$period|${ns.lines}|${ns.merchantFromAbove}|${ns.placeholder}",
+            )
         }
     }
 

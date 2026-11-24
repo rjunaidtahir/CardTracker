@@ -32,7 +32,12 @@ data class StatementAnalysis(
     val totalsAgree: Boolean?,
     /** Instalment plans printed on the statement (EPP / easy payment / deals). */
     val plans: List<InstalmentPlan> = emptyList(),
+    /** 2.8: counts for `event:stmt-read` (counts only): rows read, merchants taken from the line above (HSBC Live+), rows left with a placeholder. */
+    val nameStats: NameStats = NameStats(0, 0, 0, false),
 )
+
+/** 2.8 spec 12 counts. [livePlus] is true when the HSBC Live+ layout was recognised (and its lever is on). */
+data class NameStats(val lines: Int, val merchantFromAbove: Int, val placeholder: Int, val livePlus: Boolean)
 
 /**
  * Reads bank statements without knowing the bank's layout in advance:
@@ -509,6 +514,55 @@ object StatementReader {
 
     // ------------------------------------------------------------ main
 
+    // ------------------------------------------------------------ HSBC Live+ (2.8 spec 12)
+
+    /** Words of the HSBC Live+ transaction header; at least 3 of them in one header band (plus "HSBC" on the statement). */
+    private val livePlusHeaderWords = listOf("""transaction\s*date""", """posting\s*date""", """transaction\s*details""", """\bdebit\b""", """\bcredit\b""")
+        .map { Regex(it, RegexOption.IGNORE_CASE) }
+
+    /** True when the statement is HSBC's and one header band holds at least 3 Live+ header words (lever hsbcLivePlusNames). */
+    internal fun livePlusLayout(lines: List<PrintedLine>): Boolean {
+        if (!com.uaefinancial.tracker.parser.RulesPack.levers.on(com.uaefinancial.tracker.parser.RulesPack.Lever.HSBC_LIVE_PLUS_NAMES)) return false
+        if (lines.none { Regex("""\bHSBC\b""", RegexOption.IGNORE_CASE).containsMatchIn(it.text) }) return false
+        for (i in lines.indices) {
+            val l = lines[i]
+            val band = (i..minOf(lines.lastIndex, i + 2)).map { lines[it] }.filter { it.page == l.page && abs(it.y - l.y) < 25 }.joinToString(" ") { it.text }
+            if (livePlusHeaderWords.count { it.containsMatchIn(band) } >= 3) return true
+        }
+        return false
+    }
+
+    /**
+     * The dated row of an HSBC Live+ statement printed only a place (city, country code, maybe the currency pair and rate:
+     * "MUSCAT OM OMR/AED .104790419"): the shop name is on the line above.
+     */
+    private val placeOnly = Regex("""^(?:[A-Za-z][A-Za-z'.&-]*\s+){1,2}[A-Z]{2,3}(?:\s+[A-Z]{3}/[A-Z]{3})?[\s.\d]*$""")
+
+    /**
+     * A merchant saved from an HSBC Live+ statement by 2.7 that is really the place line: a city, a country code, a currency pair
+     * and digits ("MUSCAT OM OMR/AED .104790419"). Used only to mark such rows "Check this" once; never to rename them.
+     */
+    private val garbledPlace = Regex("""^(?:[A-Za-z][A-Za-z'.&-]*\s+){1,2}[A-Z]{2,3}\s+[A-Z]{3}/[A-Z]{3}\s*[.\d][\s.\d]*$""")
+
+    fun looksLikePlaceNotShop(merchant: String?): Boolean = merchant != null && garbledPlace.matches(merchant.trim()) && merchant.any { it.isDigit() }
+
+    private fun rowPlaceOnly(l: PrintedLine, year: Int): Boolean {
+        val row = leadingDates(l, year) ?: return false
+        val a0 = amountsIn(l, row.end).firstOrNull { !it.integer && !l.text.substring(row.end, it.start).trimEnd().endsWith("/") }
+        val raw = l.text.substring(row.end, (a0?.start ?: l.text.length).coerceAtLeast(row.end)).trim()
+        return raw.isNotEmpty() && placeOnly.matches(raw)
+    }
+
+    /** A line between two rows is the next row's shop name when the next row printed only a place and the line sits at least as close to it. */
+    private fun merchantAbove(lines: List<PrintedLine>, j: Int, year: Int): Boolean {
+        val n = lines[j]
+        val next = lines.getOrNull(j + 1) ?: return false
+        val prev = lines.getOrNull(j - 1) ?: return false
+        if (next.page != n.page || leadingDates(n, year) != null || amountsIn(n).any { !it.integer } || n.text.trim().length < 3) return false
+        if (!rowPlaceOnly(next, year)) return false
+        return next.y - n.y <= n.y - prev.y || prev.page != n.page
+    }
+
     fun analyze(lines: List<PrintedLine>, fallbackYear: Int): StatementAnalysis {
         val all = lines.joinToString("\n") { it.text }
         val year = Regex("""\b(20\d{2})\b""").findAll(all).map { it.value.toInt() }.groupingBy { it }.eachCount().maxByOrNull { it.value }?.key ?: fallbackYear
@@ -528,6 +582,10 @@ object StatementReader {
         var pending: String? = null
         var pendingAmts: List<Amt> = emptyList()
         var lastRowDates = 0
+        val livePlus = livePlusLayout(lines)
+        var pendingLine: PrintedLine? = null
+        var fromAbove = 0
+        var placeholders = 0
         var headerPage = -1
         var headerY = 0f
         // a card heading inside the table: "Supplementary Card Number ... XXXX 3944", or a card number alone on its line
@@ -570,6 +628,7 @@ object StatementReader {
                     (if (a0 != null) l.text.substring(0, a0.start) else l.text).trim().takeIf { it.length >= 3 && !Regex("""^[A-Z]{3}/[A-Z]{3}""").containsMatchIn(it) }
                 } else null
                 pendingAmts = if (pending != null) amountsIn(l).filterNot { it.integer } else emptyList()
+                pendingLine = if (pending != null) l else null
                 i++; continue
             }
             // collect the transaction block: this line plus continuation lines (no date) until the next dated row
@@ -580,6 +639,8 @@ object StatementReader {
                 if (n.page != l.page || leadingDates(n, year) != null || headerAt(lines, j) != null || skipRow.containsMatchIn(n.text) || cardHeading(n) != null ||
                     Regex("""(supplementary|primary|additional)\s*card""", RegexOption.IGNORE_CASE).containsMatchIn(n.text)) break
                 if (n.text.trim() == "-") { j++; break }
+                // HSBC Live+: the next row's shop name is not a continuation of this row.
+                if (livePlus && merchantAbove(lines, j, year)) break
                 block += n; j++
             }
             val rest = l.text.substring(row.end)
@@ -596,6 +657,13 @@ object StatementReader {
             // Before any table header, a dated line with no description of its own is a row of summary figures
             // ("12 Sep 2026   07 Oct 2026   AED 2,531.60"), not a transaction.
             if (cols == null && desc.isBlank()) { i++; continue }
+            // HSBC Live+: this row printed only a place; the shop name is the line right above it.
+            if (livePlus && rowPlaceOnly(l, year)) {
+                val above = pendingLine
+                if (above != null && pendingAmts.isEmpty() && above.page == l.page && lines.indexOf(above) == i - 1) {
+                    desc = cleanDescription(above.text); fromAbove++
+                } else placeholders++
+            } else
             if (desc.length < 4 && pending != null) desc = cleanDescription(pending!! + if (desc.isNotBlank()) " $desc" else "")
             // (never a row of labels: a line of summary figures isn't a transaction)
             if (desc.isBlank()) desc = block.drop(1).firstOrNull { amountsIn(it).isEmpty() && anyLabel.none { r -> r.containsMatchIn(it.text) } }?.text?.let(::cleanDescription) ?: ""
@@ -606,7 +674,7 @@ object StatementReader {
                     if (extra.isNotEmpty() && !Regex("""^(FT|REF)\w+$""").matches(extra)) desc = cleanDescription("$desc $extra").take(80)
                 }
             }
-            pending = null; pendingAmts = emptyList()
+            pending = null; pendingAmts = emptyList(); pendingLine = null
             // a dated line that continues the previous transaction ("23-08-2026 towards Principle AED ...")
             val firstCh = desc.firstOrNull()
             if (row.count < lastRowDates && firstCh != null && (firstCh.isLowerCase() || !firstCh.isLetterOrDigit())) { i = j; continue }
@@ -792,7 +860,10 @@ object StatementReader {
                 (if (agree) "They add up to the statement's balance." else "Expected balance ${fmt(expected)}, statement shows ${fmt(closing)}: some lines may be missing or instalments are included.") +
                 (how?.let { " (Money in / out was worked out from $it.)" } ?: "")
         }
-        return StatementAnalysis(summary, lines2, check, agree, runCatching { InstalmentPlans.read(lines) }.getOrDefault(emptyList()))
+        return StatementAnalysis(
+            summary, lines2, check, agree, runCatching { InstalmentPlans.read(lines) }.getOrDefault(emptyList()),
+            NameStats(lines2.size, fromAbove, placeholders, livePlus),
+        )
     }
 
     /** What each transaction line says about its direction; used when the first reading doesn't add up. */

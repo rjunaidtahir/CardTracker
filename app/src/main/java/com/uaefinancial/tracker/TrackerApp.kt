@@ -67,6 +67,10 @@ class TrackerApp : Application() {
             if (!prefs.unknownCleanupDone) {
                 runCatching { repo.closeWaitingUnknownSenders() }.onSuccess { prefs.unknownCleanupDone = true }
             }
+            // 2.8 spec 12: mark (never rename) statement rows whose saved shop name is a place line, once. Waits while the lever is off.
+            if (!prefs.stmtNamesFlagDone) {
+                runCatching { repo.flagGarbledStatementNames() }.onSuccess { if (it >= 0) prefs.stmtNamesFlagDone = true }
+            }
             // Build the on-device models once, off the main thread, then double-check what the rules read.
             runCatching { com.uaefinancial.tracker.intel.MessageIntel.warmUp() }
             runCatching { repo.updateSecondOpinions() }
