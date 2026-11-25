@@ -1,5 +1,5 @@
 {
-  "version": 31,
+  "version": 32,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -468,6 +468,15 @@
       "type": "PURCHASE",
       "cardType": "CREDIT",
       "pattern": "Thank you for\\s+\\w+\\s+your\\s+(?:[^.]{0,30}?\\s)?Credit Card ending(?:\\s+in)?\\s+{CARD}\\s+online\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Your available balance is\\s+{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-arabic-card-payment-received-20261125",
+      "kind": "TRANSACTION",
+      "type": "PAYMENT",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Card payment received",
+      "pattern": "تم\\u0651?\\s+استلام\\s*{CUR}\\s*{AMOUNT}\\s+كدفعة\\s+لصالح\\s+بطاقتك\\s+الائتمانية\\s+المنتهية\\s+أرقامها\\s+بـ\\s*{CARD}\\s+في\\s+{DATETIME}\\s+عبر\\s+الخدمات\\s+المصرفية\\s+عبر\\s+الإنترنت\\.?(?:\\s+الحد\\s+المتوفر\\s+لك\\s+{ANYCUR}\\s*{AVAIL})?"
     },
     {
       "bank": "SAB",
