@@ -66,8 +66,71 @@ class ShippedPackV32Test {
         val out = RulesPack.parse(file.readText(), currentVersion = 4)
         assertIs<RulesPack.Outcome.Ok>(out, (out as? RulesPack.Outcome.Rejected)?.reason)
         assertTrue(out.pack.version >= 32)
-        assertTrue(out.pack.rules.size >= 40)
-        assertTrue(out.pack.ignore.size >= 54)
+        assertTrue(out.pack.rules.size >= 41)
+        assertTrue(out.pack.ignore.size >= 57)
         assertTrue(out.pack.rules.any { it.rule.id == id })
+        assertTrue(out.pack.rules.any { it.rule.id == "mashreq-finance-charges-reversed-20261125" })
+    }
+
+    // ---- 25 Nov 2026, 19:23 slot additions (same v32 bump): 1 reading rule + 3 ignore entries ----
+
+    private val mashreqId = "pack:mashreq-finance-charges-reversed-20261125"
+
+    @Test fun mashreqFinanceChargesReversedIsReadAsRefund() {
+        // 1 loose-masked report (2.8, pv=31). Month only in the wording, no day: the received date is used.
+        for ((body, amount, card) in listOf(
+            Triple("In line with Mashreq's commitment to fair treatment of customers and prevailing regulations, Mar'26 finance charges of AED 50.00 have been reversed to your credit card ending 1234. No further action is required from your end.", "50.00", "1234"),
+            Triple("In line with Mashreq's commitment to fair treatment of customers and prevailing regulations, Oct'26 finance charges of AED 1,250.50 have been reversed to your credit card ending 5678. No further action is required from your end.", "1250.50", "5678"),
+        )) {
+            val r = read("Mashreq", body)
+            assertIs<ParseResult.Transaction>(r, "got $r for $body")
+            assertEquals(TxnType.REFUND, r.txn.type)
+            assertEquals(amount, r.txn.amount.toPlainString())
+            assertEquals("AED", r.txn.currency)
+            assertEquals(card, r.txn.cardLast4)
+            assertEquals(mashreqId, r.ruleId)
+        }
+    }
+
+    @Test fun mashreqFinanceChargesLookAlikesAreNotReadByTheRule() {
+        val charged = read("Mashreq", "Mar'26 finance charges of AED 50.00 have been charged to your credit card ending 1234. Please pay the minimum due.")
+        assertTrue(charged !is ParseResult.Transaction || charged.ruleId != mashreqId, "read by the rule: $charged")
+        val other = read("Unknown Test Bank", "Mar'26 finance charges of AED 50.00 have been reversed to your credit card ending 1234. No further action is required from your end.")
+        assertTrue(other !is ParseResult.Transaction || other.ruleId != mashreqId, "read by the rule: $other")
+    }
+
+    private fun assertIgnoredWith(label: String, r: ParseResult) {
+        assertIs<ParseResult.Ignored>(r, "got $r")
+        assertEquals(label, r.reason)
+    }
+
+    private fun assertNotIgnoredWith(label: String, r: ParseResult) {
+        assertTrue(r !is ParseResult.Ignored || r.reason != label, "hidden by $label: $r")
+    }
+
+    @Test fun personalLoanReadyAdvertIsIgnoredButRealCreditsAreNot() {
+        val label = "Advert: Personal Loan ready (confirm)"
+        assertIgnoredWith(label, read("Unknown Test Bank", "Dear Customer, Rs 50,000 Personal Loan ready. Confirm to receive in your bank A/C - https://example.test/x"))
+        assertIgnoredWith(label, read("Unknown Test Bank", "Rs 1,20,000 Personal Loan ready. Confirm to receive in your bank A/C - https://example.test/y"))
+        assertNotIgnoredWith(label, read("Emirates NBD", "Your account ending 1234 has been credited with AED 5,000.00 on 25/11/2026. Available balance AED 9,000.00."))
+        assertNotIgnoredWith(label, read("Unknown Test Bank", "AED 500.00 was credited to your bank A/C 1234 from Personal Loan disbursal on 25/11/2026."))
+    }
+
+    @Test fun deemPreauthHoldIsIgnoredButThePurchaseIsNot() {
+        val label = "Notice: Deem preauth hold"
+        assertIgnoredWith(label, read("Deem", "Thank you for using your Deem Credit card ending in 1234 for preauth transaction with an amount of AED 100.00 at DU QUICK RECHARGE on 25/11/2026. Your available balance is AED 1,000.00."))
+        assertIgnoredWith(label, read("Deem", "Thank you for using your Deem Credit card ending in 5678 for preauth transaction with an amount of AED 32.50 at Noon Food on 25/11/2026. Your available balance is AED 2,000.00."))
+        val purchase = read("Deem", "Thank you for using your Deem Credit Card ending in 1234 for AED 100.00 at DU QUICK RECHARGE on 25/11/2026. Your available balance is AED 1,000.00.")
+        assertIs<ParseResult.Transaction>(purchase, "got $purchase")
+        assertEquals(TxnType.PURCHASE, purchase.txn.type)
+        assertNotIgnoredWith(label, purchase)
+        assertNotIgnoredWith(label, read("Deem", "Thank you for using your Deem Credit card ending in 1234 for AED 40.00 at PREAUTH CAFE on 25/11/2026. Your available balance is AED 1,000.00."))
+    }
+
+    @Test fun digitalRupeeAdvertIsIgnoredButPaymentsAreNot() {
+        val label = "Advert: Digital Rupee PIN-less pay"
+        assertIgnoredWith(label, read("Unknown Test Bank", "Tap. Scan. Pay faster. with PIN less payments up to Rs 5,000. Use Digital Rupee by ABC Bank."))
+        assertIgnoredWith(label, read("Unknown Test Bank", "Tap. Scan. Pay faster. with PIN less payments up to AED 500. Use Digital Rupee by XYZ Bank."))
+        assertNotIgnoredWith(label, read("Emirates NBD", "Purchase of AED 75.00 at DIGITAL RUPEE STORE, DUBAI with card ending 1234. Avl Cr. Limit AED 5,000.00"))
     }
 }

@@ -479,6 +479,15 @@
       "pattern": "تم\\u0651?\\s+استلام\\s*{CUR}\\s*{AMOUNT}\\s+كدفعة\\s+لصالح\\s+بطاقتك\\s+الائتمانية\\s+المنتهية\\s+أرقامها\\s+بـ\\s*{CARD}\\s+في\\s+{DATETIME}\\s+عبر\\s+الخدمات\\s+المصرفية\\s+عبر\\s+الإنترنت\\.?(?:\\s+الحد\\s+المتوفر\\s+لك\\s+{ANYCUR}\\s*{AVAIL})?"
     },
     {
+      "bank": "Mashreq",
+      "id": "mashreq-finance-charges-reversed-20261125",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Finance charges reversal",
+      "pattern": "finance charges of\\s+{CUR}\\s*{AMOUNT}\\s+have been reversed to your credit card ending\\s+{CARD}"
+    },
+    {
       "bank": "SAB",
       "id": "sab-funds-transfer-accepted-20261125",
       "kind": "TRANSACTION",
@@ -711,6 +720,18 @@
     {
       "label": "Declined: Mashreq e-com untrusted device",
       "pattern": "e-com transaction of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+was rejected on your card ending\\s+\\S+\\s+on\\s+.{1,40}?\\s+as your mobile is not registered as a trusted device"
+    },
+    {
+      "label": "Advert: Personal Loan ready (confirm)",
+      "pattern": "Personal Loan ready\\.\\s*Confirm to receive in your bank A/C"
+    },
+    {
+      "label": "Notice: Deem preauth hold",
+      "pattern": "Deem Credit card ending in\\s+\\S+\\s+for preauth transaction with an amount of"
+    },
+    {
+      "label": "Advert: Digital Rupee PIN-less pay",
+      "pattern": "PIN\\s*less payments up to\\s+[^\\d\\s]{0,4}\\s*[\\d,.]+\\.?\\s*Use Digital Rupee by"
     }
   ],
   "categories": [
