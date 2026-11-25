@@ -1,5 +1,5 @@
 {
-  "version": 28,
+  "version": 29,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -689,7 +689,14 @@
         "NAHDHAT AL MADINA",
         "SHIBANI",
         "FRESH WAY BAQAL",
-        "ELGROCER"
+        "ELGROCER",
+        "BAQALA",
+        "SPMKT",
+        "MAF HYPER",
+        "MINI MA",
+        "AL AIN COOP",
+        "ADCOOPS",
+        "SUPER MARKET"
       ]
     },
     {
@@ -731,7 +738,9 @@
         "YANDEX EATS",
         "BASKIN ROBBINS",
         "NANDOS",
-        "POPEYES"
+        "POPEYES",
+        "JOLLIBEE",
+        "KRISPY KREME"
       ]
     },
     {
@@ -770,7 +779,10 @@
         "SUN AND SAND SPORTS",
         "TRENDYOL",
         "AMZN MKTP",
-        "MOTHERCARE"
+        "MOTHERCARE",
+        "LC WAIKIKI",
+        "FLIPKART",
+        "MUMUSO"
       ]
     },
     {
@@ -783,7 +795,11 @@
         "BRITISH AIRWAYS",
         "KLOOK",
         "UNIGLOBE",
-        "SAUDI ARABIA AIR"
+        "SAUDI ARABIA AIR",
+        "PREMIER INN",
+        "WIZZAIR",
+        "TRIP.COM",
+        "BOOKING.C"
       ]
     },
     {
@@ -795,7 +811,10 @@
         "MINISTRY OF",
         "ABU DHABI POLIC",
         "SHARJAH FINANCE",
-        "TRAFFIC FINES"
+        "TRAFFIC FINES",
+        "DUBAI MUNICIPALITY",
+        "DEPT OF MUNCIPAL",
+        "FED AUTH FOR ID"
       ]
     },
     {
@@ -817,14 +836,17 @@
       "words": [
         "HOME INTERNET",
         "VIRGIN MOBILE",
-        "SHARJAH ELECTRICITY"
+        "SHARJAH ELECTRICITY",
+        "DUBAI ELECTRICITY",
+        "E& TELECOM"
       ]
     },
     {
       "category": "Entertainment",
       "words": [
         "KIDOOS",
-        "GLOBAL VILLAGE"
+        "GLOBAL VILLAGE",
+        "KIDS AMUSEMENT"
       ]
     },
     {
@@ -834,7 +856,10 @@
         "AL FUTTAIM HEAL",
         "PHARM",
         "THUMBAY",
-        "ECZANE"
+        "ECZANE",
+        "AL FUTTAIM HC",
+        "MEDICINA",
+        "NOOR ALAHLI"
       ]
     }
   ],

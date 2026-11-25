@@ -1,5 +1,5 @@
 {
-  "lastTimestamp": "11/24/2026 10:25:29",
+  "lastTimestamp": "11/25/2026 9:22:04",
   "examples": [
     {
       "name": "SUNRISE CITY SPMKT OUD",
@@ -452,6 +452,106 @@
     {
       "name": "MOTHERCARE -D508 AL SH",
       "category": "Shopping"
+    },
+    {
+      "name": "BAQALA MABROOK",
+      "category": "Groceries"
+    },
+    {
+      "name": "EARTH SPMKT-AUH BR",
+      "category": "Groceries"
+    },
+    {
+      "name": "MAF HYPER MKT AL ZEINA",
+      "category": "Groceries"
+    },
+    {
+      "name": "DE ROYAL MINI MARKET",
+      "category": "Groceries"
+    },
+    {
+      "name": "AL AIN COOP SOCIETY BR",
+      "category": "Groceries"
+    },
+    {
+      "name": "ADCOOPS AD MAL",
+      "category": "Groceries"
+    },
+    {
+      "name": "MUSCAT SUPER MARKET",
+      "category": "Groceries"
+    },
+    {
+      "name": "DUBAI ELECTRICITY AND",
+      "category": "Utilities & bills"
+    },
+    {
+      "name": "E& TELECOM CORP",
+      "category": "Utilities & bills"
+    },
+    {
+      "name": "AL FUTTAIM HC PHAR ALN",
+      "category": "Health"
+    },
+    {
+      "name": "MEDICINA AL MUNEERA PH",
+      "category": "Health"
+    },
+    {
+      "name": "NOOR ALAHLI MED CT BR2",
+      "category": "Health"
+    },
+    {
+      "name": "PREMIER INN IBN BATT",
+      "category": "Travel"
+    },
+    {
+      "name": "WIZZAIRECOMAEDUSD",
+      "category": "Travel"
+    },
+    {
+      "name": "TRIP.COM TRIP.COM",
+      "category": "Travel"
+    },
+    {
+      "name": "BOOKING.C",
+      "category": "Travel"
+    },
+    {
+      "name": "JOLLIBEE FOODS RESTAUR FOR AED",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "KRISPY KREME KITE BEAC",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "LC WAIKIKI DUBAI",
+      "category": "Shopping"
+    },
+    {
+      "name": "FLIPKART INTERNET PRIV",
+      "category": "Shopping"
+    },
+    {
+      "name": "MUMUSO GENERAL TRD",
+      "category": "Shopping"
+    },
+    {
+      "name": "RAINBOW KIDS AMUSEMENT",
+      "category": "Entertainment"
+    },
+    {
+      "name": "DUBAI MUNICIPALITY",
+      "category": "Government & fees"
+    },
+    {
+      "name": "DEPT OF MUNCIPAL AFFAI",
+      "category": "Government & fees"
+    },
+    {
+      "name": "FED AUTH FOR IDEN CITZ",
+      "category": "Government & fees"
     }
   ],
   "skipped": [
