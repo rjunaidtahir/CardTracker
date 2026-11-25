@@ -1,5 +1,5 @@
 {
-  "version": 32,
+  "version": 33,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -931,7 +931,19 @@
   ],
   "ext": {
     "levers": {
-      "wordingBanks": true
-    }
+      "wordingBanks": true,
+      "curAbbrev": true
+    },
+    "rules": [
+      {
+        "bank": "Bank of Baroda",
+        "id": "bob-upi-dr-cr-20261125",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+Dr\\.\\s+from\\s+A/C\\s+{CARD}\\s+and\\s+Cr\\.\\s+to\\s+{MERCHANT}\\s+Ref:?\\s*\\d+"
+      }
+    ]
   }
 }
