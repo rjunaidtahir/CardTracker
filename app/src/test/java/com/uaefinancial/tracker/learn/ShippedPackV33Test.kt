@@ -13,9 +13,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
- * PREPARED, not on main (25 Nov 2026, owner's challenge: the 2.8 build already has the levers, use them).
- * First use of `ext.rules` with the `curAbbrev` lever: a Bank of Baroda UPI debit "Rs X Dr. from A/C ... and Cr. to <payee> Ref ..."
- * (wrongly hidden as a notice on phones where the sender was added by hand). Wording invented from the masked shape.
+ * 25 Nov 2026 (23:23 slot). First use of `ext.rules` with the `curAbbrev` lever: a Bank of Baroda UPI debit
+ * "Rs X Dr. from A/C ... and Cr. to <payee> Ref ..." (wrongly hidden as a notice on phones where the sender was added by hand;
+ * 1 loose-masked report, 2.8). Wording invented from the masked shape.
  */
 class ShippedPackV33Test {
     private val file = listOf(File("../rules/pack.json"), File("rules/pack.json")).first { it.exists() }
@@ -47,6 +47,15 @@ class ShippedPackV33Test {
             assertEquals(card, r.txn.cardLast4)
             assertEquals(id, r.ruleId)
         }
+    }
+
+    @Test fun payeeIsTheMerchant() {
+        val a = read("Bank of Baroda", "Rs.150.00 Dr. from A/C XXXXXX1234 and Cr. to shop@upi Ref:123456789012. AvlBal:Rs.900.00(2026:11:25 12:30:45). Not you? Call 18005700/5000-BOB")
+        assertIs<ParseResult.Transaction>(a, "got $a")
+        assertTrue(a.txn.merchant.contains("shop@upi", ignoreCase = true), "merchant was ${a.txn.merchant}")
+        val b = read("Bank of Baroda", "Rs 2,450.50 Dr. from A/C XXXXXX5678 and Cr. to paytm.s1a2b3@paytm Ref:210987654321. AvlBal:Rs 10,000.00(2026:11:25 09:01:02). Not you? Call 18005700/5000-BOB")
+        assertIs<ParseResult.Transaction>(b, "got $b")
+        assertTrue(b.txn.merchant.contains("paytm", ignoreCase = true), "merchant was ${b.txn.merchant}")
     }
 
     @Test fun lookAlikesAreNotReadByTheRule() {
