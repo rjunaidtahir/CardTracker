@@ -1,5 +1,5 @@
 {
-  "version": 30,
+  "version": 31,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -690,6 +690,10 @@
     {
       "label": "Notice: du balance after credit",
       "pattern": "Your account has been credited successfully\\.\\s*Your new balance is\\s+[A-Z]{3}\\s*[\\d,.]+\\.\\s*Stay connected with the best deals"
+    },
+    {
+      "label": "Notice: FAB EPP closed (no rate)",
+      "pattern": "for an Easy Payment Plan for\\s+\\d+\\s+months with a\\s+%\\s*interest rate and an\\s+[A-Z]{3}\\s*[\\d,.]+\\s+processing fee was approved and closed"
     },
     {
       "label": "Notice: SAB one-time password",
