@@ -60,4 +60,14 @@ class AddedSenderNoticeTest {
         assertFalse(CandidateScreen.clearlyNotMoney("rewards offer: aed 5 was debited"))
         assertFalse(CandidateScreen.clearlyNotMoney("your card ending 1234 was used at lulu"))
     }
+
+    @Test fun a_dr_cr_debit_alert_with_a_call_footer_is_not_hidden_as_a_notice() {
+        // "Call" in the "Not you? Call ..." footer is a notice word; "Dr." / "Cr." mark real money moving, so the message must not be hidden.
+        val debit = "Rs 150.00 Dr. from A/C XXXXXX1234 and Cr. to shop@upi Ref:123456789012. AvlBal:Rs 900.00. Not you? Call 18005700"
+        assertFalse(CandidateScreen.clearlyNotMoney(debit))
+        val r = added("AD-MyAdded", debit)
+        if (r is ParseResult.Ignored) assertFalse(r.reason == CandidateScreen.HIDDEN_NOTICE, debit)
+        // Look-alike that must stay hidden: same footer, no money mark, a bundle offer.
+        assertTrue(CandidateScreen.clearlyNotMoney("Get a data bundle offer today. Not you? Call 18005700"))
+    }
 }
