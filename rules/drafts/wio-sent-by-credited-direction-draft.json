@@ -1,0 +1,11 @@
+{
+  "_note": "DRAFT for the owner, 25 Nov 2026 loop run. NOT in any published pack. Wio 'AED x sent by NAME and has been credited into your account number N' is read today by the built-in auto reader as TRANSFER_OUT ('Money out') although money arrives. This rule reads it as TRANSFER_IN (account, counterparty as merchant). It changes how an already-read message is read, so the loop may not publish it (hard limit 4); it also needs the owner to accept that a past reading flips from out to in. Evidence: 3 reports of the same shape (smart-read 2.5-beta/e7 x1, smart-read 2.7/e7 x1, held 2.8/e8 x1), all loose-masked. Tested through parseAsBank on invented wordings: in, look-alikes (sent TO, local transfer processed, BUY order debit, other bank) unchanged.",
+  "rule": {
+    "bank": "Wio",
+    "id": "wio-sent-by-credited-into-account-20261125",
+    "kind": "TRANSACTION",
+    "type": "TRANSFER_IN",
+    "cardType": "ACCOUNT",
+    "pattern": "{CUR}\\s*{AMOUNT}\\s+sent by\\s+{MERCHANT}\\s+and has been credited into your account number\\s+{CARD}"
+  }
+}
