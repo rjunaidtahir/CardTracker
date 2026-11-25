@@ -25,4 +25,17 @@ class LoungePurchaseNotHiddenTest {
         val r = SmsParser.parseAsBank("ADCB", body, received, zone)
         assertIs<ParseResult.Ignored>(r, "got $r")
     }
+
+    /** 25 Nov 2026: SAB (Saudi Awwal Bank) Arabic POS purchase at "Awwal Lounge" was hidden; the Arabic word for balance now counts like "Avl". */
+    @Test fun arabicPosPurchaseAtALoungeIsNotHiddenByTheServiceNoticeIgnore() {
+        val body = "شراء عبر نقاط البيع بطاقة: 1234; VISA مبلغ: SAR 45.50 لدى: Awwal Lounge 1 رصيد: SAR 900.00 في: 24/11/2026 14:30"
+        val r = SmsParser.parseAsBank("SAB", body, received, zone)
+        if (r is ParseResult.Ignored) assertTrue(r.reason != "Card setting / service notice", "still hidden by lounge ignore")
+    }
+
+    @Test fun arabicLoungeAccessNoticeWithoutBalanceStaysHidden() {
+        val body = "استمتع بدخول صالة المطار lounge مجانا مع بطاقتك. T&C apply."
+        val r = SmsParser.parseAsBank("SAB", body, received, zone)
+        assertIs<ParseResult.Ignored>(r, "got $r")
+    }
 }
