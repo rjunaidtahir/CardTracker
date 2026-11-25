@@ -69,7 +69,7 @@ class ShippedPackV32Test {
         assertTrue(out.pack.rules.size >= 41)
         assertTrue(out.pack.ignore.size >= 57)
         assertTrue(out.pack.rules.any { it.rule.id == id })
-        assertTrue(out.pack.rules.any { it.rule.id == "mashreq-finance-charges-reversed-20261125" })
+        assertTrue(out.pack.rules.any { it.rule.id == mashreqId })
     }
 
     // ---- 25 Nov 2026, 19:23 slot additions (same v32 bump): 1 reading rule + 3 ignore entries ----
