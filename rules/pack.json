@@ -1,5 +1,5 @@
 {
-  "version": 27,
+  "version": 28,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -29,7 +29,8 @@
       "State Bank of India",
       "Bank of Baroda",
       "SAB",
-      "Pakistan bank 8810/8812/9225"
+      "Pakistan bank 8810/8812/9225",
+      "Deem"
     ]
   },
   "banks": [
@@ -150,6 +151,14 @@
       "country": "AE",
       "senderIds": [
         "WALLET"
+      ],
+      "track": true
+    },
+    {
+      "name": "Deem",
+      "country": "AE",
+      "senderIds": [
+        "DEEM"
       ],
       "track": true
     }
@@ -443,6 +452,14 @@
       "cardType": "ACCOUNT",
       "fixedMerchant": "Term deposit matured",
       "pattern": "Your term deposit\\s+[^.]{1,60}?\\s+is now mature\\.\\s*An amount of\\s+{CUR}\\s*{AMOUNT}\\s+has been credited to\\s+(?:your\\s+)?(?:Current|Savings)\\s+Account"
+    },
+    {
+      "bank": "Deem",
+      "id": "deem-credit-card-purchase-20261125",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "Thank you for\\s+\\w+\\s+your\\s+(?:[^.]{0,30}?\\s)?Credit Card ending(?:\\s+in)?\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Your available balance is\\s+{ANYCUR}\\s*{AVAIL})?"
     }
   ],
   "ignore": [
@@ -633,6 +650,22 @@
     {
       "label": "Declined: Tabby card limit too low",
       "pattern": "Not enough available balance\\.\\s*To shop at\\s.{1,60}?\\sfor\\s+[A-Z]{3}\\s*[\\d,.]+,\\s*make a payment to increase your Tabby Card limit"
+    },
+    {
+      "label": "Notice: DIB balance conversion",
+      "pattern": "your request for\\s+(?:[^.]{1,30}?\\s)?balance conversion of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+has been successfully processed on your"
+    },
+    {
+      "label": "Notice: account balance, recharge link",
+      "pattern": "balance in your account\\s+\\S{1,12}\\s+is\\s+[A-Z]{3}\\s*[\\d,.]+\\.\\s*Recharge via"
+    },
+    {
+      "label": "Notice: Amazon refund will be credited",
+      "pattern": "Refund\\s+\\w{1,20}:\\s*Amount\\s+[A-Z]{3}\\s*[\\d,.]+\\s*\\(.{1,120}?\\swill be credited to your\\b"
+    },
+    {
+      "label": "Notice: du balance after credit",
+      "pattern": "Your account has been credited successfully\\.\\s*Your new balance is\\s+[A-Z]{3}\\s*[\\d,.]+\\.\\s*Stay connected with the best deals"
     }
   ],
   "categories": [
