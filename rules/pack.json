@@ -1,5 +1,5 @@
 {
-  "version": 37,
+  "version": 38,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -1029,6 +1029,15 @@
         "direction": "OUT",
         "fixedMerchant": "Cheque",
         "pattern": "Cheque no\\.?\\s*\\d+\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+was cleared from your a/c\\s+{CARD}\\.?(?:\\s+And your account balance is\\s+[\\d,.]+)?"
+      },
+      {
+        "bank": "IDFC FIRST Bank",
+        "id": "idfc-fastag-toll-paid-20261126",
+        "kind": "TRANSACTION",
+        "type": "PURCHASE",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+toll paid from\\s+IDFC FIRST Bank Tag\\s+{CARD}\\s+for vehicle no\\.?\\s*\\S+\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Avbl\\.?\\s*Bal\\.?:?\\s*(?:{ANYCUR}|Rs\\.?)\\s*{AVAIL})?"
       }
     ]
   }
