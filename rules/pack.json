@@ -1,5 +1,5 @@
 {
-  "version": 34,
+  "version": 35,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -740,6 +740,10 @@
     {
       "label": "Advert: Digital Rupee PIN-less pay",
       "pattern": "PIN\\s*less payments up to\\s+[^\\d\\s]{0,4}\\s*[\\d,.]+\\.?\\s*Use Digital Rupee by"
+    },
+    {
+      "label": "Notice: Mashreq low credit limit",
+      "pattern": "\\d{1,2}%\\s+credit limit is available on your Mashreq Credit Card"
     }
   ],
   "categories": [
@@ -981,6 +985,15 @@
         "direction": "OUT",
         "fixedMerchant": "Outward transfer",
         "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?:MB FUND TRANSFER DEBIT|OUTWARD UAE FUNDS TRANS(?:FER)?(?: IPI)?)\\.\\s+Available balance"
+      },
+      {
+        "bank": "Al Hilal",
+        "id": "alhilal-transfer-out-20261126",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "Transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from account ending with\\s+{CARD}\\.\\s+New balance:"
       }
     ]
   }
