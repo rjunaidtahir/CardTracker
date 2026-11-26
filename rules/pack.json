@@ -1,5 +1,5 @@
 {
-  "version": 35,
+  "version": 36,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -774,7 +774,9 @@
         "MINI MA",
         "AL AIN COOP",
         "ADCOOPS",
-        "SUPER MARKET"
+        "SUPER MARKET",
+        "TROLLEYS",
+        "SPRMKT"
       ]
     },
     {
@@ -818,7 +820,13 @@
         "NANDOS",
         "POPEYES",
         "JOLLIBEE",
-        "KRISPY KREME"
+        "KRISPY KREME",
+        "KYOCHON",
+        "VASANTA BHAVAN",
+        "NOVIKOV",
+        "BENIHANA",
+        "SALTBAE",
+        "MC DONALD"
       ]
     },
     {
@@ -860,7 +868,13 @@
         "MOTHERCARE",
         "LC WAIKIKI",
         "FLIPKART",
-        "MUMUSO"
+        "MUMUSO",
+        "KHAADI",
+        "GIORDANO",
+        "OAKLEY",
+        "NATURALIZER",
+        "VESTIAIRE",
+        "SWATCH"
       ]
     },
     {
@@ -877,7 +891,9 @@
         "PREMIER INN",
         "WIZZAIR",
         "TRIP.COM",
-        "BOOKING.C"
+        "BOOKING.C",
+        "FLYNAS",
+        "MYHOLIDAYS"
       ]
     },
     {
@@ -892,7 +908,8 @@
         "TRAFFIC FINES",
         "DUBAI MUNICIPALITY",
         "DEPT OF MUNCIPAL",
-        "FED AUTH FOR ID"
+        "FED AUTH FOR ID",
+        "IMMIGRATION"
       ]
     },
     {
@@ -916,7 +933,8 @@
         "VIRGIN MOBILE",
         "SHARJAH ELECTRICITY",
         "DUBAI ELECTRICITY",
-        "E& TELECOM"
+        "E& TELECOM",
+        "BSNL"
       ]
     },
     {
@@ -924,7 +942,9 @@
       "words": [
         "KIDOOS",
         "GLOBAL VILLAGE",
-        "KIDS AMUSEMENT"
+        "KIDS AMUSEMENT",
+        "THEME PARK",
+        "THEATRE"
       ]
     },
     {
@@ -937,7 +957,12 @@
         "ECZANE",
         "AL FUTTAIM HC",
         "MEDICINA",
-        "NOOR ALAHLI"
+        "NOOR ALAHLI",
+        "MEDI PRIME",
+        "BURJEEL",
+        "ACIBADEM",
+        "AMAVITA",
+        "APOTHEKE"
       ]
     }
   ],

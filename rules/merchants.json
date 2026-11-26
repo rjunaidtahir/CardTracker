@@ -1,5 +1,5 @@
 {
-  "lastTimestamp": "11/25/2026 9:22:04",
+  "lastTimestamp": "11/26/2026 8:40:11",
   "examples": [
     {
       "name": "SUNRISE CITY SPMKT OUD",
@@ -362,10 +362,6 @@
       "category": "Groceries"
     },
     {
-      "name": "NAHDHAT AL MADINA SMKT",
-      "category": "Groceries"
-    },
-    {
       "name": "AL SHIBANI MEAT AND VE",
       "category": "Groceries"
     },
@@ -552,6 +548,106 @@
     {
       "name": "FED AUTH FOR IDEN CITZ",
       "category": "Government & fees"
+    },
+    {
+      "name": "TROLLEYS SMKT SHJ BR",
+      "category": "Groceries"
+    },
+    {
+      "name": "MY FATOORAH SPRMKT",
+      "category": "Groceries"
+    },
+    {
+      "name": "KYOCHON DCC",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "VASANTA BHAVAN VEGETAR",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "NOVIKOV",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "BENIHANA COVENT GARDEN",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "SALTBAE IGA AIRPORT",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "MC DONALDS DIBBA FUJ",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "MEDI PRIME AL MAJAZ PHA",
+      "category": "Health"
+    },
+    {
+      "name": "BURJEEL DAY SURGERY",
+      "category": "Health"
+    },
+    {
+      "name": "SBX IST ACIBADEM HOSP",
+      "category": "Health"
+    },
+    {
+      "name": "AMAVITA GARE GEN VE",
+      "category": "Health"
+    },
+    {
+      "name": "GSTAADERHOF APOTHEKE",
+      "category": "Health"
+    },
+    {
+      "name": "FLYNAS COMPANY",
+      "category": "Travel"
+    },
+    {
+      "name": "MYHOLIDAYS COM",
+      "category": "Travel"
+    },
+    {
+      "name": "ABU DHABI THEME PARKS",
+      "category": "Entertainment"
+    },
+    {
+      "name": "SHAFTESBURY THEATRE",
+      "category": "Entertainment"
+    },
+    {
+      "name": "BSNL",
+      "category": "Utilities & bills"
+    },
+    {
+      "name": "IMMIGRATION CANADA - C",
+      "category": "Government & fees"
+    },
+    {
+      "name": "KHAADI",
+      "category": "Shopping"
+    },
+    {
+      "name": "GIORDANO FASHIONS LLC",
+      "category": "Shopping"
+    },
+    {
+      "name": "OAKLEY",
+      "category": "Shopping"
+    },
+    {
+      "name": "NATURALIZER",
+      "category": "Shopping"
+    },
+    {
+      "name": "VESTIAIRECOLLECTIVE",
+      "category": "Shopping"
+    },
+    {
+      "name": "SWATCHS SHOP",
+      "category": "Shopping"
     }
   ],
   "skipped": [
@@ -621,6 +717,26 @@
     "E& DIGITAL APP",
     "FUNCITY OASIS",
     "TITAN COMPANY",
-    "Q MOBILITY"
+    "Q MOBILITY",
+    "SHAMSEEN BAKEIRES",
+    "ABU DHABI HEALTH SERVI",
+    "ZAHRAT AL YASMEEN PH",
+    "WEST HILL SUPER",
+    "AMBER AL MADINA HYPE",
+    "NAJMAT LAHORE REST",
+    "YANGO",
+    "DOLLAR RENT",
+    "HERTZ",
+    "HAPPY JOURNEY TRAVEL",
+    "GETYOURGUIDE",
+    "BATA",
+    "TORTILLA",
+    "CHAI AND CO",
+    "ZETTLE",
+    "OPENAI CHATGPT",
+    "DIALOG AXIATA",
+    "EMIRATES POST GROUP",
+    "GOVT OF",
+    "ISTYLE COMPUTERS"
   ]
 }
