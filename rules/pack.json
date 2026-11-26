@@ -1,5 +1,5 @@
 {
-  "version": 36,
+  "version": 37,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -1019,6 +1019,16 @@
         "cardType": "ACCOUNT",
         "direction": "OUT",
         "pattern": "Transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from account ending with\\s+{CARD}\\.\\s+New balance:"
+      },
+      {
+        "bank": "ADIB",
+        "id": "adib-cheque-cleared-20261126",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "fixedMerchant": "Cheque",
+        "pattern": "Cheque no\\.?\\s*\\d+\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+was cleared from your a/c\\s+{CARD}\\.?(?:\\s+And your account balance is\\s+[\\d,.]+)?"
       }
     ]
   }
