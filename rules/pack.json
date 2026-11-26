@@ -1,5 +1,5 @@
 {
-  "version": 33,
+  "version": 34,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -502,6 +502,14 @@
       "type": "REFUND",
       "cardType": "CREDIT",
       "pattern": "حوالة عكسية\\s+تم عكس المبلغ\\s+{CUR}\\s*{AMOUNT}\\s+على بطاقتك\\s+[^()]{1,40}?\\(\\s*{CARD}\\s*\\)\\s+لدى:\\s*{MERCHANT}\\s+تاريخ:\\s*{DATETIME}"
+    },
+    {
+      "bank": "SAB",
+      "id": "sab-card-refund-20261126",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "pattern": "بطاقة إئتمانية:\\s*إسترداد مبلغ\\s+بطاقة:\\s*\\S+\\s+رقم:\\s*{CARD}\\s+من:\\s*{MERCHANT}\\s+مبلغ:\\s*{CUR}\\s*{AMOUNT}\\s+رصيد:\\s*{ANYCUR}\\s*[\\d,.]+\\s+في:\\s*{DATETIME}"
     }
   ],
   "ignore": [
@@ -932,7 +940,8 @@
   "ext": {
     "levers": {
       "wordingBanks": true,
-      "curAbbrev": true
+      "curAbbrev": true,
+      "acctToken": true
     },
     "rules": [
       {
@@ -943,6 +952,35 @@
         "cardType": "ACCOUNT",
         "direction": "OUT",
         "pattern": "{CUR}\\s*{AMOUNT}\\s+Dr\\.\\s+from\\s+A/C\\s+{CARD}\\s+and\\s+Cr\\.\\s+to\\s+{MERCHANT}\\s+Ref:?\\s*\\d+"
+      },
+      {
+        "bank": "Dubai Islamic Bank",
+        "id": "dib-drawn-fees-20261126",
+        "kind": "TRANSACTION",
+        "type": "PURCHASE",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "fixedMerchant": "Bank fees",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?:PROCESSING FEES?|[A-Z .]{0,40}SERVICE CHARGES|[A-Z .]{0,40}ISSUANCE CHARGES|[A-Z ]{0,40}TRF CHGS[A-Z ]{0,10})\\.\\s+Available balance"
+      },
+      {
+        "bank": "Dubai Islamic Bank",
+        "id": "dib-drawn-bill-payment-20261126",
+        "kind": "TRANSACTION",
+        "type": "PURCHASE",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?!(?:OWN|MB|PYMT|DIRECT)\\b){MERCHANT}\\s+PAYMENT\\.\\s+Available balance"
+      },
+      {
+        "bank": "Dubai Islamic Bank",
+        "id": "dib-drawn-outward-transfer-20261126",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "fixedMerchant": "Outward transfer",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?:MB FUND TRANSFER DEBIT|OUTWARD UAE FUNDS TRANS(?:FER)?(?: IPI)?)\\.\\s+Available balance"
       }
     ]
   }
