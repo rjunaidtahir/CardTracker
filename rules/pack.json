@@ -1,5 +1,5 @@
 {
-  "version": 39,
+  "version": 40,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -744,6 +744,10 @@
     {
       "label": "Notice: Mashreq low credit limit",
       "pattern": "\\d{1,2}%\\s+credit limit is available on your Mashreq Credit Card"
+    },
+    {
+      "label": "Advert: SIB savings account millionaire",
+      "pattern": "Awaits!\\s*Your Savings Account makes you a MILLIONAIRE!"
     }
   ],
   "categories": [
