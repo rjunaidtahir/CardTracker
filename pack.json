@@ -1,0 +1,1084 @@
+{
+  "version": 41,
+  "minEngine": 5,
+  "sendMore": {
+    "banks": [
+      "Mashreq",
+      "HDFC Bank",
+      "Emirates NBD",
+      "ADCB",
+      "CBD",
+      "Sharjah Islamic Bank",
+      "HSBC",
+      "RAKBANK",
+      "Wio",
+      "ADIB",
+      "Axis Bank",
+      "FAB",
+      "Liv",
+      "Citibank",
+      "Al Hilal",
+      "ICICI Bank",
+      "Kotak Mahindra Bank",
+      "Ajman Bank",
+      "Punjab National Bank",
+      "Discover",
+      "Dubai First",
+      "Dubai Islamic Bank",
+      "Emirates Islamic",
+      "State Bank of India",
+      "Bank of Baroda",
+      "SAB",
+      "Pakistan bank 8810/8812/9225",
+      "Deem"
+    ]
+  },
+  "banks": [
+    {
+      "name": "Tabby",
+      "country": "AE",
+      "aliases": [
+        "Tabby Card"
+      ],
+      "senderIds": [
+        "Tabby"
+      ],
+      "track": true
+    },
+    {
+      "name": "ADCB",
+      "country": "AE",
+      "aliases": [
+        "SimplyLife"
+      ],
+      "senderIds": [
+        "SIMPLYLIFE"
+      ],
+      "track": true
+    },
+    {
+      "name": "Tamara",
+      "country": "AE",
+      "aliases": [
+        "Tamara Pay Later"
+      ]
+    },
+    {
+      "name": "Postpay",
+      "country": "AE"
+    },
+    {
+      "name": "Spotii",
+      "country": "AE"
+    },
+    {
+      "name": "Cashew",
+      "country": "AE"
+    },
+    {
+      "name": "CBD Now",
+      "country": "AE",
+      "aliases": [
+        "Commercial Bank of Dubai"
+      ]
+    },
+    {
+      "name": "ADCB Hayyak",
+      "country": "AE",
+      "aliases": [
+        "Hayyak"
+      ]
+    },
+    {
+      "name": "E20",
+      "country": "AE",
+      "aliases": [
+        "Emirates Islamic E20"
+      ]
+    },
+    {
+      "name": "Reem Community Bank",
+      "country": "AE"
+    },
+    {
+      "name": "YAP",
+      "country": "AE"
+    },
+    {
+      "name": "Xpence",
+      "country": "AE"
+    },
+    {
+      "name": "Dubai Islamic Bank",
+      "country": "AE",
+      "senderIds": [
+        "DIB-SMS"
+      ]
+    },
+    {
+      "name": "SAB",
+      "country": "AE",
+      "senderIds": [
+        "SAB"
+      ]
+    },
+    {
+      "name": "State Bank of India",
+      "country": "IN",
+      "senderIds": [
+        "CBSSBI",
+        "SBIUPI"
+      ]
+    },
+    {
+      "name": "Bank of Baroda",
+      "country": "IN",
+      "senderIds": [
+        "BOBSMS"
+      ]
+    },
+    {
+      "name": "Pakistan bank 8810/8812/9225",
+      "country": "PK",
+      "senderIds": [
+        "8810",
+        "8812",
+        "9225"
+      ]
+    },
+    {
+      "name": "Wallet",
+      "country": "AE",
+      "senderIds": [
+        "WALLET"
+      ],
+      "track": true
+    },
+    {
+      "name": "Deem",
+      "country": "AE",
+      "senderIds": [
+        "DEEM"
+      ],
+      "track": true
+    }
+  ],
+  "rules": [
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-thank-you-debit-20261116",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Thank you for\\s+\\w+\\s+(?:your\\s+)?(?:[^.]{0,40}?\\s)?Debit Card(?: Card)? ending\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+(?:Avl\\.?\\s*(?:Limit|Bal)|Available (?:Limit|Balance))\\s*(?:is|:)?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-thank-you-purchase-20261116",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "Thank you for\\s+\\w+\\s+(?:your\\s+)?(?:[^.]{0,40}?\\s)?Card ending\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+(?:Avl\\.?\\s*(?:Limit|Bal)|Available (?:Limit|Balance))\\s*(?:is|:)?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "HDFC Bank",
+      "id": "hdfc-aed-card-purchase",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Thanks for\\s+\\w+\\s+HDFC Bank\\s+[^.]{0,40}?Card\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Card Bal:?\\s*{ANYCUR}\\s*[\\d,.]+)?"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-debit-card-funds-transfer",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Liv",
+      "id": "liv-debit-card-funds-transfer",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "ADIB",
+      "id": "adib-trx-approved",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Trx\\.? of\\s+{CUR}\\s*{AMOUNT}\\s+on your card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\s+is approved\\.?(?:\\s+Avl\\.?\\s*card bal(?:ance)? is\\s+[\\d,.]+\\.?)?(?:\\s+Trx\\.? date:?\\s*{DATETIME})?"
+    },
+    {
+      "bank": "Sharjah Islamic Bank",
+      "id": "sib-outward-remit",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "A/C\\s+{CARD}\\s+outward remit\\s+{CUR}\\s*{AMOUNT}\\.?(?:\\s+Available balance is\\s+{ANYCUR}\\s*\\+?{AVAIL})?",
+      "fixedMerchant": "Outward remittance"
+    },
+    {
+      "bank": "Sharjah Islamic Bank",
+      "id": "sib-card-txn-approved",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "A txn on your card\\s+{CARD}\\s+at\\s+{MERCHANT}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}(?:\\s*at\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?\\s+is approved\\.?(?:\\s+Your available balance is\\s+[\\d,.]+)?"
+    },
+    {
+      "bank": "CBD",
+      "id": "cbd-credit-card-payment",
+      "kind": "TRANSACTION",
+      "type": "PAYMENT",
+      "cardType": "CREDIT",
+      "pattern": "thank you for your credit card payment via funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+for card ending\\s+{CARD}(?:\\s+on\\s+{DATETIME})?",
+      "fixedMerchant": "Card payment received"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-debit-card-refund",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "DEBIT",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+has been refunded to your debit card\\s+{CARD}\\s+on\\s+{DATETIME}\\s*by\\s+{MERCHANT}\\.\\s*The amount will be credited"
+    },
+    {
+      "bank": "CBD",
+      "id": "cbd-card-debited",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "A transaction of\\s+{CUR}\\s*{AMOUNT}\\s+has been debited from your\\s+[^.]{0,40}?\\s*{CARD}\\s+at\\s+{MERCHANT}\\.?\\s+Your balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Sharjah Islamic Bank",
+      "id": "sib-card-purchase-lines",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "(?:{DATETIME}\\s*)?Card\\s*:\\s*{CARD}\\s+Purchase\\s+(?:\\w+\\s+)?(?:\\w+\\s+)?of\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s*$"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-cheque-debit",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Cheque no\\.?\\s*\\d+\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+\\w+\\s+on\\s+{DATETIME}\\s+for debit from\\s+[^.]{0,20}\\.?\\s*no\\.?\\s*{CARD}\\.?(?:\\s+Avl Bal\\.?\\s*{ANYCUR}\\s*{AVAIL})?",
+      "fixedMerchant": "Cheque"
+    },
+    {
+      "bank": "Axis Bank",
+      "id": "axis-debit-alert",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Debit\\s+{CUR}\\s*{AMOUNT}\\s+A/c\\s+(?:no\\.?\\s*)?{CARD}\\s+{DATETIME}\\s*{MERCHANT}\\s+Bal-"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-debit-card-funds-transfer-b",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.?\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Liv",
+      "id": "liv-debit-card-funds-transfer-b",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Funds transfer of\\s+{CUR}\\s*{AMOUNT}\\s+has been made\\s+\\w+(?:\\s+\\w+)?\\s+your debit card ending\\s+{CARD}\\s+at\\s+{MERCHANT}\\.?\\s+Your current balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-debit-card-refund-b",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "DEBIT",
+      "pattern": "{CUR}\\s*{AMOUNT}\\s+has been refunded to your debit card\\s+{CARD}\\s+on\\s+{DATETIME}\\s*by\\s+{MERCHANT}\\.?\\s*The amount will be credited"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-card-payment",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "card payment\\.\\s*{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+(?:\\w+\\s+)?your Wio\\b"
+    },
+    {
+      "bank": "CBD",
+      "id": "cbd-card-debited-c",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "A transaction of\\s+{CUR}\\s*{AMOUNT}\\s+(?:has been\\s+|was\\s+)?debited from your\\s+[^.]{0,40}?\\s*{CARD}\\s+(?:at\\s+)?{MERCHANT}\\.?\\s+Your balance is\\s+{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Ajman Bank",
+      "id": "ajman-credit-card-spent",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "You have spent\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on your credit card ending with\\s+{CARD}\\s+on\\s+{DATETIME}\\.?(?:\\s+Available Limit:?\\s*{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Axis Bank",
+      "id": "axis-prepaid-recharge",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "Mobile recharge",
+      "pattern": "Recharge of\\s+{CUR}\\s*{AMOUNT}\\s+for\\s+[^.]{1,40}?Prepaid\\s+[\\d*X]+\\s+has been processed successfully"
+    },
+    {
+      "bank": "ICICI Bank",
+      "id": "icici-card-reversal",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Reversal",
+      "pattern": "Reversal of\\s+{CUR}\\s*{AMOUNT}\\s+credited to ICICI Bank Credit Card\\s+{CARD}\\s+on\\s+{DATETIME}"
+    },
+    {
+      "bank": "ADCB",
+      "id": "adcb-debit-card-linked-used-20261122",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "debit card\\s+{CARD}\\s+linked to acc\\.?\\s+\\S+\\s+was used for\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}\\s+at\\s+{MERCHANT}\\s*\\.\\s*Avl\\.?\\s*Bal\\.?\\s*{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-everyday-cashback-credit-20261122",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Cashback",
+      "pattern": "Congrats,?\\s*{CUR}\\s*{AMOUNT}\\s+has been credited to your Credit Card ending(?: with)?\\s+(?=[X*]*\\d{4}\\b){CARD}\\s+as part of Everyday Cashback offers"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-cashback-credited-spends-20261122",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Cashback",
+      "pattern": "Cashback of\\s+{CUR}\\s*{AMOUNT}\\s+is credited to your Credit Card ending(?: with)?\\s+{CARD}\\s+for\\s+[A-Za-z]{3,9}['’]?\\d{2,4}\\s+e-commerce spends"
+    },
+    {
+      "bank": "HDFC Bank",
+      "id": "hdfc-autopay-emandate-success-20261122",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "AutoPay \\(E-mandate\\) Success(?:ful)?!\\s+For\\s+{MERCHANT}(?:\\s*\\.\\.)?\\s+(?:Current\\s+)?Txn Amt:\\s*{CUR}\\s*{AMOUNT}\\s+(?:Date|Dt):\\s*{DATETIME}\\s+Via:\\s*(?:E-mandate on\\s+)?HDFC Bank (?:Credit Card|CC)\\s+{CARD}\\b"
+    },
+    {
+      "bank": "HDFC Bank",
+      "id": "hdfc-credit-card-spent-on-at-20261122",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "You['’]ve spent\\s+{CUR}\\s*{AMOUNT}\\s+On HDFC Bank CREDIT Card\\s+{CARD}\\s+At\\s+{MERCHANT}\\s+On\\s+{DATETIME}:\\d{1,2}:\\d{2}(?::\\d{2})?\\s*Avl bal:?\\s*{ANYCUR}\\s*{AVAIL}"
+    },
+    {
+      "bank": "Punjab National Bank",
+      "id": "pnb-account-debited-thru-upi-20261122",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "UPI payment",
+      "pattern": "A/c\\s+{CARD}\\s+has been debited with\\s+{CUR}\\s*{AMOUNT}\\s+on\\s+{DATETIME}\\s*thru UPI"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-card-payment-two-amounts-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "card payment\\.\\s*{CUR}\\s*{AMOUNT}\\s*\\(\\s*{ANYCUR}\\s*[\\d,.]+\\s*\\)\\s+at\\s+{MERCHANT}\\s+using your Wio\\b[^.]{0,30}?\\bcard\\s+{CARD}"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-payment-was-done-lounge-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "Payment of\\s+{CUR}\\s*{AMOUNT}(?:\\s*\\(\\s*{ANYCUR}\\s*[\\d,.]+\\s*\\))?\\s+was done at\\s+(?=[^.]{0,60}?\\blounge\\b){MERCHANT}\\s+using your Wio\\b[^.]{0,30}?\\bcard\\s+{CARD}"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-payment-cancelled-credited-back-20261123",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "DEBIT",
+      "pattern": "Payment of\\s+{CUR}\\s*{AMOUNT}(?:\\s*\\(\\s*{ANYCUR}\\s*[\\d,.]+\\s*\\))?\\s+at\\s+{MERCHANT}\\s+was cancelled and the amount has been credited back to your Wio\\b[^.]{0,30}?\\bcard ending(?: with)?\\s+{CARD}"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-local-transfer-processed-20261123",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Your local transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from your account number\\s+{CARD}\\s+was processed"
+    },
+    {
+      "bank": "Wallet",
+      "id": "wallet-card-payment-visa-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "^\\s*{MERCHANT}\\.\\s*{CUR}\\s*{AMOUNT}\\s+with\\s+Visa\\s+(?:Infinite|Signature|Platinum|Gold|Classic|Titanium)\\s+{CARD}\\s*$"
+    },
+    {
+      "bank": "Wallet",
+      "id": "wallet-card-payment-personal-20261123",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "DEBIT",
+      "pattern": "^\\s*{MERCHANT}\\.\\s*{CUR}\\s*{AMOUNT}\\s+with\\s+Wio Personal\\s+{CARD}\\s*$"
+    },
+    {
+      "bank": "Wio",
+      "id": "wio-term-deposit-matured-credited-20261124",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_IN",
+      "cardType": "ACCOUNT",
+      "fixedMerchant": "Term deposit matured",
+      "pattern": "Your term deposit\\s+[^.]{1,60}?\\s+is now mature\\.\\s*An amount of\\s+{CUR}\\s*{AMOUNT}\\s+has been credited to\\s+(?:your\\s+)?(?:Current|Savings)\\s+Account"
+    },
+    {
+      "bank": "Deem",
+      "id": "deem-credit-card-purchase-20261125",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "Thank you for\\s+\\w+\\s+your\\s+(?:[^.]{0,30}?\\s)?Credit Card ending(?:\\s+in)?\\s+{CARD}\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Your available balance is\\s+{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Deem",
+      "id": "deem-credit-card-online-20261125",
+      "kind": "TRANSACTION",
+      "type": "PURCHASE",
+      "cardType": "CREDIT",
+      "pattern": "Thank you for\\s+\\w+\\s+your\\s+(?:[^.]{0,30}?\\s)?Credit Card ending(?:\\s+in)?\\s+{CARD}\\s+online\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Your available balance is\\s+{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Emirates NBD",
+      "id": "enbd-arabic-card-payment-received-20261125",
+      "kind": "TRANSACTION",
+      "type": "PAYMENT",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Card payment received",
+      "pattern": "تم\\u0651?\\s+استلام\\s*{CUR}\\s*{AMOUNT}\\s+كدفعة\\s+لصالح\\s+بطاقتك\\s+الائتمانية\\s+المنتهية\\s+أرقامها\\s+بـ\\s*{CARD}\\s+في\\s+{DATETIME}\\s+عبر\\s+الخدمات\\s+المصرفية\\s+عبر\\s+الإنترنت\\.?(?:\\s+الحد\\s+المتوفر\\s+لك\\s+{ANYCUR}\\s*{AVAIL})?"
+    },
+    {
+      "bank": "Mashreq",
+      "id": "mashreq-finance-charges-reversed-20261125",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "fixedMerchant": "Finance charges reversal",
+      "pattern": "finance charges of\\s+{CUR}\\s*{AMOUNT}\\s+have been reversed to your credit card ending\\s+{CARD}"
+    },
+    {
+      "bank": "SAB",
+      "id": "sab-funds-transfer-accepted-20261125",
+      "kind": "TRANSACTION",
+      "type": "TRANSFER_OUT",
+      "cardType": "ACCOUNT",
+      "pattern": "Funds?\\s+Transfer Accepted\\s+From:\\s*{CARD}\\s+To:\\s*{MERCHANT}\\s+IBAN:\\s*\\S+(?:\\s+[A-Za-z][^:]{0,40}?)?\\s+Amount:\\s*{CUR}\\s*{AMOUNT}\\s+Fees:\\s*{ANYCUR}\\s*[\\d,.]+\\s+(?:On|Date):\\s*{DATETIME}"
+    },
+    {
+      "bank": "SAB",
+      "id": "sab-reversal-to-card-refund-20261125",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "pattern": "حوالة عكسية\\s+تم عكس المبلغ\\s+{CUR}\\s*{AMOUNT}\\s+على بطاقتك\\s+[^()]{1,40}?\\(\\s*{CARD}\\s*\\)\\s+لدى:\\s*{MERCHANT}\\s+تاريخ:\\s*{DATETIME}"
+    },
+    {
+      "bank": "SAB",
+      "id": "sab-card-refund-20261126",
+      "kind": "TRANSACTION",
+      "type": "REFUND",
+      "cardType": "CREDIT",
+      "pattern": "بطاقة إئتمانية:\\s*إسترداد مبلغ\\s+بطاقة:\\s*\\S+\\s+رقم:\\s*{CARD}\\s+من:\\s*{MERCHANT}\\s+مبلغ:\\s*{CUR}\\s*{AMOUNT}\\s+رصيد:\\s*{ANYCUR}\\s*[\\d,.]+\\s+في:\\s*{DATETIME}"
+    }
+  ],
+  "ignore": [
+    {
+      "label": "Declined: insufficient balance",
+      "pattern": "cannot be processed due to insufficient balance"
+    },
+    {
+      "label": "Notice: transfer limit raised",
+      "pattern": "is pleased to .{1,120} in your account\\. For .{1,30} call .{1,20} or visit your .{1,30} branch"
+    },
+    {
+      "label": "Notice: IBFT limit advert",
+      "pattern": "now .{1,30} IBFT transactions up to [A-Z]{3} [\\d,.]+/-"
+    },
+    {
+      "label": "Advert: instant credit branches",
+      "pattern": "branches for instant credit to your account"
+    },
+    {
+      "label": "Telecom bill reminder",
+      "pattern": "Total payable are [A-Z]{3} [\\d,.]+"
+    },
+    {
+      "label": "Telecom bill due notice",
+      "pattern": "Your total bill for .{1,40} is [A-Z]{3} [\\d,.]+, Please pay by"
+    },
+    {
+      "label": "Failed payment notice",
+      "pattern": "Your payment of [A-Z]{3} [\\d,.]+ is failed"
+    },
+    {
+      "label": "UPI payment request",
+      "pattern": "has requested .{1,40}? from you on your .{1,30}? UPI\\."
+    },
+    {
+      "label": "Payee added notice",
+      "pattern": "Payee .{1,60}? added\\. Transfer funds after"
+    },
+    {
+      "label": "Card spend promo",
+      "pattern": "spend is on us!"
+    },
+    {
+      "label": "Currency rate alert",
+      "pattern": "we have a new update for your currency .{1,20}? alert"
+    },
+    {
+      "label": "Future-dated payment set up",
+      "pattern": "you have .{1,10}? up a .{1,15}? dated (?:payment|transfer) through online/mobile banking"
+    },
+    {
+      "label": "Credit card approved notice",
+      "pattern": "your FAB credit card has been approved with a limit of"
+    },
+    {
+      "label": "Card purchase initiated (one-time code)",
+      "pattern": "has been initiated\\. Please log in to your Banking App"
+    },
+    {
+      "label": "Notice: balance converted to instalments",
+      "pattern": "Balance Conversion of\\s+[A-Z]{3}\\s+[\\d,.]+\\s+on Credit Card ending"
+    },
+    {
+      "label": "Card offer with code",
+      "pattern": "\\bUse Code:\\s*\\w+"
+    },
+    {
+      "label": "Debit card offer with code",
+      "pattern": "the code ADCB\\d+"
+    },
+    {
+      "label": "Notice: transfer limit changed",
+      "pattern": "Transfer limit is now .{1,30} to [A-Z]{3} [\\d,.]+"
+    },
+    {
+      "label": "Notice: Tabby card limit increased",
+      "pattern": "Tabby Card total limit is now increased to [A-Z]{3}\\s*[\\d,.]+"
+    },
+    {
+      "label": "Statement notice with no due date",
+      "pattern": "\\bCC has a credit balance\\s+(?:of\\s+)?[A-Z]{3}\\s*[\\d,.]+\\s+with Min(?:imum)? Due\\s+[A-Z]{3}\\s*[\\d,.]+"
+    },
+    {
+      "label": "Declined: card txn not processed",
+      "pattern": "\\btxn\\b.{1,30}\\bon card\\b.{1,120}was not processed"
+    },
+    {
+      "label": "Reminder: ICICI total due",
+      "pattern": "Total Amount Due on ICICI Bank Credit Card\\s+\\S{1,12}\\s+is\\s+[A-Z]{3}"
+    },
+    {
+      "label": "Reminder: Wio payment due today",
+      "pattern": "Your credit payment is due today\\. Statement amount"
+    },
+    {
+      "label": "Reminder: Citibank minimum due",
+      "pattern": "(?:Pay minimum due of|a minimum due of)\\s+[A-Z]{3}\\s*[\\d,.]+"
+    },
+    {
+      "label": "Reminder: RAKBANK minimum due",
+      "pattern": "pay the min due of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+on your card"
+    },
+    {
+      "label": "Reminder: Mashreq minimum payment",
+      "pattern": "credit card min payment of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is due"
+    },
+    {
+      "label": "Notice: refund pending at merchant",
+      "pattern": "a credit refund of amount of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+is notified by merchant"
+    },
+    {
+      "label": "Notice: HDFC daily balance",
+      "pattern": "Available Bal in HDFC Bank A/c\\s+\\S{1,12}\\s+as on yesterday"
+    },
+    {
+      "label": "Notice: HDFC avg balance maintenance",
+      "pattern": "Avg\\. bal\\. maintained as on\\s.{1,60}?Avoid non-maintenance charges"
+    },
+    {
+      "label": "Payment request: CRED approval",
+      "pattern": "has requested money from you on CRED\\.\\s*On approving the request"
+    },
+    {
+      "label": "Reminder: HDFC amount due (PayZapp)",
+      "pattern": "Amt Due:?\\s*[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+on HDFC Bank (?:Credit )?Card\\s+\\S{1,8}\\.?\\s*Pay (?:Instant )?with PayZapp"
+    },
+    {
+      "label": "Declined: Kotak credit card txn",
+      "pattern": "on your Kotak Bank Credit Card\\s+\\S{1,12}\\s+of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+at\\s+.{1,60}?\\s+could not be approved"
+    },
+    {
+      "label": "Notice: HDFC third-party limit",
+      "pattern": "HDFC Bank Third Party Transfer limit is now set to"
+    },
+    {
+      "label": "Request: UPI collect (through UPI)",
+      "pattern": "has requested\\s+.{1,60}?\\s+from you through UPI\\.\\s*To authorize debit"
+    },
+    {
+      "label": "Notice: FAB Easy Payment Plan closed",
+      "pattern": "for an Easy Payment Plan for\\s+\\d+\\s+months with a\\s+[\\d.]+% interest rate and an\\s+[A-Z]{3}\\s*[\\d,.]+\\s+processing fee was approved and closed"
+    },
+    {
+      "label": "Notice: RAKBANK cashback approved",
+      "pattern": "cashback\\s.{1,60}?\\bis approved and will be credited to your card account"
+    },
+    {
+      "label": "Failed: HDFC autopay notice",
+      "pattern": "Autopay Failed:\\s*[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+on\\s.{1,30}?via HDFC Bank Card"
+    },
+    {
+      "label": "Failed: HDFC card transaction notice",
+      "pattern": "Transaction failed!\\s*For\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+To\\s.{1,60}?On HDFC Bank Credit Card\\s+\\S{1,12}\\.?\\s*Reason:"
+    },
+    {
+      "label": "Notice: PNB failed-ATM charge",
+      "pattern": "charge of\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\+GST shall be levied on failed domestic ATM cash withdrawal"
+    },
+    {
+      "label": "Advert: Liv fees changed",
+      "pattern": "Our fees have changed!\\s*Send money to\\s"
+    },
+    {
+      "label": "Notice: Wio upcoming subscription",
+      "pattern": "Upcoming\\s.{1,40}?\\ssubscription payment\\.\\s*Your\\s.{1,40}?\\ssubscription of\\s"
+    },
+    {
+      "label": "Failed: CBD bill low balance",
+      "pattern": "you did not have enough balance to pay your\\s.{1,40}?\\sbill of\\s"
+    },
+    {
+      "label": "Failed: CBD card txn not processed",
+      "pattern": "Transaction of\\s+[A-Za-z.]{2,4}\\s*[\\d,.]+\\s+with (?:Credit|Debit) Card ending\\s+\\S{1,8}\\s+at\\s.{1,60}?\\scould not be processed\\s+(?:since|due to)\\s"
+    },
+    {
+      "label": "Failed: ADCB debit card txn",
+      "pattern": "\\btxn at\\b.{1,100}?\\bfrom Debit Card\\s+\\S{1,12}\\s+failed due to\\b"
+    },
+    {
+      "label": "Advert: savings prize draw",
+      "pattern": "boost your chances to win\\s.{1,40}?\\bTeslas?\\b"
+    },
+    {
+      "label": "Notice: telecom credit call due",
+      "pattern": "used your [^.]{0,20}\\bCredit Call\\.\\s*With your [^.]{0,20}\\brecharge,?\\s+the amount of\\s.{0,80}?\\bwill be deducted"
+    },
+    {
+      "label": "Declined: Tabby card limit too low",
+      "pattern": "Not enough available balance\\.\\s*To shop at\\s.{1,60}?\\sfor\\s+[A-Z]{3}\\s*[\\d,.]+,\\s*make a payment to increase your Tabby Card limit"
+    },
+    {
+      "label": "Notice: DIB balance conversion",
+      "pattern": "your request for\\s+(?:[^.]{1,30}?\\s)?balance conversion of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+has been successfully processed on your"
+    },
+    {
+      "label": "Notice: account balance, recharge link",
+      "pattern": "balance in your account\\s+\\S{1,12}\\s+is\\s+[A-Z]{3}\\s*[\\d,.]+\\.\\s*Recharge via"
+    },
+    {
+      "label": "Notice: Amazon refund will be credited",
+      "pattern": "Refund\\s+\\w{1,20}:\\s*Amount\\s+[A-Z]{3}\\s*[\\d,.]+\\s*\\(.{1,120}?\\swill be credited to your\\b"
+    },
+    {
+      "label": "Notice: du balance after credit",
+      "pattern": "Your account has been credited successfully\\.\\s*Your new balance is\\s+[A-Z]{3}\\s*[\\d,.]+\\.\\s*Stay connected with the best deals"
+    },
+    {
+      "label": "Notice: FAB EPP closed (no rate)",
+      "pattern": "for an Easy Payment Plan for\\s+\\d+\\s+months with a\\s+%\\s*interest rate and an\\s+[A-Z]{3}\\s*[\\d,.]+\\s+processing fee was approved and closed"
+    },
+    {
+      "label": "Notice: SAB one-time password",
+      "pattern": "كلمة مرور صالحة لمرة واحدة.{0,60}?تأكيد العملية الشرائية عبر الإنترنت"
+    },
+    {
+      "label": "Declined: Mashreq e-com untrusted device",
+      "pattern": "e-com transaction of\\s+[A-Z]{3}\\s*[\\d,.]+\\s+was rejected on your card ending\\s+\\S+\\s+on\\s+.{1,40}?\\s+as your mobile is not registered as a trusted device"
+    },
+    {
+      "label": "Advert: Personal Loan ready (confirm)",
+      "pattern": "Personal Loan ready\\.\\s*Confirm to receive in your bank A/C"
+    },
+    {
+      "label": "Notice: Deem preauth hold",
+      "pattern": "Deem Credit card ending in\\s+\\S+\\s+for preauth transaction with an amount of"
+    },
+    {
+      "label": "Advert: Digital Rupee PIN-less pay",
+      "pattern": "PIN\\s*less payments up to\\s+[^\\d\\s]{0,4}\\s*[\\d,.]+\\.?\\s*Use Digital Rupee by"
+    },
+    {
+      "label": "Notice: Mashreq low credit limit",
+      "pattern": "\\d{1,2}%\\s+credit limit is available on your Mashreq Credit Card"
+    },
+    {
+      "label": "Advert: SIB savings account millionaire",
+      "pattern": "Awaits!\\s*Your Savings Account makes you a MILLIONAIRE!"
+    },
+    {
+      "label": "Advert: SIB Millionaire March winners",
+      "pattern": "awaits our SIB Millionaire March winners!\\s*Every"
+    },
+    {
+      "label": "Advert: SIB gateway to millions",
+      "pattern": "Awaits!\\s*SIB Savings Account, your gateway to millions"
+    },
+    {
+      "label": "Notice: Tabby payment awaits confirm",
+      "pattern": "To complete your Tabby Card payment at [^\\n]{1,80}?\\s+for\\s+[A-Za-z]{3}\\s*[\\d,.]+,\\s*confirm it in the Tabby app"
+    }
+  ],
+  "categories": [
+    {
+      "category": "Groceries",
+      "words": [
+        "SUNRISE CITY SPMKT",
+        "HYPER MARKET",
+        "WESTZONE",
+        "EMIRATES COOP",
+        "ORGANIC MAGIC",
+        "FRESH HOUSE SUPER",
+        "CRREFOUR",
+        "CHOITHRAM",
+        "GROCE",
+        "SHAML AL MADINAH",
+        "DURAT AL MADEENA",
+        "DAY TO DAY",
+        "PINOY CHOICE",
+        "GRAND MULTIMART",
+        "NAHDHAT AL MADINA",
+        "SHIBANI",
+        "FRESH WAY BAQAL",
+        "ELGROCER",
+        "BAQALA",
+        "SPMKT",
+        "MAF HYPER",
+        "MINI MA",
+        "AL AIN COOP",
+        "ADCOOPS",
+        "SUPER MARKET",
+        "TROLLEYS",
+        "SPRMKT",
+        "CHOITRAM",
+        "EXPRESS BLUE"
+      ]
+    },
+    {
+      "category": "Dining & delivery",
+      "words": [
+        "BIRYANI",
+        "PUNJABI DHABA",
+        "ALBAIK",
+        "BAIK AL MADEENA",
+        "HAJI ALI JUICE",
+        "BON VOYAGE JUICE",
+        "GEEK REST",
+        "CHEESE CAKE",
+        "RED RIBBON",
+        "KABAB",
+        "MOMOS",
+        "COFFE",
+        "ZOMATO",
+        "LA BRIOCHE",
+        "SUBWAY",
+        "VAPIANO",
+        "CHOWKING",
+        "HARDEES",
+        "BROASTED",
+        "RESTAU",
+        "SWIGGY",
+        "TALABA",
+        "NEW YORK FRIES",
+        "MARRY BROWN",
+        "PAPA JOHNS",
+        "KRISPY KREEME",
+        "DUNKIN",
+        "SHAKE SHACK",
+        "COLD STONE",
+        "KUWAIT FOOD CO",
+        "CAESARS REST",
+        "BAIT ELKHETYAR",
+        "UDUPI CITY",
+        "YANDEX EATS",
+        "BASKIN ROBBINS",
+        "NANDOS",
+        "POPEYES",
+        "JOLLIBEE",
+        "KRISPY KREME",
+        "KYOCHON",
+        "VASANTA BHAVAN",
+        "NOVIKOV",
+        "BENIHANA",
+        "SALTBAE",
+        "MC DONALD",
+        "PANDA EXPRESS",
+        "HUNGERSTATION",
+        "WAGAMAMA",
+        "RAISING CANES",
+        "MISTER BAKER"
+      ]
+    },
+    {
+      "category": "Fuel & transport",
+      "words": [
+        "SERVICE STATION",
+        "SER. STATION",
+        "SHELL OMAN",
+        "ALKARAMA SERVICE",
+        "TOLL PLAZA",
+        "MAWGIF"
+      ]
+    },
+    {
+      "category": "Shopping",
+      "words": [
+        "MINISO",
+        "DAISO",
+        "MARKS N SPENCER",
+        "ALIEXPRESS",
+        "NISHAT LINEN",
+        "SHOE MART",
+        "BATH N BODY",
+        "BRANDS FOR LESS",
+        "SACOOR BROTHERS",
+        "GIFTS VILLAGE",
+        "HOME CENTRE",
+        "ADIDAS",
+        "AMERICAN EAGLE",
+        "DECATHLON",
+        "SEPHORA",
+        "TOYS FOR LESS",
+        "BERSHKA",
+        "REDTAG",
+        "STATIONERY",
+        "DUFRY",
+        "SUN AND SAND SPORTS",
+        "TRENDYOL",
+        "AMZN MKTP",
+        "MOTHERCARE",
+        "LC WAIKIKI",
+        "FLIPKART",
+        "MUMUSO",
+        "KHAADI",
+        "GIORDANO",
+        "OAKLEY",
+        "NATURALIZER",
+        "VESTIAIRE",
+        "SWATCH",
+        "HAMLEY",
+        "HOLLISTER",
+        "DEBENHAMS",
+        "CROCS",
+        "UNDER ARMOUR",
+        "MALABAR GOLD",
+        "HENNES AND MAURITZ",
+        "BOOK CORNER"
+      ]
+    },
+    {
+      "category": "Travel",
+      "words": [
+        "SOFITEL",
+        "MAKEMYTRIP",
+        "ADDRESS BEACH",
+        "QATAR AIRWAYS",
+        "BRITISH AIRWAYS",
+        "KLOOK",
+        "UNIGLOBE",
+        "SAUDI ARABIA AIR",
+        "PREMIER INN",
+        "WIZZAIR",
+        "TRIP.COM",
+        "BOOKING.C",
+        "FLYNAS",
+        "MYHOLIDAYS",
+        "AIR ARAB"
+      ]
+    },
+    {
+      "category": "Government & fees",
+      "words": [
+        "EVISA",
+        "MINISTRY OF INTERIOR",
+        "FEDERAL TAX",
+        "MINISTRY OF",
+        "ABU DHABI POLIC",
+        "SHARJAH FINANCE",
+        "TRAFFIC FINES",
+        "DUBAI MUNICIPALITY",
+        "DEPT OF MUNCIPAL",
+        "FED AUTH FOR ID",
+        "IMMIGRATION",
+        "DMUNICIPALITY",
+        "ADJD",
+        "ABU DHABI JUDICIAL"
+      ]
+    },
+    {
+      "category": "Education",
+      "words": [
+        "LIWA COLLEGE",
+        "ABU DHABI UNIVERS"
+      ]
+    },
+    {
+      "category": "Insurance",
+      "words": [
+        "ROYAL AND SUN",
+        "TOKIO MARINE"
+      ]
+    },
+    {
+      "category": "Utilities & bills",
+      "words": [
+        "HOME INTERNET",
+        "VIRGIN MOBILE",
+        "SHARJAH ELECTRICITY",
+        "DUBAI ELECTRICITY",
+        "E& TELECOM",
+        "BSNL",
+        "AJMAN SEWERAGE",
+        "E& DIGITAL"
+      ]
+    },
+    {
+      "category": "Entertainment",
+      "words": [
+        "KIDOOS",
+        "GLOBAL VILLAGE",
+        "KIDS AMUSEMENT",
+        "THEME PARK",
+        "THEATRE",
+        "MAJID AL FUTTAIM CINEM"
+      ]
+    },
+    {
+      "category": "Health",
+      "words": [
+        "NMC ROYAL",
+        "AL FUTTAIM HEAL",
+        "PHARM",
+        "THUMBAY",
+        "ECZANE",
+        "AL FUTTAIM HC",
+        "MEDICINA",
+        "NOOR ALAHLI",
+        "MEDI PRIME",
+        "BURJEEL",
+        "ACIBADEM",
+        "AMAVITA",
+        "APOTHEKE",
+        "AMBULATORY HEALTH"
+      ]
+    }
+  ],
+  "ext": {
+    "levers": {
+      "wordingBanks": true,
+      "curAbbrev": true,
+      "acctToken": true
+    },
+    "rules": [
+      {
+        "bank": "Bank of Baroda",
+        "id": "bob-upi-dr-cr-20261125",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+Dr\\.\\s+from\\s+A/C\\s+{CARD}\\s+and\\s+Cr\\.\\s+to\\s+{MERCHANT}\\s+Ref:?\\s*\\d+"
+      },
+      {
+        "bank": "Dubai Islamic Bank",
+        "id": "dib-drawn-fees-20261126",
+        "kind": "TRANSACTION",
+        "type": "PURCHASE",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "fixedMerchant": "Bank fees",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?:PROCESSING FEES?|[A-Z .]{0,40}SERVICE CHARGES|[A-Z .]{0,40}ISSUANCE CHARGES|[A-Z ]{0,40}TRF CHGS[A-Z ]{0,10})\\.\\s+Available balance"
+      },
+      {
+        "bank": "Dubai Islamic Bank",
+        "id": "dib-drawn-bill-payment-20261126",
+        "kind": "TRANSACTION",
+        "type": "PURCHASE",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?!(?:OWN|MB|PYMT|DIRECT)\\b){MERCHANT}\\s+PAYMENT\\.\\s+Available balance"
+      },
+      {
+        "bank": "Dubai Islamic Bank",
+        "id": "dib-drawn-outward-transfer-20261126",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "fixedMerchant": "Outward transfer",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+has been drawn from A/C No\\.\\s+{ACCT}\\s+as\\s+(?:MB FUND TRANSFER DEBIT|OUTWARD UAE FUNDS TRANS(?:FER)?(?: IPI)?)\\.\\s+Available balance"
+      },
+      {
+        "bank": "Al Hilal",
+        "id": "alhilal-transfer-out-20261126",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "Transfer of\\s+{CUR}\\s*{AMOUNT}\\s+to\\s+{MERCHANT}\\s+from account ending with\\s+{CARD}\\.\\s+New balance:"
+      },
+      {
+        "bank": "ADIB",
+        "id": "adib-cheque-cleared-20261126",
+        "kind": "TRANSACTION",
+        "type": "TRANSFER_OUT",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "fixedMerchant": "Cheque",
+        "pattern": "Cheque no\\.?\\s*\\d+\\s+for\\s+{CUR}\\s*{AMOUNT}\\s+was cleared from your a/c\\s+{CARD}\\.?(?:\\s+And your account balance is\\s+[\\d,.]+)?"
+      },
+      {
+        "bank": "IDFC FIRST Bank",
+        "id": "idfc-fastag-toll-paid-20261126",
+        "kind": "TRANSACTION",
+        "type": "PURCHASE",
+        "cardType": "ACCOUNT",
+        "direction": "OUT",
+        "pattern": "{CUR}\\s*{AMOUNT}\\s+toll paid from\\s+IDFC FIRST Bank Tag\\s+{CARD}\\s+for vehicle no\\.?\\s*\\S+\\s+at\\s+{MERCHANT}\\s+on\\s+{DATETIME}\\.?(?:\\s+Avbl\\.?\\s*Bal\\.?:?\\s*(?:{ANYCUR}|Rs\\.?)\\s*{AVAIL})?"
+      }
+    ]
+  }
+}
