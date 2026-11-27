@@ -1,5 +1,5 @@
 {
-  "lastTimestamp": "11/26/2026 8:40:11",
+  "lastTimestamp": "11/27/2026 9:13:49",
   "examples": [
     {
       "name": "SUNRISE CITY SPMKT OUD",
@@ -652,6 +652,102 @@
     {
       "name": "SWATCHS SHOP",
       "category": "Shopping"
+    },
+    {
+      "name": "T CHOITRAM",
+      "category": "Groceries"
+    },
+    {
+      "name": "EXPRESS BLUEMART SUPER",
+      "category": "Groceries"
+    },
+    {
+      "name": "PANDA EXPRESS",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "HUNGERSTATION LLC",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "WAGAMAMA DUBAI MARINA",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "RAISING CANES ALSHAYA",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "MISTER BAKER",
+      "category": "Dining & delivery"
+    },
+    {
+      "name": "DUBAIPAY*DMUNICIPALITY",
+      "category": "Government & fees"
+    },
+    {
+      "name": "ADJD-AL AIN COURT",
+      "category": "Government & fees"
+    },
+    {
+      "name": "ABU DHABI JUDICIAL DEP",
+      "category": "Government & fees"
+    },
+    {
+      "name": "AJMAN SEWERAGE PRIVATE",
+      "category": "Utilities & bills"
+    },
+    {
+      "name": "E& DIGITAL APP",
+      "category": "Utilities & bills"
+    },
+    {
+      "name": "AIR ARAB",
+      "category": "Travel"
+    },
+    {
+      "name": "HAMLEY'S",
+      "category": "Shopping"
+    },
+    {
+      "name": "HOLLISTER FASHION-MI",
+      "category": "Shopping"
+    },
+    {
+      "name": "DEBENHAMS",
+      "category": "Shopping"
+    },
+    {
+      "name": "CROCS",
+      "category": "Shopping"
+    },
+    {
+      "name": "UNDER ARMOUR FOR AED",
+      "category": "Shopping"
+    },
+    {
+      "name": "MALABAR GOLD LLC UMD",
+      "category": "Shopping"
+    },
+    {
+      "name": "HENNES AND MAURITZ J46",
+      "category": "Shopping"
+    },
+    {
+      "name": "BOOK CORNER LLC BR",
+      "category": "Shopping"
+    },
+    {
+      "name": "MAJID AL FUTTAIM CINEM DUBAI",
+      "category": "Entertainment"
+    },
+    {
+      "name": "MAWGIF",
+      "category": "Fuel & transport"
+    },
+    {
+      "name": "AMBULATORY HEALTH SERV",
+      "category": "Health"
     }
   ],
   "skipped": [
@@ -741,6 +837,17 @@
     "DIALOG AXIATA",
     "EMIRATES POST GROUP",
     "GOVT OF",
-    "ISTYLE COMPUTERS"
+    "ISTYLE COMPUTERS",
+    "HAPPY LAND RECREATIONA",
+    "BASELINE SPORTS ACADEM",
+    "SP DBRAND",
+    "LOOTAH BC GAS",
+    "DUBAI DUTY FREE",
+    "EMIRATES POST",
+    "KARAM BEIRUT",
+    "ROAD & TRANSPORT AUTHO",
+    "NATIONAL DRINKING WATE",
+    "STC BAHRAIN",
+    "ZIINA"
   ]
 }

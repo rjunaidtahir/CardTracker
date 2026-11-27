@@ -1,5 +1,5 @@
 {
-  "version": 38,
+  "version": 39,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -776,7 +776,9 @@
         "ADCOOPS",
         "SUPER MARKET",
         "TROLLEYS",
-        "SPRMKT"
+        "SPRMKT",
+        "CHOITRAM",
+        "EXPRESS BLUE"
       ]
     },
     {
@@ -826,7 +828,12 @@
         "NOVIKOV",
         "BENIHANA",
         "SALTBAE",
-        "MC DONALD"
+        "MC DONALD",
+        "PANDA EXPRESS",
+        "HUNGERSTATION",
+        "WAGAMAMA",
+        "RAISING CANES",
+        "MISTER BAKER"
       ]
     },
     {
@@ -836,7 +843,8 @@
         "SER. STATION",
         "SHELL OMAN",
         "ALKARAMA SERVICE",
-        "TOLL PLAZA"
+        "TOLL PLAZA",
+        "MAWGIF"
       ]
     },
     {
@@ -874,7 +882,15 @@
         "OAKLEY",
         "NATURALIZER",
         "VESTIAIRE",
-        "SWATCH"
+        "SWATCH",
+        "HAMLEY",
+        "HOLLISTER",
+        "DEBENHAMS",
+        "CROCS",
+        "UNDER ARMOUR",
+        "MALABAR GOLD",
+        "HENNES AND MAURITZ",
+        "BOOK CORNER"
       ]
     },
     {
@@ -893,7 +909,8 @@
         "TRIP.COM",
         "BOOKING.C",
         "FLYNAS",
-        "MYHOLIDAYS"
+        "MYHOLIDAYS",
+        "AIR ARAB"
       ]
     },
     {
@@ -909,7 +926,10 @@
         "DUBAI MUNICIPALITY",
         "DEPT OF MUNCIPAL",
         "FED AUTH FOR ID",
-        "IMMIGRATION"
+        "IMMIGRATION",
+        "DMUNICIPALITY",
+        "ADJD",
+        "ABU DHABI JUDICIAL"
       ]
     },
     {
@@ -934,7 +954,9 @@
         "SHARJAH ELECTRICITY",
         "DUBAI ELECTRICITY",
         "E& TELECOM",
-        "BSNL"
+        "BSNL",
+        "AJMAN SEWERAGE",
+        "E& DIGITAL"
       ]
     },
     {
@@ -944,7 +966,8 @@
         "GLOBAL VILLAGE",
         "KIDS AMUSEMENT",
         "THEME PARK",
-        "THEATRE"
+        "THEATRE",
+        "MAJID AL FUTTAIM CINEM"
       ]
     },
     {
@@ -962,7 +985,8 @@
         "BURJEEL",
         "ACIBADEM",
         "AMAVITA",
-        "APOTHEKE"
+        "APOTHEKE",
+        "AMBULATORY HEALTH"
       ]
     }
   ],
