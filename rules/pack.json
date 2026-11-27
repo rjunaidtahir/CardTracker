@@ -1,5 +1,5 @@
 {
-  "version": 40,
+  "version": 41,
   "minEngine": 5,
   "sendMore": {
     "banks": [
@@ -748,6 +748,18 @@
     {
       "label": "Advert: SIB savings account millionaire",
       "pattern": "Awaits!\\s*Your Savings Account makes you a MILLIONAIRE!"
+    },
+    {
+      "label": "Advert: SIB Millionaire March winners",
+      "pattern": "awaits our SIB Millionaire March winners!\\s*Every"
+    },
+    {
+      "label": "Advert: SIB gateway to millions",
+      "pattern": "Awaits!\\s*SIB Savings Account, your gateway to millions"
+    },
+    {
+      "label": "Notice: Tabby payment awaits confirm",
+      "pattern": "To complete your Tabby Card payment at [^\\n]{1,80}?\\s+for\\s+[A-Za-z]{3}\\s*[\\d,.]+,\\s*confirm it in the Tabby app"
     }
   ],
   "categories": [
